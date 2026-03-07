@@ -42,6 +42,11 @@ class IdeaBrief:
     project_category: str = ""  # e.g., "web", "app", "cli"
     project_type_confidence: float = 0.0
     suggested_stack: List[str] = field(default_factory=list)
+    # Design preferences
+    design_style: str = ""  # minimal, playful, corporate, elegant, bold, etc.
+    color_scheme: str = ""  # user's color preferences or theme
+    design_inspiration: str = ""  # apps/sites they like, reference examples
+    design_priorities: List[str] = field(default_factory=list)  # e.g., ["easy to use", "visually impressive", "fast"]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -61,6 +66,10 @@ class IdeaBrief:
             "project_category": self.project_category,
             "project_type_confidence": self.project_type_confidence,
             "suggested_stack": self.suggested_stack,
+            "design_style": self.design_style,
+            "color_scheme": self.color_scheme,
+            "design_inspiration": self.design_inspiration,
+            "design_priorities": self.design_priorities,
         }
 
     def is_ready(self) -> bool:
@@ -80,6 +89,10 @@ class IdeaBrief:
             missing.append("core features (at least 2)")
         if not self.scope:
             missing.append("project scope")
+        # Check for design preferences on visual projects
+        if self.project_category in ["app", "web", ""]:
+            if not self.design_style and not self.color_scheme:
+                missing.append("design preferences (style, colors, inspiration)")
         return missing
 
 
@@ -143,6 +156,7 @@ IMPORTANT GUIDELINES:
 - Dig deeper when answers are vague ("tell me more about...", "what specifically...")
 - Help them think through implications they might not have considered
 - Focus on WHAT and WHY before HOW (technical details come last)
+- For apps/websites: ASK about design preferences before finishing (style, colors, apps they like as inspiration)
 
 WHEN THEY ASK FOR YOUR INPUT (e.g., "what do you think?", "any suggestions?", "help me brainstorm"):
 - ALWAYS offer 3-5 concrete suggestions based on what you know about their idea
@@ -187,13 +201,19 @@ Respond with a JSON object containing:
     "technical_requirements": "any technical preferences",
     "constraints": "limitations mentioned",
     "scope": "MVP/prototype/full product",
+    "design_style": "visual style: minimal, playful, corporate, elegant, bold, etc.",
+    "color_scheme": "color preferences or theme mentioned",
+    "design_inspiration": "apps/websites they referenced as inspiration",
+    "design_priorities": ["what matters most in the design, e.g. 'easy to use', 'fun', 'professional'"],
     "readiness_score": 0-100,
-    "missing_elements": ["what's still unclear"],
+    "missing_elements": ["what's still unclear - INCLUDE design preferences if not discussed for visual projects"],
     "next_question": "a NEW question not yet asked (or empty string if ready)"
 }}
 
-IMPORTANT: The next_question MUST be different from all questions already asked.
-If readiness >= 80, set next_question to empty string.
+IMPORTANT:
+- The next_question MUST be different from all questions already asked.
+- For apps/websites, ASK about design preferences (style, colors, inspiration) if not yet discussed.
+- If readiness >= 80, set next_question to empty string.
 
 RESPOND ONLY WITH THE JSON OBJECT.""",
 
@@ -877,6 +897,15 @@ CRITICAL RULES:
             self.brief.scope = analysis["scope"]
         if "readiness_score" in analysis:
             self.brief.readiness_score = int(analysis["readiness_score"])
+        # Design preferences
+        if "design_style" in analysis and analysis["design_style"]:
+            self.brief.design_style = analysis["design_style"]
+        if "color_scheme" in analysis and analysis["color_scheme"]:
+            self.brief.color_scheme = analysis["color_scheme"]
+        if "design_inspiration" in analysis and analysis["design_inspiration"]:
+            self.brief.design_inspiration = analysis["design_inspiration"]
+        if "design_priorities" in analysis and analysis["design_priorities"]:
+            self.brief.design_priorities = analysis["design_priorities"]
 
     def _generate_summary(self) -> str:
         """Generate a type-appropriate summary when conversation is complete."""
@@ -1224,6 +1253,24 @@ Outline → Draft → Review → Deliver
 """
         else:
             # Default product format
+            # Build design section if available
+            design_section = ""
+            if self.brief.design_style or self.brief.color_scheme or self.brief.design_inspiration or self.brief.design_priorities:
+                design_parts = []
+                if self.brief.design_style:
+                    design_parts.append(f"- **Style:** {self.brief.design_style}")
+                if self.brief.color_scheme:
+                    design_parts.append(f"- **Colors:** {self.brief.color_scheme}")
+                if self.brief.design_inspiration:
+                    design_parts.append(f"- **Inspiration:** {self.brief.design_inspiration}")
+                if self.brief.design_priorities:
+                    priorities = ", ".join(self.brief.design_priorities) if isinstance(self.brief.design_priorities, list) else self.brief.design_priorities
+                    design_parts.append(f"- **Priorities:** {priorities}")
+                design_section = f"""
+
+## Design Preferences
+{chr(10).join(design_parts)}
+"""
             return f"""# Project Brief: {self.brief.title}
 
 ## Overview
@@ -1243,7 +1290,7 @@ Outline → Draft → Review → Deliver
 
 ## Scope
 {self.brief.scope}
-
+{design_section}
 ## Technical Requirements
 {self.brief.technical_requirements or "No specific requirements - use best practices"}
 
