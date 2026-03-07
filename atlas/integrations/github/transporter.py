@@ -28,6 +28,7 @@ from .models import (
     GitHubIssueData,
 )
 from .api import GitHubAPI, get_github_api
+from atlas.projects.models import TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -735,7 +736,7 @@ class Transporter:
     async def _update_task_from_issue(self, issue: GitHubIssueData, task_id: int):
         """Update ATLAS task from GitHub issue."""
         # Map issue state to task status
-        status = "completed" if issue.state == "closed" else "pending"
+        status = TaskStatus.COMPLETED if issue.state == "closed" else TaskStatus.PENDING
 
         # Extract tags from labels
         tags = [
