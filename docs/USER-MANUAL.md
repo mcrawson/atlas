@@ -370,10 +370,12 @@ curl -X POST http://localhost:8080/api/projects \
 ## Changelog
 
 ### 2026-03-07
+- Added Claude provider (Anthropic API now available)
 - Added design preference questions to idea conversation
 - Fixed live preview rendering (Tinker's code now shows in iframe)
 - Fixed GitHub reverse sync (issue → task)
 - Added auto-load .env to startup
+- Created user manual
 
 ### 2026-03-06
 - Set up GitHub integration
