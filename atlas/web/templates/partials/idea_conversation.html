@@ -1,0 +1,324 @@
+<div class="idea-conversation" id="idea-conversation">
+    <!-- Conversation History -->
+    {% if conversation.get('messages', []) %}
+    <div class="conversation-messages">
+        {% for msg in conversation.get('messages', []) %}
+        <div class="message {{ msg.role }}">
+            <div class="message-avatar">
+                {% if msg.role == 'assistant' %}🤖{% else %}👤{% endif %}
+            </div>
+            <div class="message-content">
+                {{ msg.content }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Current Question -->
+    {% if not current_question.get('complete') %}
+    <div class="current-question">
+        <div class="question-header">
+            <span class="question-icon">💭</span>
+            <span class="question-stage">{{ current_question.get('stage', 'initial')|replace('_', ' ')|title }}</span>
+        </div>
+
+        {% if current_question.get('is_summary') %}
+        <!-- Summary View -->
+        <div class="summary-view">
+            <div class="summary-content">
+                {% set summary_text = current_question.get('summary', '') %}
+                {{ summary_text|replace('\n', '<br>')|safe }}
+            </div>
+            <p class="summary-prompt">{{ current_question.get('question') }}</p>
+        </div>
+        <form hx-post="/projects/{{ project.id }}/idea/respond"
+              hx-target="#idea-conversation"
+              hx-swap="outerHTML"
+              class="response-form summary-form">
+            <div class="form-actions">
+                <button type="submit" name="response" value="yes" class="btn btn-primary">
+                    ✓ Looks Good
+                </button>
+                <button type="submit" name="response" value="make changes" class="btn btn-secondary">
+                    Make Changes
+                </button>
+            </div>
+        </form>
+
+        {% else %}
+        <!-- Question View -->
+        <div class="question-text">{{ current_question.get('question', 'Tell me more...') }}</div>
+        {% if current_question.get('help') %}
+        <div class="question-help">{{ current_question.get('help') }}</div>
+        {% endif %}
+
+        <form hx-post="/projects/{{ project.id }}/idea/respond"
+              hx-target="#idea-conversation"
+              hx-swap="outerHTML"
+              class="response-form">
+            <textarea name="response"
+                      placeholder="{{ current_question.get('placeholder', 'Type your response...') }}"
+                      rows="3"
+                      autofocus></textarea>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    Continue →
+                </button>
+                {% if current_question.get('can_skip') %}
+                <button type="submit" name="skip" value="true" class="btn btn-ghost">
+                    Skip this
+                </button>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <!-- Conversation Complete -->
+    <div class="conversation-complete">
+        <div class="complete-icon">✅</div>
+        <h3>Idea Ready!</h3>
+        <p>Your project idea has been captured. Ready to create a plan?</p>
+
+        <!-- Show extracted context -->
+        <div class="extracted-context">
+            {% set ctx = conversation.get('context', {}) %}
+            {% set core_idea = ctx.get('core_idea', '') %}
+            <div class="context-item">
+                <strong>Idea:</strong> {{ core_idea[:100] }}{% if core_idea|length > 100 %}...{% endif %}
+            </div>
+            {% if ctx.get('problem') %}
+            {% set problem = ctx.get('problem', '') %}
+            <div class="context-item">
+                <strong>Problem:</strong> {{ problem[:80] }}{% if problem|length > 80 %}...{% endif %}
+            </div>
+            {% endif %}
+            {% if ctx.get('features') %}
+            <div class="context-item">
+                <strong>Features:</strong> {{ ctx.get('features', [])|length }} identified
+            </div>
+            {% endif %}
+        </div>
+
+        <form action="/projects/{{ project.id }}/start-planning" method="post" class="planning-form">
+            <!-- Pass the conversation context to planning -->
+            <input type="hidden" name="description" value="{{ ctx.get('core_idea', '') or project.description }}">
+            <input type="hidden" name="problem" value="{{ ctx.get('problem', '') }}">
+            <input type="hidden" name="features" value="{{ ctx.get('features', [])|join(', ') }}">
+            <input type="hidden" name="technical" value="{{ ctx.get('technical_preferences', '') }}">
+
+            <button type="submit" class="btn btn-primary btn-large">
+                <span>Start Planning</span>
+                <span class="btn-icon">→</span>
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.idea-conversation {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.conversation-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.message {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.message.assistant {
+    flex-direction: row;
+}
+
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-input);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.message-content {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-lg);
+    max-width: 80%;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.message.assistant .message-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+.message.user .message-content {
+    background: var(--matrix-green-subtle);
+    border: 1px solid var(--border-green);
+    color: var(--text-primary);
+}
+
+.current-question {
+    background: var(--bg-card);
+    border: 1px solid var(--border-green);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-green);
+}
+
+.question-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.question-icon {
+    font-size: 1.25rem;
+}
+
+.question-stage {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--matrix-green);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.question-text {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+
+.question-help {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+}
+
+.response-form textarea {
+    width: 100%;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    min-height: 80px;
+    resize: vertical;
+}
+
+.response-form .form-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.btn-ghost:hover {
+    border-color: var(--border-green);
+    color: var(--text-primary);
+}
+
+.summary-view {
+    margin-bottom: 1.5rem;
+}
+
+.summary-content {
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    margin-bottom: 1rem;
+}
+
+.summary-content strong {
+    color: var(--matrix-green);
+}
+
+.summary-prompt {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.summary-form .form-actions {
+    justify-content: center;
+}
+
+.conversation-complete {
+    text-align: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, rgba(0, 255, 65, 0.05), transparent);
+    border: 1px solid var(--border-green);
+    border-radius: var(--radius-lg);
+}
+
+.complete-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.conversation-complete h3 {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    margin-bottom: 0.5rem;
+}
+
+.conversation-complete p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.extracted-context {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.context-item {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.context-item:last-child {
+    border-bottom: none;
+}
+
+.context-item strong {
+    color: var(--text-primary);
+}
+
+.planning-form {
+    display: flex;
+    justify-content: center;
+}
+</style>

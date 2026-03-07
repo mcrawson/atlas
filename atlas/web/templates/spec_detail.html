@@ -1,0 +1,735 @@
+{% extends "base.html" %}
+
+{% block title %}{{ spec.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <div class="header-content">
+            <a href="/specs" class="back-link">&larr; All Specs</a>
+            <h1>{{ spec.name[:80] }}{% if spec.name|length > 80 %}...{% endif %}</h1>
+            <p class="subtitle">{{ spec.description[:200] if spec.description else 'No description' }}{% if spec.description and spec.description|length > 200 %}...{% endif %}</p>
+        </div>
+        <div class="header-actions">
+            <a href="/specs/{{ spec.id }}/execute" class="btn btn-primary">Execute Tasks</a>
+        </div>
+    </header>
+
+    <!-- Progress Overview -->
+    <section class="section">
+        <div class="progress-overview">
+            <div class="progress-ring-container">
+                <svg class="progress-ring" width="120" height="120">
+                    <circle class="progress-ring-bg" cx="60" cy="60" r="52" fill="none" stroke-width="8"/>
+                    <circle class="progress-ring-fill" cx="60" cy="60" r="52" fill="none" stroke-width="8"
+                        stroke-dasharray="{{ 327 }}"
+                        stroke-dashoffset="{{ 327 - (327 * progress.percentage / 100) }}"
+                        transform="rotate(-90 60 60)"/>
+                </svg>
+                <div class="progress-ring-text">
+                    <span class="progress-value">{{ "%.0f"|format(progress.percentage) }}%</span>
+                    <span class="progress-label">Complete</span>
+                </div>
+            </div>
+            <div class="progress-stats">
+                <div class="stat">
+                    <span class="stat-value">{{ progress.total }}</span>
+                    <span class="stat-label">Total Tasks</span>
+                </div>
+                <div class="stat completed">
+                    <span class="stat-value">{{ progress.completed }}</span>
+                    <span class="stat-label">Completed</span>
+                </div>
+                <div class="stat in-progress">
+                    <span class="stat-value">{{ progress.in_progress }}</span>
+                    <span class="stat-label">In Progress</span>
+                </div>
+                <div class="stat pending">
+                    <span class="stat-value">{{ progress.pending }}</span>
+                    <span class="stat-label">Pending</span>
+                </div>
+                <div class="stat blocked">
+                    <span class="stat-value">{{ progress.blocked }}</span>
+                    <span class="stat-label">Blocked</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Spec Info -->
+    <section class="section card">
+        <h2 class="section-title">Specification Details</h2>
+        <div class="spec-info-grid">
+            <div class="info-item">
+                <span class="info-label">Version</span>
+                <span class="info-value">{{ spec.version or '1.0.0' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Status</span>
+                <span class="info-value status-badge status-{{ spec.status }}">{{ spec.status }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Requirements</span>
+                <span class="info-value">{{ spec.requirements_count }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Created</span>
+                <span class="info-value">{{ spec.created_at[:10] if spec.created_at else 'N/A' }}</span>
+            </div>
+            {% if spec.spec_dir %}
+            <div class="info-item full-width">
+                <span class="info-label">Spec Directory</span>
+                <span class="info-value code">{{ spec.spec_dir }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Spec Documents -->
+    <section class="section">
+        <h2 class="section-title">Spec Documents</h2>
+        <div class="doc-cards">
+            <a href="/specs/{{ spec.id }}/requirements" class="doc-card">
+                <div class="doc-icon">📋</div>
+                <h3>Requirements</h3>
+                <p>User stories and acceptance criteria in EARS format</p>
+                <span class="doc-count">{{ spec.requirements_count }} requirements</span>
+            </a>
+            <a href="/specs/{{ spec.id }}/design" class="doc-card">
+                <div class="doc-icon">🏗️</div>
+                <h3>Design</h3>
+                <p>Technical architecture and component design</p>
+            </a>
+            <a href="/specs/{{ spec.id }}/tasks" class="doc-card">
+                <div class="doc-icon">✅</div>
+                <h3>Tasks</h3>
+                <p>Implementation tasks linked to requirements</p>
+                <span class="doc-count">{{ spec.tasks_count }} tasks</span>
+            </a>
+        </div>
+    </section>
+
+    <!-- Refine with Sketch -->
+    <section class="section refine-section">
+        <div class="section-header-row">
+            <h2 class="section-title">Refine with Sketch</h2>
+            <button class="btn btn-ghost btn-small" onclick="toggleRefineChat()">
+                <span id="refine-toggle-text">Expand</span>
+            </button>
+        </div>
+        <p class="section-desc">Have questions or want to adjust the spec? Chat with Sketch.</p>
+
+        <div class="refine-chat-container" id="refine-chat" style="display: none;">
+            <div class="refine-chat-messages" id="refine-messages">
+                <div class="chat-welcome-mini">
+                    <span class="welcome-icon">💡</span>
+                    <p>I'm Sketch. Ask me about this spec or tell me what you'd like to change.</p>
+                </div>
+            </div>
+
+            <form class="refine-chat-form" onsubmit="sendRefineMessage(event)">
+                <div class="refine-input-wrapper">
+                    <textarea
+                        id="refine-input"
+                        placeholder="Ask a question or suggest changes..."
+                        rows="2"
+                        onkeydown="handleRefineKeyDown(event)"></textarea>
+                    <button type="submit" class="send-btn sketch">
+                        <span>→</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Recent Tasks -->
+    <section class="section">
+        <h2 class="section-title">Tasks Overview</h2>
+        <div class="task-list">
+            {% for task in tasks[:10] %}
+            <div class="task-item status-{{ task.status }}">
+                <div class="task-status-icon">
+                    {% if task.status == 'completed' %}✅
+                    {% elif task.status == 'in_progress' %}🔄
+                    {% elif task.status == 'blocked' %}🚫
+                    {% else %}⬜{% endif %}
+                </div>
+                <div class="task-content">
+                    <span class="task-id">{{ task.task_id }}</span>
+                    <span class="task-title">{{ task.title }}</span>
+                </div>
+                <span class="task-priority priority-{{ task.priority }}">{{ task.priority }}</span>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>No tasks in this spec yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% if tasks|length > 10 %}
+        <a href="/specs/{{ spec.id }}/tasks" class="view-all-link">View all {{ tasks|length }} tasks &rarr;</a>
+        {% endif %}
+    </section>
+</div>
+
+<style>
+.header-content {
+    flex: 1;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.back-link {
+    color: var(--text-secondary, #888);
+    text-decoration: none;
+    font-size: 0.9rem;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.back-link:hover {
+    color: var(--accent-color, #00ff41);
+}
+
+.progress-overview {
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+    padding: 1.5rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 8px;
+}
+
+.progress-ring-container {
+    position: relative;
+}
+
+.progress-ring-bg {
+    stroke: var(--bg-tertiary, #252540);
+}
+
+.progress-ring-fill {
+    stroke: var(--accent-color, #00ff41);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.5s ease;
+}
+
+.progress-ring-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.progress-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary, #fff);
+}
+
+.progress-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+}
+
+.progress-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat .stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary, #fff);
+}
+
+.stat .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+}
+
+.stat.completed .stat-value { color: #00ff41; }
+.stat.in-progress .stat-value { color: #f0ad4e; }
+.stat.pending .stat-value { color: var(--text-secondary, #888); }
+.stat.blocked .stat-value { color: #dc3545; }
+
+.spec-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    padding: 1rem;
+    background: var(--bg-tertiary, #252540);
+    border-radius: 6px;
+}
+
+.info-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.info-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    margin-bottom: 0.3rem;
+}
+
+.info-value {
+    color: var(--text-primary, #fff);
+    font-weight: 500;
+}
+
+.info-value.code {
+    font-family: monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.status-badge.status-active {
+    background: rgba(0, 255, 65, 0.2);
+    color: #00ff41;
+}
+
+.doc-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.doc-card {
+    background: var(--bg-secondary, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.doc-card:hover {
+    border-color: var(--accent-color, #00ff41);
+    transform: translateY(-2px);
+}
+
+.doc-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.doc-card h3 {
+    color: var(--text-primary, #fff);
+    margin-bottom: 0.5rem;
+}
+
+.doc-card p {
+    color: var(--text-secondary, #888);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.doc-count {
+    font-size: 0.8rem;
+    color: var(--accent-color, #00ff41);
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.task-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 6px;
+    border-left: 3px solid var(--border-color, #2a2a4a);
+}
+
+.task-item.status-completed { border-left-color: #00ff41; }
+.task-item.status-in_progress { border-left-color: #f0ad4e; }
+.task-item.status-blocked { border-left-color: #dc3545; }
+
+.task-status-icon {
+    font-size: 1rem;
+}
+
+.task-content {
+    flex: 1;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.task-id {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    background: var(--bg-tertiary, #252540);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.task-title {
+    color: var(--text-primary, #fff);
+}
+
+.task-priority {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.priority-critical { background: rgba(220, 53, 69, 0.3); color: #dc3545; }
+.priority-high { background: rgba(240, 173, 78, 0.3); color: #f0ad4e; }
+.priority-medium { background: rgba(0, 255, 65, 0.2); color: #00ff41; }
+.priority-low { background: rgba(136, 136, 136, 0.3); color: #888; }
+
+.view-all-link {
+    display: block;
+    text-align: center;
+    padding: 1rem;
+    color: var(--accent-color, #00ff41);
+    text-decoration: none;
+}
+
+.view-all-link:hover {
+    text-decoration: underline;
+}
+
+/* Refine with Sketch */
+.refine-section {
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.section-desc {
+    color: var(--text-secondary, #888);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.refine-chat-container {
+    border-top: 1px solid var(--border-color, #2a2a4a);
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+
+.refine-chat-messages {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.chat-welcome-mini {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(74, 144, 217, 0.1);
+    border: 1px solid rgba(74, 144, 217, 0.3);
+    border-radius: 8px;
+}
+
+.chat-welcome-mini .welcome-icon {
+    font-size: 1.5rem;
+}
+
+.chat-welcome-mini p {
+    margin: 0;
+    color: var(--text-primary, #fff);
+    font-size: 0.9rem;
+}
+
+.refine-message {
+    display: flex;
+    gap: 0.75rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.refine-message.user {
+    flex-direction: row-reverse;
+}
+
+.refine-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+}
+
+.refine-message.user .refine-avatar {
+    background: var(--bg-tertiary, #252540);
+    color: var(--text-secondary, #888);
+    font-weight: 600;
+}
+
+.refine-message.assistant .refine-avatar {
+    background: linear-gradient(135deg, #4A90D9, #357ABD);
+    font-size: 1rem;
+}
+
+.refine-content {
+    max-width: 85%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.refine-message.user .refine-content {
+    background: rgba(74, 144, 217, 0.15);
+    border: 1px solid rgba(74, 144, 217, 0.3);
+}
+
+.refine-message.assistant .refine-content {
+    background: var(--bg-tertiary, #252540);
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.refine-chat-form {
+    margin-top: 0.5rem;
+}
+
+.refine-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.refine-input-wrapper textarea {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-tertiary, #252540);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    font-size: 0.9rem;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+}
+
+.refine-input-wrapper textarea:focus {
+    outline: none;
+    border-color: #4A90D9;
+}
+
+.send-btn.sketch {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #4A90D9;
+    border: none;
+    color: white;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.send-btn.sketch:hover {
+    background: #357ABD;
+    transform: scale(1.05);
+}
+
+.refine-thinking {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary, #252540);
+    border-radius: 8px;
+    color: var(--text-muted, #666);
+    font-size: 0.85rem;
+}
+
+.refine-thinking-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.refine-thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background: #4A90D9;
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+.refine-thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.refine-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.refine-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+</style>
+
+<script>
+const specId = "{{ spec.id }}";
+let refineHistory = [];
+
+function toggleRefineChat() {
+    const chat = document.getElementById('refine-chat');
+    const toggleText = document.getElementById('refine-toggle-text');
+
+    if (chat.style.display === 'none') {
+        chat.style.display = 'block';
+        toggleText.textContent = 'Collapse';
+    } else {
+        chat.style.display = 'none';
+        toggleText.textContent = 'Expand';
+    }
+}
+
+function handleRefineKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendRefineMessage(event);
+    }
+}
+
+function addRefineMessage(role, content) {
+    const messages = document.getElementById('refine-messages');
+
+    // Remove welcome message on first real message
+    const welcome = messages.querySelector('.chat-welcome-mini');
+    if (welcome && role === 'user') {
+        welcome.style.display = 'none';
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `refine-message ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'refine-avatar';
+    avatar.textContent = role === 'user' ? 'You' : '💡';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'refine-content';
+
+    // Basic markdown rendering
+    let html = content
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+    contentDiv.innerHTML = html;
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messages.appendChild(messageDiv);
+
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function addRefineThinking() {
+    const messages = document.getElementById('refine-messages');
+
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.className = 'refine-message assistant';
+    thinkingDiv.id = 'refine-thinking';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'refine-avatar';
+    avatar.textContent = '💡';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'refine-thinking';
+    contentDiv.innerHTML = `
+        <div class="refine-thinking-dots">
+            <span></span><span></span><span></span>
+        </div>
+        <span>Sketch is thinking...</span>
+    `;
+
+    thinkingDiv.appendChild(avatar);
+    thinkingDiv.appendChild(contentDiv);
+    messages.appendChild(thinkingDiv);
+
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function removeRefineThinking() {
+    const thinking = document.getElementById('refine-thinking');
+    if (thinking) thinking.remove();
+}
+
+async function sendRefineMessage(event) {
+    event.preventDefault();
+
+    const input = document.getElementById('refine-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Add user message
+    addRefineMessage('user', message);
+    refineHistory.push({ role: 'user', content: message });
+
+    // Clear input
+    input.value = '';
+
+    // Show thinking
+    addRefineThinking();
+
+    try {
+        const response = await fetch(`/specs/${specId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                history: refineHistory.slice(-10)
+            })
+        });
+
+        const data = await response.json();
+        removeRefineThinking();
+
+        if (data.error) {
+            addRefineMessage('assistant', `Sorry, I encountered an error: ${data.error}`);
+        } else {
+            addRefineMessage('assistant', data.response);
+            refineHistory.push({ role: 'assistant', content: data.response });
+        }
+    } catch (error) {
+        removeRefineThinking();
+        addRefineMessage('assistant', 'Sorry, I had trouble connecting. Please try again.');
+    }
+
+    input.focus();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}Projects - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page projects-page">
+    <!-- Header with Create Button -->
+    <header class="projects-header">
+        <div class="header-content">
+            <h1>Projects</h1>
+            <p class="header-desc">Track your ideas from concept to completion</p>
+        </div>
+        <button class="btn btn-primary" onclick="toggleCreateForm()">
+            <span class="btn-icon">💡</span> Have an idea?
+        </button>
+    </header>
+
+    <!-- Collapsible Create Form -->
+    <section id="create-form-section" class="create-form-section hidden">
+        <div class="create-form-card">
+            <form class="create-form"
+                  hx-post="/projects"
+                  hx-target="#project-list"
+                  hx-swap="innerHTML"
+                  hx-on::after-request="toggleCreateForm()">
+                <div class="form-header">
+                    <h3>Tell us your idea</h3>
+                    <button type="button" class="btn-close" onclick="toggleCreateForm()">&times;</button>
+                </div>
+                <div class="form-body">
+                    <div class="form-group">
+                        <label for="project-name">Project Name</label>
+                        <input type="text"
+                               id="project-name"
+                               name="name"
+                               placeholder="My awesome project"
+                               required>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-desc">Description</label>
+                        <textarea id="project-desc"
+                                  name="description"
+                                  placeholder="What are you building? What problem does it solve?"
+                                  rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-tags">Tags</label>
+                        <input type="text"
+                               id="project-tags"
+                               name="tags"
+                               placeholder="web, api, mobile (comma-separated)">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="toggleCreateForm()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Project</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Stats Bar -->
+    {% if stats.get('total_projects', 0) > 0 %}
+    <section class="stats-bar-section">
+        <div class="stats-inline">
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ stats.get('total_projects', 0) }}</span>
+                <span class="stat-inline-label">Projects</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ stats.get('projects_by_status', {}).get('active', 0) }}</span>
+                <span class="stat-inline-label">Active</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ stats.get('projects_by_status', {}).get('completed', 0) }}</span>
+                <span class="stat-inline-label">Completed</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ stats.get('total_tasks', 0) }}</span>
+                <span class="stat-inline-label">Tasks</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Filters -->
+    <section class="filters-section">
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="status-filter" onchange="filterProjects()">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="paused">Paused</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Sort:</label>
+                <select id="sort-filter" onchange="filterProjects()">
+                    <option value="recent">Most Recent</option>
+                    <option value="name">Name (A-Z)</option>
+                    <option value="progress">Progress</option>
+                </select>
+            </div>
+            <div class="filter-search">
+                <input type="text" id="search-filter" placeholder="Search projects..." oninput="filterProjects()">
+            </div>
+        </div>
+    </section>
+
+    <!-- Project List -->
+    <section class="section">
+        <div id="project-list" class="projects-grid">
+            {% if projects %}
+                {% for project in projects %}
+                <a href="/projects/{{ project.id }}" class="project-card-link" data-status="{{ project.status.value }}" data-name="{{ project.name|lower }}" data-progress="{{ project.progress }}">
+                    <div class="project-card">
+                        <!-- Status Badge -->
+                        <div class="card-status">
+                            <span class="status-badge status-{{ project.status.value }}">{{ project.status.value }}</span>
+                        </div>
+
+                        <!-- Project Info -->
+                        <h3 class="project-title">{{ project.name }}</h3>
+
+                        {% if project.description %}
+                        <p class="project-description">{{ project.description[:120] }}{% if project.description|length > 120 %}...{% endif %}</p>
+                        {% else %}
+                        <p class="project-description text-muted">No description provided</p>
+                        {% endif %}
+
+                        <!-- Lifecycle Pipeline -->
+                        <div class="project-lifecycle">
+                            {% set phase = project.metadata.get('phase', 'idea') if project.metadata else 'idea' %}
+                            <div class="lifecycle-stage {% if phase == 'idea' %}current{% elif phase in ['plan', 'plan_review', 'build', 'build_review', 'verify', 'verify_review', 'deliver'] %}done{% endif %}">
+                                <span class="lifecycle-dot"></span>
+                                <span class="lifecycle-label">Idea</span>
+                            </div>
+                            <div class="lifecycle-line {% if phase in ['plan', 'plan_review', 'build', 'build_review', 'verify', 'verify_review', 'deliver'] %}done{% endif %}"></div>
+                            <div class="lifecycle-stage {% if phase in ['plan', 'plan_review'] %}current{% elif phase in ['build', 'build_review', 'verify', 'verify_review', 'deliver'] %}done{% endif %}">
+                                <span class="lifecycle-dot"></span>
+                                <span class="lifecycle-label">Plan</span>
+                            </div>
+                            <div class="lifecycle-line {% if phase in ['build', 'build_review', 'verify', 'verify_review', 'deliver'] %}done{% endif %}"></div>
+                            <div class="lifecycle-stage {% if phase in ['build', 'build_review'] %}current{% elif phase in ['verify', 'verify_review', 'deliver'] %}done{% endif %}">
+                                <span class="lifecycle-dot"></span>
+                                <span class="lifecycle-label">Build</span>
+                            </div>
+                            <div class="lifecycle-line {% if phase in ['verify', 'verify_review', 'deliver'] %}done{% endif %}"></div>
+                            <div class="lifecycle-stage {% if phase in ['verify', 'verify_review'] %}current{% elif phase == 'deliver' %}done{% endif %}">
+                                <span class="lifecycle-dot"></span>
+                                <span class="lifecycle-label">Verify</span>
+                            </div>
+                            <div class="lifecycle-line {% if phase == 'deliver' %}done{% endif %}"></div>
+                            <div class="lifecycle-stage {% if phase == 'deliver' %}current{% endif %}">
+                                <span class="lifecycle-dot"></span>
+                                <span class="lifecycle-label">Deliver</span>
+                            </div>
+                        </div>
+
+                        <!-- Meta Footer -->
+                        <div class="project-footer">
+                            <div class="project-tasks">
+                                <span class="task-icon">📋</span>
+                                <span>{{ project.tasks|length }} tasks</span>
+                            </div>
+                            {% if project.tags %}
+                            <div class="project-tags">
+                                {% for tag in project.tags[:3] %}
+                                <span class="tag">{{ tag }}</span>
+                                {% endfor %}
+                                {% if project.tags|length > 3 %}
+                                <span class="tag tag-more">+{{ project.tags|length - 3 }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="project-progress">
+                            <div class="progress-bar small">
+                                <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                            </div>
+                            <span class="progress-text">{{ "%.0f"|format(project.progress) }}%</span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            {% else %}
+            <div class="empty-state-card">
+                <span class="empty-icon">🚀</span>
+                <h3>No projects yet</h3>
+                <p>Create your first project and let our AI agents help you plan, build, and ship it.</p>
+                <button class="btn btn-primary" onclick="toggleCreateForm()">
+                    <span class="btn-icon">💡</span> Share your idea
+                </button>
+                <p class="hint">Try something like: <code>Build a REST API for a todo app</code></p>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<script>
+function toggleCreateForm() {
+    const section = document.getElementById('create-form-section');
+    section.classList.toggle('hidden');
+    if (!section.classList.contains('hidden')) {
+        document.getElementById('project-name').focus();
+    }
+}
+
+function filterProjects() {
+    const status = document.getElementById('status-filter').value;
+    const sort = document.getElementById('sort-filter').value;
+    const search = document.getElementById('search-filter').value.toLowerCase();
+
+    const cards = document.querySelectorAll('.project-card-link');
+    const cardsArray = Array.from(cards);
+
+    // Filter
+    cardsArray.forEach(card => {
+        const cardStatus = card.dataset.status;
+        const cardName = card.dataset.name;
+
+        let show = true;
+        if (status !== 'all' && cardStatus !== status) show = false;
+        if (search && !cardName.includes(search)) show = false;
+
+        card.style.display = show ? '' : 'none';
+    });
+
+    // Sort visible cards
+    const container = document.getElementById('project-list');
+    const visibleCards = cardsArray.filter(c => c.style.display !== 'none');
+
+    visibleCards.sort((a, b) => {
+        if (sort === 'name') {
+            return a.dataset.name.localeCompare(b.dataset.name);
+        } else if (sort === 'progress') {
+            return parseFloat(b.dataset.progress) - parseFloat(a.dataset.progress);
+        }
+        return 0; // recent - keep original order
+    });
+
+    visibleCards.forEach(card => container.appendChild(card));
+}
+</script>
+{% endblock %}

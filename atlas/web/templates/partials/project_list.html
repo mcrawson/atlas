@@ -1,0 +1,21 @@
+{% if projects %}
+    {% for project in projects %}
+    <div class="project-item">
+        <div class="project-header">
+            <a href="/projects/{{ project.id }}" class="project-name">{{ project.name }}</a>
+            <span class="status-badge status-{{ project.status.value }}">{{ project.status.value }}</span>
+        </div>
+        <div class="project-meta">
+            <span class="task-count">{{ project.tasks|length }} tasks</span>
+            <span class="progress">{{ "%.0f"|format(project.progress) }}%</span>
+        </div>
+        <div class="progress-bar small">
+            <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state small">
+        <p>No projects yet</p>
+    </div>
+{% endif %}

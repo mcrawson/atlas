@@ -1,0 +1,653 @@
+<!-- Platform Selector Partial -->
+<!-- Shows available publishing platforms based on project type -->
+
+<div class="platform-selector" id="platform-selector">
+    <div class="platform-header">
+        <h3>
+            <span class="header-icon">🚀</span>
+            Publish Your Product
+        </h3>
+        <p class="header-subtitle">Choose where to publish based on your project type</p>
+    </div>
+
+    <div class="platforms-loading" id="platforms-loading">
+        <div class="spinner"></div>
+        <p>Loading available platforms...</p>
+    </div>
+
+    <div class="platforms-grid" id="platforms-grid" style="display: none;">
+        <!-- Platforms will be loaded here via JS -->
+    </div>
+
+    <div class="platforms-empty" id="platforms-empty" style="display: none;">
+        <p>Set your project type to see available publishing platforms.</p>
+    </div>
+</div>
+
+<!-- Platform Detail Modal -->
+<div class="platform-modal" id="platform-modal" style="display: none;">
+    <div class="modal-backdrop" onclick="closePlatformModal()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="platform-modal-icon" id="modal-platform-icon"></div>
+            <div class="modal-title-area">
+                <h3 id="modal-platform-name"></h3>
+                <p id="modal-platform-desc"></p>
+            </div>
+            <button class="modal-close" onclick="closePlatformModal()">×</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Requirements Section -->
+            <div class="requirements-section">
+                <h4>Requirements</h4>
+                <div class="requirements-list" id="modal-requirements"></div>
+            </div>
+
+            <!-- Validation Result -->
+            <div class="validation-section" id="validation-section" style="display: none;">
+                <h4>Validation</h4>
+                <div class="validation-result" id="validation-result"></div>
+            </div>
+
+            <!-- Environment Variables -->
+            <div class="env-section" id="env-section">
+                <h4>Environment Variables</h4>
+                <div class="env-vars" id="modal-env-vars"></div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="validateForPlatform()" id="btn-validate">
+                <span class="btn-icon">✓</span> Validate
+            </button>
+            <button class="btn btn-primary" onclick="publishToPlatform()" id="btn-publish" disabled>
+                <span class="btn-icon">🚀</span> Publish
+            </button>
+        </div>
+
+        <div class="modal-status" id="modal-status"></div>
+    </div>
+</div>
+
+<style>
+/* Platform Selector Container */
+.platform-selector {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.platform-header {
+    margin-bottom: 1.5rem;
+}
+
+.platform-header h3 {
+    margin: 0 0 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header-icon {
+    font-size: 1.25rem;
+}
+
+.header-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Loading State */
+.platforms-loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.platforms-loading .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--matrix-green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+/* Platforms Grid */
+.platforms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.platform-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.platform-card:hover {
+    border-color: var(--matrix-green);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 255, 65, 0.1);
+}
+
+.platform-card.authenticated {
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+.platform-card.not-authenticated {
+    opacity: 0.7;
+}
+
+.platform-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+}
+
+.platform-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.platform-category {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.platform-status {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.platform-status.ready {
+    color: #10b981;
+}
+
+.platform-status.setup-needed {
+    color: #f59e0b;
+}
+
+.platform-status.submitted {
+    color: #3b82f6;
+}
+
+/* Platform Modal */
+.platform-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.platform-modal-icon {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+}
+
+.modal-title-area {
+    flex: 1;
+}
+
+.modal-title-area h3 {
+    margin: 0 0 0.25rem;
+}
+
+.modal-title-area p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-body h4 {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.requirements-section,
+.validation-section,
+.env-section {
+    margin-bottom: 1.5rem;
+}
+
+.requirements-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.requirement-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-input);
+    border-radius: 6px;
+}
+
+.requirement-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.requirement-info {
+    flex: 1;
+}
+
+.requirement-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.requirement-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.requirement-item.missing .requirement-icon {
+    color: #ef4444;
+}
+
+.requirement-item.present .requirement-icon {
+    color: #10b981;
+}
+
+.requirement-item.optional {
+    opacity: 0.7;
+}
+
+/* Validation Results */
+.validation-result {
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.validation-result.valid {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.validation-result.invalid {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.validation-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.validation-header.valid {
+    color: #10b981;
+}
+
+.validation-header.invalid {
+    color: #ef4444;
+}
+
+.validation-issues {
+    font-size: 0.85rem;
+}
+
+.validation-issues ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+}
+
+.validation-issues li {
+    margin-bottom: 0.25rem;
+}
+
+/* Environment Variables */
+.env-vars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.env-var {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-input);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.env-var-status {
+    font-size: 0.9rem;
+}
+
+.env-var-name {
+    color: var(--text-primary);
+}
+
+/* Modal Actions */
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-input);
+}
+
+.modal-actions .btn {
+    flex: 1;
+}
+
+.modal-status {
+    padding: 1rem 1.5rem;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.modal-status:empty {
+    display: none;
+}
+
+.modal-status.loading {
+    color: var(--text-muted);
+}
+
+.modal-status.success {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.modal-status.error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .platforms-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .platforms-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+let currentPlatform = null;
+let projectId = {{ project.id }};
+
+// Load platforms on page load
+document.addEventListener('DOMContentLoaded', loadPlatforms);
+
+async function loadPlatforms() {
+    const loading = document.getElementById('platforms-loading');
+    const grid = document.getElementById('platforms-grid');
+    const empty = document.getElementById('platforms-empty');
+
+    try {
+        const response = await fetch(`/projects/${projectId}/platforms`);
+        const data = await response.json();
+
+        if (data.platforms && data.platforms.length > 0) {
+            grid.innerHTML = data.platforms.map(p => `
+                <div class="platform-card ${p.authenticated ? 'authenticated' : 'not-authenticated'}"
+                     onclick="openPlatformModal('${p.id}', ${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                    <div class="platform-icon">${p.icon}</div>
+                    <div class="platform-name">${p.name}</div>
+                    <div class="platform-category">${p.category}</div>
+                    <div class="platform-status ${p.authenticated ? 'ready' : 'setup-needed'}">
+                        ${p.authenticated ? '✓ Ready' : '⚙️ Setup needed'}
+                    </div>
+                </div>
+            `).join('');
+
+            loading.style.display = 'none';
+            grid.style.display = 'grid';
+        } else {
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Failed to load platforms:', error);
+        loading.innerHTML = '<p class="error">Failed to load platforms</p>';
+    }
+}
+
+function openPlatformModal(platformId, platformData) {
+    currentPlatform = { id: platformId, ...platformData };
+
+    // Populate modal
+    document.getElementById('modal-platform-icon').textContent = platformData.icon;
+    document.getElementById('modal-platform-name').textContent = platformData.name;
+    document.getElementById('modal-platform-desc').textContent = platformData.description;
+
+    // Requirements
+    const reqList = document.getElementById('modal-requirements');
+    if (platformData.requirements && platformData.requirements.length > 0) {
+        reqList.innerHTML = platformData.requirements.map(r => `
+            <div class="requirement-item ${r.required ? '' : 'optional'}">
+                <span class="requirement-icon">${r.required ? '📋' : '📎'}</span>
+                <div class="requirement-info">
+                    <div class="requirement-name">${r.name.replace(/_/g, ' ')}</div>
+                    <div class="requirement-desc">${r.description}</div>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        reqList.innerHTML = '<p class="text-muted">No specific requirements</p>';
+    }
+
+    // Environment variables
+    const envVars = document.getElementById('modal-env-vars');
+    if (platformData.env_vars && platformData.env_vars.length > 0) {
+        envVars.innerHTML = platformData.env_vars.map(v => `
+            <div class="env-var">
+                <span class="env-var-status">🔑</span>
+                <span class="env-var-name">${v}</span>
+            </div>
+        `).join('');
+        document.getElementById('env-section').style.display = 'block';
+    } else {
+        document.getElementById('env-section').style.display = 'none';
+    }
+
+    // Reset validation section
+    document.getElementById('validation-section').style.display = 'none';
+    document.getElementById('modal-status').textContent = '';
+    document.getElementById('modal-status').className = 'modal-status';
+    document.getElementById('btn-publish').disabled = true;
+
+    // Show modal
+    document.getElementById('platform-modal').style.display = 'flex';
+}
+
+function closePlatformModal() {
+    document.getElementById('platform-modal').style.display = 'none';
+    currentPlatform = null;
+}
+
+async function validateForPlatform() {
+    if (!currentPlatform) return;
+
+    const status = document.getElementById('modal-status');
+    const valSection = document.getElementById('validation-section');
+    const valResult = document.getElementById('validation-result');
+    const publishBtn = document.getElementById('btn-publish');
+
+    status.textContent = 'Validating...';
+    status.className = 'modal-status loading';
+
+    try {
+        const response = await fetch(`/projects/${projectId}/platforms/${currentPlatform.id}/validate`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        valSection.style.display = 'block';
+
+        if (data.validation.valid) {
+            valResult.className = 'validation-result valid';
+            valResult.innerHTML = `
+                <div class="validation-header valid">✓ Ready to publish</div>
+                ${data.validation.warnings.length > 0 ? `
+                    <div class="validation-issues">
+                        <strong>Warnings:</strong>
+                        <ul>${data.validation.warnings.map(w => `<li>${w}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+            `;
+            publishBtn.disabled = false;
+            status.textContent = '';
+        } else {
+            valResult.className = 'validation-result invalid';
+            valResult.innerHTML = `
+                <div class="validation-header invalid">✕ Not ready</div>
+                <div class="validation-issues">
+                    ${data.validation.errors.length > 0 ? `
+                        <strong>Errors:</strong>
+                        <ul>${data.validation.errors.map(e => `<li>${e}</li>`).join('')}</ul>
+                    ` : ''}
+                    ${data.validation.missing.length > 0 ? `
+                        <strong>Missing:</strong>
+                        <ul>${data.validation.missing.map(m => `<li>${m.description}</li>`).join('')}</ul>
+                    ` : ''}
+                </div>
+            `;
+            publishBtn.disabled = true;
+            status.textContent = '';
+        }
+    } catch (error) {
+        status.textContent = 'Validation failed: ' + error.message;
+        status.className = 'modal-status error';
+    }
+}
+
+async function publishToPlatform() {
+    if (!currentPlatform) return;
+
+    const status = document.getElementById('modal-status');
+    const publishBtn = document.getElementById('btn-publish');
+
+    publishBtn.disabled = true;
+    status.textContent = `Publishing to ${currentPlatform.name}...`;
+    status.className = 'modal-status loading';
+
+    try {
+        const response = await fetch(`/projects/${projectId}/platforms/${currentPlatform.id}/publish`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            status.className = 'modal-status success';
+            if (data.result.url) {
+                status.innerHTML = `
+                    ✓ Published! <a href="${data.result.url}" target="_blank">View on ${currentPlatform.name}</a>
+                `;
+            } else if (data.result.metadata && data.result.metadata.next_steps) {
+                status.innerHTML = `
+                    ✓ Ready for next steps<br>
+                    <small>${data.result.message}</small>
+                `;
+            } else {
+                status.textContent = `✓ ${data.result.message || 'Published successfully!'}`;
+            }
+            // Reload platforms to show updated status
+            setTimeout(loadPlatforms, 2000);
+        } else {
+            status.textContent = `✕ ${data.error || 'Publishing failed'}`;
+            status.className = 'modal-status error';
+            publishBtn.disabled = false;
+        }
+    } catch (error) {
+        status.textContent = 'Publishing failed: ' + error.message;
+        status.className = 'modal-status error';
+        publishBtn.disabled = false;
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closePlatformModal();
+    }
+});
+</script>

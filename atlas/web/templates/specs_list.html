@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Specs - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page specs-page">
+    <!-- Header -->
+    <header class="specs-header">
+        <div class="header-content">
+            <h1>Specs</h1>
+            <p class="header-desc">Transform ideas into structured requirements, designs, and tasks</p>
+        </div>
+        <a href="/specs/new" class="btn btn-primary">
+            <span class="btn-icon">✨</span> Describe your vision
+        </a>
+    </header>
+
+    <!-- Stats Bar -->
+    {% if specs %}
+    <section class="stats-bar-section">
+        <div class="stats-inline">
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ specs|length }}</span>
+                <span class="stat-inline-label">Specs</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ specs|selectattr('status', 'equalto', 'active')|list|length }}</span>
+                <span class="stat-inline-label">Active</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ specs|sum(attribute='requirements_count') }}</span>
+                <span class="stat-inline-label">Requirements</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ specs|sum(attribute='tasks_completed') }}/{{ specs|sum(attribute='tasks_count') }}</span>
+                <span class="stat-inline-label">Tasks Done</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Spec List -->
+    <section class="section">
+        <div class="specs-grid">
+            {% if specs %}
+                {% for spec in specs %}
+                <div class="spec-card">
+                    <!-- Header -->
+                    <div class="spec-card-header">
+                        <span class="spec-version">v{{ spec.version or '1.0.0' }}</span>
+                        {% if spec.spec_dir %}
+                        <span class="spec-badge">📁 Files</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Title & Description -->
+                    <h3 class="spec-title">
+                        <a href="/specs/{{ spec.id }}">{{ spec.name[:50] }}{% if spec.name|length > 50 %}...{% endif %}</a>
+                    </h3>
+                    {% if spec.description %}
+                    <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
+                    {% else %}
+                    <p class="spec-description text-muted">No description</p>
+                    {% endif %}
+
+                    <!-- Lifecycle Pipeline -->
+                    <div class="spec-lifecycle">
+                        {% set has_requirements = spec.requirements_count > 0 %}
+                        {% set has_design = spec.has_design|default(true) %}
+                        {% set has_tasks = spec.tasks_count > 0 %}
+                        {% set tasks_started = spec.tasks_completed > 0 %}
+                        {% set tasks_done = spec.tasks_completed == spec.tasks_count and spec.tasks_count > 0 %}
+
+                        <div class="lifecycle-stage {% if has_requirements %}done{% else %}current{% endif %}">
+                            <span class="lifecycle-dot"></span>
+                            <span class="lifecycle-label">Requirements</span>
+                        </div>
+                        <div class="lifecycle-line {% if has_requirements %}done{% endif %}"></div>
+                        <div class="lifecycle-stage {% if has_design and has_requirements %}done{% elif has_requirements %}current{% endif %}">
+                            <span class="lifecycle-dot"></span>
+                            <span class="lifecycle-label">Design</span>
+                        </div>
+                        <div class="lifecycle-line {% if has_tasks %}done{% endif %}"></div>
+                        <div class="lifecycle-stage {% if has_tasks %}done{% elif has_design %}current{% endif %}">
+                            <span class="lifecycle-dot"></span>
+                            <span class="lifecycle-label">Tasks</span>
+                        </div>
+                        <div class="lifecycle-line {% if tasks_started %}done{% endif %}"></div>
+                        <div class="lifecycle-stage {% if tasks_done %}done{% elif tasks_started %}current{% endif %}">
+                            <span class="lifecycle-dot"></span>
+                            <span class="lifecycle-label">Execute</span>
+                        </div>
+                    </div>
+
+                    <!-- Meta Info -->
+                    <div class="spec-meta">
+                        <span class="meta-item">
+                            <span class="meta-icon">📋</span>
+                            {{ spec.requirements_count }} requirements
+                        </span>
+                        <span class="meta-item">
+                            <span class="meta-icon">✅</span>
+                            {{ spec.tasks_completed }}/{{ spec.tasks_count }} tasks
+                        </span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="spec-progress">
+                        {% set progress = (spec.tasks_completed / spec.tasks_count * 100) if spec.tasks_count > 0 else 0 %}
+                        <div class="progress-bar small">
+                            <div class="progress-fill" style="width: {{ progress }}%"></div>
+                        </div>
+                        <span class="progress-text">{{ "%.0f"|format(progress) }}%</span>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="spec-actions">
+                        <a href="/specs/{{ spec.id }}/requirements" class="btn btn-small btn-ghost">Requirements</a>
+                        <a href="/specs/{{ spec.id }}/design" class="btn btn-small btn-ghost">Design</a>
+                        <a href="/specs/{{ spec.id }}/tasks" class="btn btn-small btn-ghost">Tasks</a>
+                        <a href="/specs/{{ spec.id }}/execute" class="btn btn-small btn-primary">Execute</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="empty-state-card">
+                <div class="empty-icon">📐</div>
+                <h3>No specs yet</h3>
+                <p>Transform your idea into structured requirements, design documents, and actionable tasks using the EARS methodology.</p>
+                <a href="/specs/new" class="btn btn-primary">
+                    <span class="btn-icon">✨</span> Describe your vision
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

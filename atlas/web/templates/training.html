@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Training - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page training-page">
+    <!-- Header -->
+    <header class="training-header">
+        <div class="header-content">
+            <h1>Training Lab</h1>
+            <p class="header-desc">Collect data to train your own local ATLAS agent</p>
+        </div>
+        <div class="header-actions">
+            <a href="/training/chat" class="btn btn-secondary">
+                <span class="btn-icon">🧠</span> Ask Cortex
+            </a>
+        </div>
+    </header>
+
+    <!-- Goal Card -->
+    <section class="goal-card">
+        <div class="goal-icon">🎯</div>
+        <div class="goal-content">
+            <h2>Build a Local ATLAS Agent</h2>
+            <p>Every agent interaction is captured as training data. Once you have enough high-quality examples, you can fine-tune a local LLM (via Ollama) to replicate the same behavior - running entirely on your hardware with zero cloud costs.</p>
+        </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <section class="training-stats-bar">
+        <div class="training-stat primary">
+            <span class="training-stat-value">{{ "{:,}".format(stats.total_examples) if stats else 0 }}</span>
+            <span class="training-stat-label">Training Examples</span>
+            <div class="stat-progress-mini">
+                {% set progress = (stats.total_examples / 500 * 100) if stats else 0 %}
+                {% set progress = [progress, 100]|min %}
+                <div class="progress-bar small">
+                    <div class="progress-fill" style="width: {{ progress }}%"></div>
+                </div>
+                <span class="progress-hint">{{ stats.total_examples if stats else 0 }}/500 optimal</span>
+            </div>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="training-stat">
+            <span class="training-stat-value">{{ "{:.0%}".format(stats.approval_rate) if stats else '0%' }}</span>
+            <span class="training-stat-label">Approval Rate</span>
+            <span class="stat-quality {% if stats and stats.approval_rate >= 0.7 %}good{% elif stats and stats.approval_rate >= 0.5 %}warning{% else %}poor{% endif %}">
+                {% if stats and stats.approval_rate >= 0.7 %}Good quality
+                {% elif stats and stats.approval_rate >= 0.5 %}Needs improvement
+                {% else %}Low quality{% endif %}
+            </span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="training-stat">
+            <span class="training-stat-value">{{ "{:,}".format(stats.total_tokens) if stats else 0 }}</span>
+            <span class="training-stat-label">Total Tokens</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="training-stat highlight">
+            <span class="training-stat-value">${{ "%.2f"|format(savings.potential_savings) if savings else '0.00' }}</span>
+            <span class="training-stat-label">Potential Savings</span>
+        </div>
+    </section>
+
+    <!-- Readiness Status -->
+    <section class="section">
+        <div class="readiness-card {% if savings and savings.ready_for_training %}ready{% else %}collecting{% endif %}">
+            <div class="readiness-icon">
+                {% if savings and savings.ready_for_training %}✓{% else %}⏳{% endif %}
+            </div>
+            <div class="readiness-content">
+                <h3>{% if savings and savings.ready_for_training %}Ready for Training{% else %}Collecting Data{% endif %}</h3>
+                <p>{{ savings.recommendation if savings else 'Start using ATLAS to collect training data from agent interactions.' }}</p>
+            </div>
+            {% if savings and savings.ready_for_training %}
+            <a href="/training/export" class="btn btn-primary">Export Data</a>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Data Breakdown -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Data Breakdown</h2>
+        </div>
+        <div class="breakdown-grid">
+            <!-- By Agent -->
+            <div class="breakdown-card">
+                <div class="breakdown-card-icon">🤖</div>
+                <h3>By Agent</h3>
+                <div class="breakdown-list">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">💡 Sketch</span>
+                        <span class="breakdown-value">{{ stats.by_agent.get('architect', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">🛠️ Tinker</span>
+                        <span class="breakdown-value">{{ stats.by_agent.get('mason', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">🔮 Oracle</span>
+                        <span class="breakdown-value">{{ stats.by_agent.get('oracle', 0) if stats else 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Complexity -->
+            <div class="breakdown-card">
+                <div class="breakdown-card-icon">📊</div>
+                <h3>By Complexity</h3>
+                <div class="breakdown-list">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label simple">Simple</span>
+                        <span class="breakdown-value">{{ stats.by_complexity.get('simple', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label medium">Medium</span>
+                        <span class="breakdown-value">{{ stats.by_complexity.get('medium', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label complex">Complex</span>
+                        <span class="breakdown-value">{{ stats.by_complexity.get('complex', 0) if stats else 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Quality -->
+            <div class="breakdown-card">
+                <div class="breakdown-card-icon">✅</div>
+                <h3>By Quality</h3>
+                <div class="breakdown-list">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label approved">Approved</span>
+                        <span class="breakdown-value">{{ stats.by_quality.get('approved', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label revised">Revised</span>
+                        <span class="breakdown-value">{{ stats.by_quality.get('revised_once', 0) if stats else 0 }}</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="breakdown-label pending">Pending</span>
+                        <span class="breakdown-value">{{ stats.by_quality.get('unknown', 0) if stats else 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Provider -->
+            <div class="breakdown-card">
+                <div class="breakdown-card-icon">☁️</div>
+                <h3>By Provider</h3>
+                <div class="breakdown-list">
+                    {% if stats and stats.by_provider %}
+                        {% for provider, count in stats.by_provider.items() %}
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">{{ provider }}</span>
+                            <span class="breakdown-value">{{ count }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="breakdown-item">
+                            <span class="breakdown-label">No data yet</span>
+                            <span class="breakdown-value">-</span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cost Comparison -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Cost Analysis</h2>
+        </div>
+        <div class="cost-comparison">
+            <div class="cost-card cloud">
+                <span class="cost-icon">☁️</span>
+                <span class="cost-label">Cloud LLM</span>
+                <span class="cost-value">${{ "%.2f"|format(savings.cloud_cost) if savings else '0.00' }}</span>
+            </div>
+            <div class="cost-arrow">→</div>
+            <div class="cost-card local">
+                <span class="cost-icon">🏠</span>
+                <span class="cost-label">Local LLM</span>
+                <span class="cost-value">${{ "%.4f"|format(savings.local_cost_estimate) if savings else '0.0000' }}</span>
+            </div>
+            <div class="cost-arrow">=</div>
+            <div class="cost-card savings">
+                <span class="cost-icon">💰</span>
+                <span class="cost-label">You Save</span>
+                <span class="cost-value">${{ "%.2f"|format(savings.potential_savings) if savings else '0.00' }}</span>
+                <span class="cost-percent">{{ "%.0f"|format(savings.savings_percentage) if savings else 0 }}% reduction</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Export Options -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Export Training Data</h2>
+        </div>
+        <div class="export-grid">
+            <div class="export-card">
+                <div class="export-icon">📄</div>
+                <h3>JSONL Format</h3>
+                <p>Standard format for fine-tuning with OpenAI, Anthropic, or open-source tools</p>
+                <form action="/training/export" method="post">
+                    <button type="submit" class="btn btn-primary btn-block">Download JSONL</button>
+                </form>
+            </div>
+            <div class="export-card">
+                <div class="export-icon">🦙</div>
+                <h3>Ollama Modelfile</h3>
+                <p>Create a custom Ollama model with your trained data</p>
+                <form action="/training/export-ollama" method="post">
+                    <button type="submit" class="btn btn-secondary btn-block">Download Modelfile</button>
+                </form>
+            </div>
+            <div class="export-card disabled">
+                <div class="export-icon">🤖</div>
+                <h3>Auto Fine-tune</h3>
+                <p>One-click fine-tuning with LoRA on your local GPU</p>
+                <button class="btn btn-ghost btn-block" disabled>Coming Soon</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">How to Train Your Local ATLAS</h2>
+        </div>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <h4>Collect Data</h4>
+                <p>Use ATLAS normally. Every approved agent output becomes training data.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <h4>Export Data</h4>
+                <p>Once you have 100+ examples, export as JSONL format.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <h4>Fine-tune</h4>
+                <p>Use tools like mlx_lm, axolotl, or unsloth to fine-tune a base model.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">4</div>
+                <h4>Deploy to Ollama</h4>
+                <p>Convert your model to GGUF and add to Ollama.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">5</div>
+                <h4>Update Config</h4>
+                <p>Configure ATLAS to route tasks to your local model first.</p>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

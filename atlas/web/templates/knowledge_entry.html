@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}{{ entry.title }} - ATLAS Knowledge{% endblock %}
+
+{% block content %}
+<div class="page knowledge-entry-page">
+    <!-- Breadcrumb -->
+    <nav class="knowledge-breadcrumb">
+        <a href="/knowledge/">Knowledge Base</a>
+        <span class="breadcrumb-sep">/</span>
+        <span>{{ entry.category.value | title }}</span>
+        {% if entry.platform %}
+        <span class="breadcrumb-sep">/</span>
+        <span>{{ entry.platform | title }}</span>
+        {% endif %}
+    </nav>
+
+    <div class="knowledge-entry-layout">
+        <!-- Main Content -->
+        <article class="knowledge-entry-main">
+            <!-- Header -->
+            <header class="entry-header">
+                <div class="entry-badges">
+                    <span class="platform-badge {{ entry.platform or 'general' }}">
+                        {{ entry.platform or 'General' }}
+                    </span>
+                    <span class="category-badge">{{ entry.category.value | title }}</span>
+                </div>
+                <h1>{{ entry.title }}</h1>
+                <div class="entry-tags">
+                    {% for tag in entry.tags %}
+                    <span class="tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+            </header>
+
+            <!-- Prerequisites -->
+            {% if entry.prerequisites %}
+            <section class="entry-section prerequisites-section">
+                <h2>Prerequisites</h2>
+                <ul class="prerequisites-list">
+                    {% for prereq in entry.prerequisites %}
+                    <li>
+                        <span class="prereq-check">✓</span>
+                        {{ prereq }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endif %}
+
+            <!-- Quick Commands -->
+            {% if entry.commands %}
+            <section class="entry-section commands-section">
+                <div class="section-header">
+                    <h2>Quick Commands</h2>
+                    <button class="btn btn-small btn-secondary copy-all-btn" onclick="copyAllCommands()">
+                        Copy All
+                    </button>
+                </div>
+                <div class="commands-list">
+                    {% for cmd in entry.commands %}
+                    <div class="command-item">
+                        <code>{{ cmd }}</code>
+                        <button class="copy-btn" onclick="copyCommand(this, '{{ cmd | e }}')">
+                            <span class="copy-icon">📋</span>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="/agents?task=Run commands from {{ entry.title }}" class="btn btn-primary run-commands-btn">
+                    <span class="btn-icon">⚡</span> Execute with Agents
+                </a>
+            </section>
+            {% endif %}
+
+            <!-- Main Content -->
+            <section class="entry-section content-section">
+                <div class="entry-content markdown-content">
+                    {{ entry.content | safe }}
+                </div>
+            </section>
+
+            <!-- Source -->
+            {% if entry.source %}
+            <footer class="entry-footer">
+                <span class="source-label">Source:</span>
+                <span class="source-value">{{ entry.source }}</span>
+            </footer>
+            {% endif %}
+        </article>
+
+        <!-- Sidebar -->
+        <aside class="knowledge-entry-sidebar">
+            <!-- Actions -->
+            <div class="sidebar-card">
+                <h3>Actions</h3>
+                <div class="sidebar-actions">
+                    <a href="/knowledge/{{ entry.id }}/edit" class="btn btn-secondary btn-block">
+                        Edit Guide
+                    </a>
+                    <button class="btn btn-ghost btn-block" onclick="shareEntry()">
+                        Share
+                    </button>
+                </div>
+            </div>
+
+            <!-- Related Guides -->
+            {% if related %}
+            <div class="sidebar-card">
+                <h3>Related Guides</h3>
+                <div class="related-guides-list">
+                    {% for rel in related %}
+                    <a href="/knowledge/{{ rel.id }}" class="related-guide-item">
+                        <span class="platform-dot {{ rel.platform or 'general' }}"></span>
+                        <span class="related-title">{{ rel.title }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Info -->
+            <div class="sidebar-card">
+                <h3>Quick Info</h3>
+                <div class="quick-info-list">
+                    <div class="quick-info-item">
+                        <span class="info-label">Category</span>
+                        <span class="info-value">{{ entry.category.value | title }}</span>
+                    </div>
+                    <div class="quick-info-item">
+                        <span class="info-label">Platform</span>
+                        <span class="info-value">{{ entry.platform | title if entry.platform else 'General' }}</span>
+                    </div>
+                    {% if entry.commands %}
+                    <div class="quick-info-item">
+                        <span class="info-label">Commands</span>
+                        <span class="info-value">{{ entry.commands|length }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script>
+function copyCommand(btn, cmd) {
+    navigator.clipboard.writeText(cmd);
+    const icon = btn.querySelector('.copy-icon');
+    icon.textContent = '✓';
+    setTimeout(() => icon.textContent = '📋', 1500);
+}
+
+function copyAllCommands() {
+    const commands = Array.from(document.querySelectorAll('.command-item code'))
+        .map(c => c.textContent)
+        .join('\n');
+    navigator.clipboard.writeText(commands);
+    const btn = document.querySelector('.copy-all-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy All', 1500);
+}
+
+function shareEntry() {
+    if (navigator.share) {
+        navigator.share({
+            title: '{{ entry.title }}',
+            url: window.location.href
+        });
+    } else {
+        navigator.clipboard.writeText(window.location.href);
+        alert('Link copied to clipboard!');
+    }
+}
+</script>
+{% endblock %}

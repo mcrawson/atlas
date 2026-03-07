@@ -1,0 +1,592 @@
+{% extends "base.html" %}
+
+{% block title %}Setup - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page setup-page">
+    <!-- Header -->
+    <header class="setup-header">
+        <div class="header-content">
+            <h1>Platform Setup</h1>
+            <p class="header-desc">Configure integrations to publish your projects</p>
+        </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <section class="setup-stats-bar">
+        <div class="setup-stat ready">
+            <span class="setup-stat-value">{{ stats.ready }}</span>
+            <span class="setup-stat-label">Ready</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="setup-stat partial">
+            <span class="setup-stat-value">{{ stats.partial }}</span>
+            <span class="setup-stat-label">Partial</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="setup-stat missing">
+            <span class="setup-stat-value">{{ stats.missing }}</span>
+            <span class="setup-stat-label">Missing</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="setup-stat total">
+            <span class="setup-stat-value">{{ stats.total }}</span>
+            <span class="setup-stat-label">Total Platforms</span>
+        </div>
+    </section>
+
+    <!-- Quick Start Guide -->
+    <section class="section">
+        <div class="goal-card">
+            <div class="goal-icon">📋</div>
+            <div class="goal-content">
+                <h2>Quick Setup</h2>
+                <p>Create a <code>.env</code> file in your ATLAS directory with your API keys. Copy from <code>.env.example</code> and fill in the values you need.</p>
+                <div class="quick-commands">
+                    <code>cp .env.example .env</code>
+                    <code>nano .env  # or your editor</code>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Platform Categories -->
+    {% for cat_id, category in categories.items() %}
+    {% if category.platforms %}
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">{{ category.name }}</h2>
+        </div>
+        <div class="platforms-grid">
+            {% for platform in category.platforms %}
+            <div class="platform-card {{ platform.status }}">
+                <div class="platform-header">
+                    <span class="platform-icon">{{ platform.icon }}</span>
+                    <div class="platform-info">
+                        <h3>{{ platform.name }}</h3>
+                        <p>{{ platform.description }}</p>
+                    </div>
+                    <span class="platform-status-badge {{ platform.status }}">
+                        {% if platform.status == 'ready' %}
+                        ✓ Ready
+                        {% elif platform.status == 'partial' %}
+                        ⚠ Partial
+                        {% elif platform.status == 'optional' %}
+                        ○ Optional
+                        {% else %}
+                        ✕ Not Configured
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="platform-env-vars">
+                    {% for env_var in platform.env_vars %}
+                    <div class="env-var-row {{ 'configured' if env_var.configured else 'missing' }}">
+                        <span class="env-var-status">
+                            {% if env_var.configured %}✓{% else %}○{% endif %}
+                        </span>
+                        <div class="env-var-info">
+                            <code class="env-var-name">{{ env_var.name }}</code>
+                            <span class="env-var-desc">{{ env_var.description }}</span>
+                            {% if env_var.configured %}
+                            <span class="env-var-value">{{ env_var.masked_value }}</span>
+                            {% endif %}
+                        </div>
+                        {% if env_var.url and not env_var.configured %}
+                        <a href="{{ env_var.url }}" target="_blank" class="env-var-link btn btn-sm btn-ghost">
+                            Get Key →
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if platform.note %}
+                <div class="platform-note">
+                    <span class="note-icon">ℹ️</span>
+                    {{ platform.note }}
+                </div>
+                {% endif %}
+
+                {% if platform.scopes %}
+                <div class="platform-scopes">
+                    <span class="scopes-label">Required scopes:</span>
+                    <code>{{ platform.scopes }}</code>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% endfor %}
+
+    <!-- Project Type Quick Reference -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">What You Need by Project Type</h2>
+        </div>
+        <div class="project-type-grid">
+            <div class="project-type-card">
+                <span class="project-type-icon">📱</span>
+                <h4>Mobile Apps</h4>
+                <ul class="checklist">
+                    <li>AI Provider (required)</li>
+                    <li>GitHub (code storage)</li>
+                    <li>Canva (icons, screenshots)</li>
+                    <li>App Store / Play Store</li>
+                </ul>
+            </div>
+            <div class="project-type-card">
+                <span class="project-type-icon">📚</span>
+                <h4>Books</h4>
+                <ul class="checklist">
+                    <li>AI Provider (required)</li>
+                    <li>Canva (covers)</li>
+                    <li>Google Docs (manuscripts)</li>
+                    <li>Amazon KDP (no API)</li>
+                </ul>
+            </div>
+            <div class="project-type-card">
+                <span class="project-type-icon">🌐</span>
+                <h4>Web Apps</h4>
+                <ul class="checklist">
+                    <li>AI Provider (required)</li>
+                    <li>GitHub (code storage)</li>
+                    <li>Vercel (deployment)</li>
+                    <li>Figma (design - optional)</li>
+                </ul>
+            </div>
+            <div class="project-type-card">
+                <span class="project-type-icon">📦</span>
+                <h4>Libraries</h4>
+                <ul class="checklist">
+                    <li>AI Provider (required)</li>
+                    <li>GitHub (code storage)</li>
+                    <li>npm (JavaScript)</li>
+                    <li>PyPI (Python)</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Help Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Need Help?</h2>
+        </div>
+        <div class="help-grid">
+            <div class="help-card">
+                <h4>Environment Variables</h4>
+                <p>All secrets are loaded from environment variables. You can set them in:</p>
+                <ul>
+                    <li><code>.env</code> file in your ATLAS directory</li>
+                    <li>Your shell profile (<code>~/.bashrc</code>, <code>~/.zshrc</code>)</li>
+                    <li>System environment variables</li>
+                </ul>
+            </div>
+            <div class="help-card">
+                <h4>Testing Setup</h4>
+                <p>After configuring, restart ATLAS and return to this page to verify your setup.</p>
+                <code>source .env && python -m atlas.web</code>
+            </div>
+            <div class="help-card">
+                <h4>.env.example</h4>
+                <p>A template file with all available configuration options is provided at:</p>
+                <code>atlas/.env.example</code>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+/* Setup Page Styles */
+.setup-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.setup-header {
+    margin-bottom: 2rem;
+}
+
+.setup-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.header-desc {
+    color: var(--text-secondary);
+}
+
+/* Stats Bar */
+.setup-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    background: var(--surface-elevated);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+}
+
+.setup-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.setup-stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.setup-stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.setup-stat.ready .setup-stat-value {
+    color: var(--success);
+}
+
+.setup-stat.partial .setup-stat-value {
+    color: var(--warning);
+}
+
+.setup-stat.missing .setup-stat-value {
+    color: var(--error);
+}
+
+.stat-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border);
+}
+
+/* Quick Commands */
+.quick-commands {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.quick-commands code {
+    background: var(--surface);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-family: monospace;
+}
+
+/* Platforms Grid */
+.platforms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+}
+
+.platform-card {
+    background: var(--surface-elevated);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+}
+
+.platform-card.ready {
+    border-color: var(--success);
+}
+
+.platform-card.partial {
+    border-color: var(--warning);
+}
+
+.platform-card.missing {
+    border-color: var(--border);
+}
+
+.platform-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.platform-icon {
+    font-size: 2rem;
+}
+
+.platform-info {
+    flex: 1;
+}
+
+.platform-info h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.1rem;
+}
+
+.platform-info p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.platform-status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.platform-status-badge.ready {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.platform-status-badge.partial {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.platform-status-badge.missing {
+    background: var(--surface);
+    color: var(--text-secondary);
+}
+
+.platform-status-badge.optional {
+    background: var(--surface);
+    color: var(--text-secondary);
+}
+
+/* Env Vars */
+.platform-env-vars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.env-var-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+.env-var-row.configured {
+    background: var(--success-bg);
+}
+
+.env-var-status {
+    font-size: 0.875rem;
+    width: 1.5rem;
+    text-align: center;
+}
+
+.env-var-row.configured .env-var-status {
+    color: var(--success);
+}
+
+.env-var-row.missing .env-var-status {
+    color: var(--text-muted);
+}
+
+.env-var-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.env-var-name {
+    font-family: monospace;
+    font-size: 0.875rem;
+    color: var(--primary);
+}
+
+.env-var-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.env-var-value {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.env-var-link {
+    font-size: 0.75rem;
+}
+
+/* Platform Note & Scopes */
+.platform-note,
+.platform-scopes {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--surface);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.note-icon {
+    margin-right: 0.5rem;
+}
+
+.scopes-label {
+    color: var(--text-muted);
+    margin-right: 0.5rem;
+}
+
+/* Project Type Grid */
+.project-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.project-type-card {
+    background: var(--surface-elevated);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+}
+
+.project-type-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.project-type-card h4 {
+    margin: 0 0 1rem;
+}
+
+.checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.checklist li {
+    padding: 0.25rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.checklist li::before {
+    content: "○";
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+}
+
+/* Help Grid */
+.help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.help-card {
+    background: var(--surface-elevated);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+}
+
+.help-card h4 {
+    margin: 0 0 0.75rem;
+}
+
+.help-card p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.help-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.help-card li {
+    padding: 0.25rem 0;
+    font-size: 0.875rem;
+}
+
+.help-card code {
+    background: var(--surface);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+/* Goal Card (reused from training) */
+.goal-card {
+    display: flex;
+    gap: 1.5rem;
+    background: var(--surface-elevated);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--primary);
+}
+
+.goal-icon {
+    font-size: 2.5rem;
+}
+
+.goal-content h2 {
+    margin: 0 0 0.5rem;
+}
+
+.goal-content p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.goal-content code {
+    background: var(--surface);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* Section styles */
+.section {
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    margin-bottom: 1rem;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+/* Button styles */
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+    background: var(--surface);
+    border-color: var(--primary);
+}
+</style>
+{% endblock %}

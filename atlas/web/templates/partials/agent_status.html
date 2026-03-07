@@ -1,0 +1,70 @@
+{% if agents %}
+    {% for name, agent in agents.items() %}
+    {% set agent_key = 'sketch' if name == 'architect' else ('tinker' if name == 'mason' else ('oracle' if name == 'oracle' else name)) %}
+    {% set display_name = 'Sketch' if name == 'architect' else ('Tinker' if name == 'mason' else ('Oracle' if name == 'oracle' else name|title)) %}
+    {% set agent_icon = '💡' if agent_key == 'sketch' else ('🛠️' if agent_key == 'tinker' else ('🔮' if agent_key == 'oracle' else ('📤' if agent_key == 'launch' else ('📡' if agent_key == 'buzz' else '🎉')))) %}
+    {% set is_active = agent.status in ['working', 'thinking', 'planning', 'building', 'verifying'] %}
+    <div class="agent-status-card {% if is_active %}active{% endif %}">
+        <div class="status-card-header">
+            <div class="status-icon {% if is_active %}active{% endif %}">
+                {{ agent_icon }}
+            </div>
+            <div class="status-info">
+                <h3>{{ display_name }}</h3>
+                <p>{{ agent.description }}</p>
+            </div>
+            <div class="status-badge-wrap">
+                <span class="status-indicator {{ agent.status }}">
+                    {% if is_active %}
+                    <span class="spinner"></span>
+                    {% endif %}
+                    {{ agent.status }}
+                </span>
+            </div>
+        </div>
+        {% if agent.current_task %}
+        <div class="status-task">
+            <span class="task-label">Working on:</span>
+            <span class="task-text">{{ agent.current_task[:60] }}{% if agent.current_task|length > 60 %}...{% endif %}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="agent-status-card">
+        <div class="status-card-header">
+            <div class="status-icon">💡</div>
+            <div class="status-info">
+                <h3>Sketch</h3>
+                <p>The idea whisperer</p>
+            </div>
+            <div class="status-badge-wrap">
+                <span class="status-indicator idle">idle</span>
+            </div>
+        </div>
+    </div>
+    <div class="agent-status-card">
+        <div class="status-card-header">
+            <div class="status-icon">🛠️</div>
+            <div class="status-info">
+                <h3>Tinker</h3>
+                <p>The maker of things</p>
+            </div>
+            <div class="status-badge-wrap">
+                <span class="status-indicator idle">idle</span>
+            </div>
+        </div>
+    </div>
+    <div class="agent-status-card">
+        <div class="status-card-header">
+            <div class="status-icon">🔮</div>
+            <div class="status-info">
+                <h3>Oracle</h3>
+                <p>The all-seeing eye</p>
+            </div>
+            <div class="status-badge-wrap">
+                <span class="status-indicator idle">idle</span>
+            </div>
+        </div>
+    </div>
+{% endif %}

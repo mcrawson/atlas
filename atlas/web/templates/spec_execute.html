@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Execute: {{ spec.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <div class="header-content">
+            <a href="/specs/{{ spec.id }}/tasks" class="back-link">&larr; Back to Tasks</a>
+            <h1>Execute Spec Tasks</h1>
+            <p class="subtitle">{{ spec.name }}</p>
+        </div>
+    </header>
+
+    <!-- Progress -->
+    <section class="section">
+        <div class="progress-section">
+            <div class="progress-bar large">
+                <div class="progress-fill" style="width: {{ progress.percentage }}%"></div>
+            </div>
+            <div class="progress-info">
+                <span class="progress-text">{{ progress.completed }}/{{ progress.total }} tasks completed</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Next Task -->
+    {% if next_task %}
+    <section class="section card highlight">
+        <h2 class="section-title">Next Task</h2>
+        <div class="next-task">
+            <div class="task-info">
+                <span class="task-id">{{ next_task.task_id }}</span>
+                <h3 class="task-title">{{ next_task.title }}</h3>
+                <p class="task-description">{{ next_task.description or 'No description provided' }}</p>
+                <div class="task-meta">
+                    <span class="priority priority-{{ next_task.priority }}">{{ next_task.priority }} priority</span>
+                    {% if next_task.requirement_ids %}
+                    <span class="requirements">Requirements: {{ next_task.requirement_ids }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="task-actions">
+                <form action="/specs/{{ spec.id }}/execute/{{ next_task.task_id }}" method="post">
+                    <button type="submit" class="btn btn-primary btn-large">
+                        Execute with Agent Workflow
+                        <span class="btn-subtitle">Architect → Mason → Oracle</span>
+                    </button>
+                </form>
+                <form action="/specs/{{ spec.id }}/tasks/{{ next_task.task_id }}/status" method="post" class="manual-action">
+                    <input type="hidden" name="status" value="completed">
+                    <button type="submit" class="btn btn-secondary">
+                        Mark as Complete (Manual)
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+    {% else %}
+    <section class="section card">
+        <div class="all-done">
+            <div class="done-icon">🎉</div>
+            <h2>All Tasks Complete!</h2>
+            <p>Great job! All tasks in this spec have been completed.</p>
+            <a href="/specs/{{ spec.id }}" class="btn btn-primary">View Spec Summary</a>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Pending Queue -->
+    {% if pending_tasks|length > 1 %}
+    <section class="section">
+        <h2 class="section-title">Task Queue ({{ pending_tasks|length }} pending)</h2>
+        <div class="task-queue">
+            {% for task in pending_tasks[1:] %}
+            <div class="queue-item">
+                <span class="queue-position">{{ loop.index + 1 }}</span>
+                <span class="task-id">{{ task.task_id }}</span>
+                <span class="task-title">{{ task.title }}</span>
+                <span class="priority priority-{{ task.priority }}">{{ task.priority }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- How it Works -->
+    <section class="section card info-card">
+        <h3>How Task Execution Works</h3>
+        <div class="workflow-diagram">
+            <div class="workflow-step">
+                <div class="step-icon">💡</div>
+                <div class="step-name">Sketch</div>
+                <div class="step-desc">Plans the implementation approach</div>
+            </div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step">
+                <div class="step-icon">🛠️</div>
+                <div class="step-name">Tinker</div>
+                <div class="step-desc">Builds the code implementation</div>
+            </div>
+            <div class="workflow-arrow">→</div>
+            <div class="workflow-step">
+                <div class="step-icon">🔮</div>
+                <div class="step-name">Oracle</div>
+                <div class="step-desc">Verifies quality & correctness</div>
+            </div>
+        </div>
+        <p class="workflow-note">Oracle can send work back to Tinker for revision if needed. Once approved, the task is marked complete.</p>
+    </section>
+</div>
+
+<style>
+.progress-section {
+    background: var(--bg-secondary, #1a1a2e);
+    padding: 1.5rem;
+    border-radius: 8px;
+}
+
+.progress-bar.large {
+    height: 12px;
+    margin-bottom: 1rem;
+}
+
+.card.highlight {
+    border: 1px solid var(--accent-color, #00ff41);
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+}
+
+.next-task {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.task-info {
+    flex: 1;
+}
+
+.task-info .task-id {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    background: var(--bg-tertiary, #252540);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.task-info .task-title {
+    color: var(--text-primary, #fff);
+    margin: 0.5rem 0;
+}
+
+.task-info .task-description {
+    color: var(--text-secondary, #888);
+    margin-bottom: 1rem;
+}
+
+.task-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+}
+
+.priority {
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+}
+
+.priority-critical { background: rgba(220, 53, 69, 0.3); color: #ff6b7a; }
+.priority-high { background: rgba(240, 173, 78, 0.3); color: #f0ad4e; }
+.priority-medium { background: rgba(0, 255, 65, 0.2); color: #00ff41; }
+.priority-low { background: rgba(136, 136, 136, 0.3); color: #aaa; }
+
+.requirements {
+    color: var(--text-secondary, #888);
+}
+
+.task-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.btn-subtitle {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-top: 0.25rem;
+}
+
+.manual-action {
+    margin-top: 0.5rem;
+}
+
+.all-done {
+    text-align: center;
+    padding: 3rem;
+}
+
+.done-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.all-done h2 {
+    color: var(--accent-color, #00ff41);
+    margin-bottom: 0.5rem;
+}
+
+.all-done p {
+    color: var(--text-secondary, #888);
+    margin-bottom: 1.5rem;
+}
+
+.task-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 6px;
+}
+
+.queue-position {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary, #252540);
+    border-radius: 50%;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+}
+
+.queue-item .task-id {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+}
+
+.queue-item .task-title {
+    flex: 1;
+    color: var(--text-primary, #fff);
+}
+
+.info-card {
+    background: var(--bg-tertiary, #252540);
+    margin-top: 2rem;
+}
+
+.info-card h3 {
+    color: var(--accent-color, #00ff41);
+    margin-bottom: 1.5rem;
+}
+
+.workflow-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.workflow-step {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 8px;
+    min-width: 140px;
+}
+
+.step-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.step-name {
+    color: var(--text-primary, #fff);
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.step-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+}
+
+.workflow-arrow {
+    font-size: 1.5rem;
+    color: var(--accent-color, #00ff41);
+}
+
+.workflow-note {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #888);
+}
+</style>
+{% endblock %}

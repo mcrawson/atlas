@@ -1,0 +1,86 @@
+{% if files_written %}
+<div class="files-written-card">
+    <div class="files-header">
+        <span class="files-icon">📁</span>
+        <h3>Files Generated</h3>
+        {% if files_written.success %}
+        <span class="files-status success">Success</span>
+        {% else %}
+        <span class="files-status error">Errors</span>
+        {% endif %}
+    </div>
+    <div class="files-location">
+        <strong>Project Directory:</strong>
+        <code>{{ files_written.project_dir }}</code>
+    </div>
+    {% if files_written.files %}
+    <div class="files-list">
+        <strong>Files Created:</strong>
+        <ul>
+            {% for file in files_written.files %}
+            <li><code>{{ file }}</code></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% if files_written.errors %}
+    <div class="files-errors">
+        <strong>Errors:</strong>
+        <ul>
+            {% for error in files_written.errors %}
+            <li class="error-item">{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if results %}
+<div class="results-container">
+    {% for result in results %}
+    <div class="result-card agent-{{ result.agent }}">
+        <div class="result-header">
+            <span class="agent-badge">
+                {% if 'architect' in result.agent %}
+                💡 Sketch
+                {% elif 'mason' in result.agent %}
+                🛠️ Tinker
+                {% elif 'oracle' in result.agent %}
+                🔮 Oracle
+                {% elif 'launch' in result.agent %}
+                📤 Launch
+                {% elif 'buzz' in result.agent %}
+                📡 Buzz
+                {% elif 'hype' in result.agent %}
+                🎉 Hype
+                {% else %}
+                {{ result.agent|title }}
+                {% endif %}
+            </span>
+            <span class="result-status status-{{ result.status }}">
+                {{ result.status }}
+            </span>
+        </div>
+        <div class="result-content">
+            <pre>{{ result.content }}</pre>
+        </div>
+        {% if result.metadata %}
+        <div class="result-metadata">
+            {% for key, value in result.metadata.items() %}
+            {% if key != 'error' %}
+            <span class="meta-item">
+                <strong>{{ key }}:</strong> {{ value }}
+            </span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No results to display.</p>
+</div>
+{% endif %}

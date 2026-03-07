@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}Agents - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page agents-page">
+    <!-- Hero Section -->
+    <header class="agents-hero">
+        <div class="hero-content">
+            <h1>Agent Command Center</h1>
+            <p class="hero-desc">Monitor, control, and deploy your AI workforce</p>
+        </div>
+    </header>
+
+    <!-- Meet the Team -->
+    <section class="section meet-the-team">
+        <div class="section-header">
+            <h2 class="section-title">Meet the Team</h2>
+        </div>
+
+        <!-- Core Agents -->
+        <div class="team-label">Core Pipeline</div>
+        <div class="team-cards core-team">
+            <div class="team-card">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/sketch.webp" alt="Sketch" class="agent-portrait">
+                    <span class="agent-icon-badge">💡</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Sketch</h3>
+                    <span class="team-card-role">Planning & Strategy</span>
+                    <p class="team-card-desc">The idea whisperer. Sketch takes your rough concepts and turns them into detailed blueprints. Analyzes requirements, identifies risks, and draws up the master plan before a single line of code is written.</p>
+                </div>
+            </div>
+            <div class="team-card">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/tinker.webp" alt="Tinker" class="agent-portrait">
+                    <span class="agent-icon-badge">🛠️</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Tinker</h3>
+                    <span class="team-card-role">Implementation</span>
+                    <p class="team-card-desc">The maker of things. Tinker takes Sketch's blueprints and brings them to life, one component at a time. Writes clean, maintainable code and won't stop tweaking until it works just right.</p>
+                </div>
+            </div>
+            <div class="team-card">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/oracle.webp" alt="Oracle" class="agent-portrait">
+                    <span class="agent-icon-badge">🔮</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Oracle</h3>
+                    <span class="team-card-role">Quality & Verification</span>
+                    <p class="team-card-desc">The all-seeing eye. Oracle examines every line, questions every decision, and ensures nothing ships until it meets the standard. Part critic, part guardian—your last line of defense against bugs and bad patterns.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Support Agents -->
+        <div class="team-label">Support Team</div>
+        <div class="team-cards support-team">
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/buzz.webp" alt="Buzz" class="agent-portrait">
+                    <span class="agent-icon-badge">📡</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Buzz</h3>
+                    <span class="team-card-role">Communications</span>
+                    <p class="team-card-desc">The messenger. Buzz keeps everyone in the loop—routing notifications, delivering updates, and making sure no important message gets lost in the void.</p>
+                </div>
+            </div>
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/sentry.webp" alt="Sentry" class="agent-portrait">
+                    <span class="agent-icon-badge">🛡️</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Sentry</h3>
+                    <span class="team-card-role">Webhook Gatekeeper</span>
+                    <p class="team-card-desc">The gatekeeper. Sentry stands watch at the door, verifying every incoming webhook, checking credentials, and routing only legitimate events through.</p>
+                </div>
+            </div>
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/launch.webp" alt="Launch" class="agent-portrait">
+                    <span class="agent-icon-badge">📤</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Launch</h3>
+                    <span class="team-card-role">Deployment</span>
+                    <p class="team-card-desc">The flight director. Launch handles liftoff—managing deployments across environments, orchestrating rollbacks when needed, and ensuring every release lands safely.</p>
+                </div>
+            </div>
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/tally.webp" alt="Tally" class="agent-portrait">
+                    <span class="agent-icon-badge">💰</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Tally</h3>
+                    <span class="team-card-role">Cost Tracking</span>
+                    <p class="team-card-desc">The bean counter. Tally watches every token, tracks every API call, and knows exactly where your money is going. Alerts you before budgets blow up.</p>
+                </div>
+            </div>
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/hype.webp" alt="Hype" class="agent-portrait">
+                    <span class="agent-icon-badge">🎉</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Hype</h3>
+                    <span class="team-card-role">Advertising & Promotion</span>
+                    <p class="team-card-desc">The hypeman. Hype takes what the team built and makes the world care. Crafts compelling copy, generates social campaigns, and knows exactly which buttons to push.</p>
+                </div>
+            </div>
+            <div class="team-card small">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/cortex.webp" alt="Cortex" class="agent-portrait" onerror="this.style.display='none'; this.nextElementSibling.classList.add('no-image');">
+                    <span class="agent-icon-badge">🧠</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Cortex</h3>
+                    <span class="team-card-role">Training Intelligence</span>
+                    <p class="team-card-desc">The brain of your training system. Understands your data, tracks your progress, assesses readiness, and guides you to training your own local AI model.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <section class="agent-stats-bar">
+        <div class="agent-stat">
+            <span class="agent-stat-value" id="tasks-today">{{ stats.tasks_today if stats else 0 }}</span>
+            <span class="agent-stat-label">Tasks Today</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="agent-stat">
+            <span class="agent-stat-value" id="success-rate">{{ "%.0f"|format(stats.success_rate if stats else 100) }}%</span>
+            <span class="agent-stat-label">Success Rate</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="agent-stat">
+            <span class="agent-stat-value" id="avg-time">{{ stats.avg_time if stats else '0s' }}</span>
+            <span class="agent-stat-label">Avg Time</span>
+        </div>
+        <span class="stat-divider"></span>
+        <div class="agent-stat">
+            <span class="agent-stat-value" id="queue-count">{{ queue|length if queue else 0 }}</span>
+            <span class="agent-stat-label">In Queue</span>
+        </div>
+    </section>
+
+    <!-- Main Content: Two Columns -->
+    <div class="agents-main-grid">
+        <!-- Left Column: Live Pipeline -->
+        <section class="pipeline-section">
+            <div class="section-header">
+                <h2 class="section-title">Live Pipeline</h2>
+            </div>
+            <div id="live-pipeline"
+                 hx-get="/agents/partials/pipeline"
+                 hx-trigger="every 2s"
+                 hx-swap="innerHTML"
+                 class="live-pipeline">
+                {% include "partials/agent_pipeline.html" %}
+            </div>
+        </section>
+
+        <!-- Right Column: Execute & Quick Actions -->
+        <section class="execute-section">
+            <div class="execute-card">
+                <div class="execute-header">
+                    <h2>Execute Task</h2>
+                </div>
+                <form class="execute-form"
+                      hx-post="/agents/execute"
+                      hx-target="#execution-results"
+                      hx-swap="innerHTML"
+                      hx-indicator="#execute-indicator">
+                    <div class="form-group">
+                        <textarea id="task"
+                                  name="task"
+                                  placeholder="Describe what you want to build..."
+                                  rows="3"
+                                  required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <select id="mode" name="mode">
+                            <option value="sequential">Full Pipeline</option>
+                            <option value="direct_build">Skip Planning</option>
+                            <option value="verify_only">Verify Only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <span class="btn-text">Execute</span>
+                        <span id="execute-indicator" class="htmx-indicator">
+                            <span class="spinner-small"></span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions-card">
+                <h3>Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn"
+                            hx-post="/agents/quick/test"
+                            hx-target="#execution-results"
+                            hx-swap="innerHTML">
+                        <span class="quick-icon">🧪</span>
+                        <span>Run Tests</span>
+                    </button>
+                    <button class="quick-action-btn"
+                            hx-post="/agents/quick/review"
+                            hx-target="#execution-results"
+                            hx-swap="innerHTML">
+                        <span class="quick-icon">🔍</span>
+                        <span>Code Review</span>
+                    </button>
+                    <button class="quick-action-btn"
+                            hx-post="/agents/quick/deploy"
+                            hx-target="#execution-results"
+                            hx-swap="innerHTML">
+                        <span class="quick-icon">🚀</span>
+                        <span>Deploy</span>
+                    </button>
+                    <button class="quick-action-btn"
+                            hx-post="/agents/quick/docs"
+                            hx-target="#execution-results"
+                            hx-swap="innerHTML">
+                        <span class="quick-icon">📝</span>
+                        <span>Gen Docs</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Execution Queue (if tasks pending) -->
+    <section class="section queue-section" id="queue-section" {% if not queue %}style="display: none;"{% endif %}>
+        <div class="section-header">
+            <h2 class="section-title">Execution Queue</h2>
+            <span class="queue-count">{{ queue|length if queue else 0 }} pending</span>
+        </div>
+        <div class="queue-list" id="queue-list">
+            {% if queue %}
+                {% for item in queue %}
+                <div class="queue-item">
+                    <span class="queue-position">#{{ loop.index }}</span>
+                    <span class="queue-task">{{ item.task[:50] }}{% if item.task|length > 50 %}...{% endif %}</span>
+                    <span class="queue-mode tag">{{ item.mode }}</span>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Results</h2>
+        </div>
+        <div id="execution-results" class="execution-results">
+            <div class="results-placeholder">
+                <span class="results-icon">🎯</span>
+                <p>Execute a task to see agent outputs here</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Activity Timeline -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Activity Timeline</h2>
+            <a href="/agents/history" class="section-link">View all →</a>
+        </div>
+        <div class="activity-timeline"
+             id="activity-timeline"
+             hx-get="/agents/partials/activity"
+             hx-trigger="every 5s"
+             hx-swap="innerHTML">
+            {% if activity %}
+                {% for event in activity[:8] %}
+                <div class="timeline-item">
+                    <div class="timeline-avatar">
+                        <span class="avatar-emoji">{% if event.agent == 'sketch' %}💡{% elif event.agent == 'tinker' %}🛠️{% elif event.agent == 'oracle' %}🔮{% elif event.agent == 'launch' %}📤{% elif event.agent == 'buzz' %}📡{% elif event.agent == 'hype' %}🎉{% elif event.agent == 'sentry' %}🛡️{% elif event.agent == 'tally' %}💰{% else %}🤖{% endif %}</span>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <span class="timeline-agent">{{ event.agent|title }}</span>
+                            <span class="timeline-action">{{ event.action }}</span>
+                        </div>
+                        <p class="timeline-task">{{ event.task[:60] }}{% if event.task|length > 60 %}...{% endif %}</p>
+                        <span class="timeline-time">{{ event.time_ago }}</span>
+                    </div>
+                    <div class="timeline-status">
+                        <span class="status-dot {{ event.status }}"></span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="timeline-empty">
+                    <p>No recent activity. Execute a task to get started.</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}

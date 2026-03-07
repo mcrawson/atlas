@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks: {{ spec.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <div class="header-content">
+            <a href="/specs/{{ spec.id }}" class="back-link">&larr; Back to Spec</a>
+            <h1>Implementation Tasks</h1>
+            <p class="subtitle">{{ spec.name }}</p>
+        </div>
+        <div class="header-actions">
+            <a href="/specs/{{ spec.id }}/execute" class="btn btn-primary">Execute Next Task</a>
+        </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <section class="section">
+        <div class="progress-section">
+            <div class="progress-bar large">
+                <div class="progress-fill" style="width: {{ progress.percentage }}%"></div>
+            </div>
+            <div class="progress-info">
+                <span class="progress-text">{{ progress.completed }}/{{ progress.total }} tasks completed ({{ "%.0f"|format(progress.percentage) }}%)</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task Filters -->
+    <section class="section">
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">All ({{ tasks|length }})</button>
+            <button class="filter-btn" data-filter="pending">Pending ({{ task_groups.pending|length }})</button>
+            <button class="filter-btn" data-filter="in_progress">In Progress ({{ task_groups.in_progress|length }})</button>
+            <button class="filter-btn" data-filter="completed">Completed ({{ task_groups.completed|length }})</button>
+            <button class="filter-btn" data-filter="blocked">Blocked ({{ task_groups.blocked|length }})</button>
+        </div>
+    </section>
+
+    <!-- In Progress Tasks -->
+    {% if task_groups.in_progress %}
+    <section class="section task-section" data-status="in_progress">
+        <h2 class="section-title">
+            <span class="status-icon">🔄</span> In Progress
+        </h2>
+        <div class="task-list">
+            {% for task in task_groups.in_progress %}
+            {% include "partials/task_card.html" %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Pending Tasks -->
+    {% if task_groups.pending %}
+    <section class="section task-section" data-status="pending">
+        <h2 class="section-title">
+            <span class="status-icon">⬜</span> Pending
+        </h2>
+        <div class="task-list">
+            {% for task in task_groups.pending %}
+            {% include "partials/task_card.html" %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Blocked Tasks -->
+    {% if task_groups.blocked %}
+    <section class="section task-section" data-status="blocked">
+        <h2 class="section-title">
+            <span class="status-icon">🚫</span> Blocked
+        </h2>
+        <div class="task-list">
+            {% for task in task_groups.blocked %}
+            {% include "partials/task_card.html" %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Completed Tasks -->
+    {% if task_groups.completed %}
+    <section class="section task-section" data-status="completed">
+        <h2 class="section-title">
+            <span class="status-icon">✅</span> Completed
+        </h2>
+        <div class="task-list">
+            {% for task in task_groups.completed %}
+            {% include "partials/task_card.html" %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if not tasks %}
+    <section class="section">
+        <div class="empty-state">
+            <p>No tasks in this spec yet.</p>
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<style>
+.progress-section {
+    background: var(--bg-secondary, #1a1a2e);
+    padding: 1.5rem;
+    border-radius: 8px;
+}
+
+.progress-bar.large {
+    height: 12px;
+    margin-bottom: 1rem;
+}
+
+.progress-info {
+    text-align: center;
+}
+
+.progress-text {
+    color: var(--text-secondary, #888);
+}
+
+.filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    background: var(--bg-secondary, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a4a);
+    color: var(--text-secondary, #888);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+    border-color: var(--accent-color, #00ff41);
+    color: var(--text-primary, #fff);
+}
+
+.filter-btn.active {
+    background: var(--accent-color, #00ff41);
+    color: var(--bg-primary, #0a0a0f);
+    border-color: var(--accent-color, #00ff41);
+}
+
+.task-section {
+    margin-top: 1.5rem;
+}
+
+.section-title .status-icon {
+    margin-right: 0.5rem;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.task-card {
+    background: var(--bg-secondary, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    transition: border-color 0.2s ease;
+}
+
+.task-card:hover {
+    border-color: var(--text-secondary, #888);
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.task-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.task-id {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    background: var(--bg-tertiary, #252540);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.task-title {
+    color: var(--text-primary, #fff);
+    font-weight: 500;
+}
+
+.task-priority {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+}
+
+.priority-critical { background: rgba(220, 53, 69, 0.3); color: #ff6b7a; }
+.priority-high { background: rgba(240, 173, 78, 0.3); color: #f0ad4e; }
+.priority-medium { background: rgba(0, 255, 65, 0.2); color: #00ff41; }
+.priority-low { background: rgba(136, 136, 136, 0.3); color: #aaa; }
+
+.task-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #888);
+    margin-bottom: 0.75rem;
+}
+
+.task-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.task-actions form {
+    display: inline;
+}
+
+.btn-status {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--bg-tertiary, #252540);
+    border: 1px solid var(--border-color, #2a2a4a);
+    color: var(--text-primary, #fff);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-status:hover {
+    background: var(--accent-color, #00ff41);
+    color: var(--bg-primary, #0a0a0f);
+    border-color: var(--accent-color, #00ff41);
+}
+
+.btn-execute {
+    background: var(--accent-color, #00ff41);
+    color: var(--bg-primary, #0a0a0f);
+    border-color: var(--accent-color, #00ff41);
+}
+</style>
+
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Update active button
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const filter = btn.dataset.filter;
+
+        // Show/hide task sections
+        document.querySelectorAll('.task-section').forEach(section => {
+            if (filter === 'all' || section.dataset.status === filter) {
+                section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

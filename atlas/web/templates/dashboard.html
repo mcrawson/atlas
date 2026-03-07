@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}ATLAS - Build Software with AI Agents{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-brand">ATLAS</h1>
+            <p class="hero-title">We build software with AI agents.</p>
+            <p class="hero-description">
+                ATLAS orchestrates specialized AI agents to plan, build, and verify your software projects.
+                From idea to deployment, our agents work together to bring your vision to life.
+            </p>
+            <div class="hero-actions">
+                <a href="/specs/new" class="btn btn-primary">Start a Project</a>
+                <a href="/agents" class="btn btn-secondary">Meet the Agents</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Idea Input Card -->
+    <section class="idea-section">
+        <div class="idea-card">
+            <div class="idea-orb">
+                <div class="orb">
+                    <span class="orb-inner"></span>
+                </div>
+            </div>
+            <div class="idea-content">
+                <h2 class="idea-title">What would you like to create?</h2>
+                <form class="idea-form" action="/projects/new-idea" method="post">
+                    <div class="idea-input-wrapper">
+                        <input type="text"
+                               name="idea"
+                               class="idea-input"
+                               placeholder="Describe your idea..."
+                               autocomplete="off">
+                        <button type="submit" class="idea-submit">
+                            <span>Create</span>
+                        </button>
+                    </div>
+                    <p class="idea-hint">Tell us what you want to build and our agents will help you plan, implement, and ship it.</p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Meet the Agents -->
+    <section class="section">
+        <h2 class="section-title">Meet the Agents</h2>
+        <p class="section-desc">Specialists that collaborate to build your project</p>
+
+        <div class="agents-mini-grid">
+            <a href="/agents" class="agent-mini-card">
+                <div class="agent-mini-portrait">
+                    <img src="/static/images/agents/sketch.webp" alt="Sketch">
+                </div>
+                <div class="agent-mini-info">
+                    <h4>Sketch</h4>
+                    <span class="agent-mini-role">Planning & Strategy</span>
+                    <p>The idea whisperer. Takes your rough concepts and turns them into detailed blueprints, analyzing requirements and identifying risks before a single line of code is written.</p>
+                </div>
+            </a>
+            <a href="/agents" class="agent-mini-card">
+                <div class="agent-mini-portrait">
+                    <img src="/static/images/agents/tinker.webp" alt="Tinker">
+                </div>
+                <div class="agent-mini-info">
+                    <h4>Tinker</h4>
+                    <span class="agent-mini-role">Implementation</span>
+                    <p>The maker of things. Takes Sketch's blueprints and brings them to life, one component at a time. Writes clean, maintainable code and won't stop until it works just right.</p>
+                </div>
+            </a>
+            <a href="/agents" class="agent-mini-card">
+                <div class="agent-mini-portrait">
+                    <img src="/static/images/agents/oracle.webp" alt="Oracle">
+                </div>
+                <div class="agent-mini-info">
+                    <h4>Oracle</h4>
+                    <span class="agent-mini-role">Quality & Verification</span>
+                    <p>The all-seeing eye. Examines every line, questions every decision, and ensures nothing ships until it meets the standard. Your last line of defense against bugs.</p>
+                </div>
+            </a>
+            <a href="/agents" class="agent-mini-card">
+                <div class="agent-mini-portrait">
+                    <img src="/static/images/agents/launch.webp" alt="Launch">
+                </div>
+                <div class="agent-mini-info">
+                    <h4>Launch</h4>
+                    <span class="agent-mini-role">Deployment</span>
+                    <p>The flight director. Handles liftoff to app stores, npm, Docker Hub, and beyond. Manages deployments, orchestrates rollbacks, and ensures every release lands safely.</p>
+                </div>
+            </a>
+            <a href="/agents" class="agent-mini-card">
+                <div class="agent-mini-portrait">
+                    <img src="/static/images/agents/hype.webp" alt="Hype">
+                </div>
+                <div class="agent-mini-info">
+                    <h4>Hype</h4>
+                    <span class="agent-mini-role">Advertising & Promotion</span>
+                    <p>The hypeman. Takes what the team built and makes the world care. Crafts compelling copy, generates social campaigns, and knows exactly which buttons to push.</p>
+                </div>
+            </a>
+        </div>
+
+        <div class="agents-cta">
+            <a href="/agents" class="btn btn-ghost">Meet the full team →</a>
+        </div>
+    </section>
+
+    <!-- Why ATLAS -->
+    <section class="section why-section">
+        <h2 class="section-title">Why ATLAS</h2>
+        <div class="why-grid">
+            <div class="why-item">
+                <span class="why-icon">🧠</span>
+                <strong>Persistent Memory</strong>
+                <p>Remembers your preferences and past decisions across sessions.</p>
+            </div>
+            <div class="why-item">
+                <span class="why-icon">📚</span>
+                <strong>Knowledge Base</strong>
+                <p>Built-in best practices and guides that agents reference automatically.</p>
+            </div>
+            <div class="why-item">
+                <span class="why-icon">🔄</span>
+                <strong>Quality Loop</strong>
+                <p>Agents review each other's work until it meets your standards.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Active Projects -->
+    {% if recent_projects %}
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Active Projects</h2>
+            <a href="/projects" class="section-link">View all</a>
+        </div>
+
+        <div class="projects-pipeline">
+            {% for project in recent_projects %}
+            <div class="pipeline-project">
+                <div class="project-info">
+                    <a href="/projects/{{ project.id }}" class="project-name">{{ project.name }}</a>
+                    {% if project.description %}
+                    <p class="project-desc">{{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}</p>
+                    {% endif %}
+                </div>
+
+                <div class="pipeline-stages">
+                    <div class="stage {% if project.metadata.get('phase', 'idea') == 'idea' %}active{% elif project.metadata.get('phase', 'idea') in ['plan', 'build', 'deliver'] %}completed{% endif %}">
+                        <span class="stage-icon">💡</span>
+                        <span class="stage-label">Idea</span>
+                    </div>
+                    <div class="stage-connector {% if project.metadata.get('phase', 'idea') in ['plan', 'build', 'deliver'] %}active{% endif %}"></div>
+                    <div class="stage {% if project.metadata.get('phase') == 'plan' %}active{% elif project.metadata.get('phase') in ['build', 'deliver'] %}completed{% endif %}">
+                        <span class="stage-icon">📐</span>
+                        <span class="stage-label">Plan</span>
+                    </div>
+                    <div class="stage-connector {% if project.metadata.get('phase') in ['build', 'deliver'] %}active{% endif %}"></div>
+                    <div class="stage {% if project.metadata.get('phase') == 'build' %}active{% elif project.metadata.get('phase') == 'deliver' %}completed{% endif %}">
+                        <span class="stage-icon">🔨</span>
+                        <span class="stage-label">Build</span>
+                    </div>
+                    <div class="stage-connector {% if project.metadata.get('phase') == 'deliver' %}active{% endif %}"></div>
+                    <div class="stage {% if project.metadata.get('phase') == 'deliver' %}active{% endif %}">
+                        <span class="stage-icon">📤</span>
+                        <span class="stage-label">Deliver</span>
+                    </div>
+                </div>
+
+                <div class="project-action">
+                    <a href="/projects/{{ project.id }}" class="btn btn-small btn-primary">Continue</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Quick Stats Bar -->
+    {% if project_stats.get('total_projects', 0) > 0 %}
+    <section class="stats-bar-section">
+        <div class="stats-inline">
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ project_stats.get('total_projects', 0) }}</span>
+                <span class="stat-inline-label">Projects</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ project_stats.get('tasks_by_status', {}).get('completed', 0) }}</span>
+                <span class="stat-inline-label">Tasks Completed</span>
+            </div>
+            <span class="stat-divider"></span>
+            <div class="stat-inline">
+                <span class="stat-inline-value">{{ project_stats.get('tasks_by_status', {}).get('pending', 0) + project_stats.get('tasks_by_status', {}).get('planning', 0) }}</span>
+                <span class="stat-inline-label">In Progress</span>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

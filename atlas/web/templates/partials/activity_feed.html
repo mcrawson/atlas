@@ -1,0 +1,11 @@
+{% if activities %}
+    {% for activity in activities %}
+    <div class="activity-item type-{{ activity.type }}">
+        <span class="activity-time">{{ activity.timestamp }}</span>
+        <span class="activity-agent">{{ activity.agent }}</span>
+        <span class="activity-message">{{ activity.message }}</span>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="empty-state small">Waiting for activity...</p>
+{% endif %}

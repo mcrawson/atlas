@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Revision History - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="revisions-page">
+    <header class="page-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Revisions</span>
+        </nav>
+        <h1>Revision History</h1>
+        <p class="subtitle">Track changes and iterations for {{ project.name }}</p>
+    </header>
+
+    {% if revisions %}
+    <div class="revision-timeline">
+        {% for revision in revisions|reverse %}
+        <div class="revision-item">
+            <div class="revision-marker">
+                <span class="revision-number">{{ revision.id }}</span>
+            </div>
+            <div class="revision-content">
+                <div class="revision-header">
+                    <span class="revision-agent">
+                        {% if revision.agent == 'architect' %}📐 Architect
+                        {% elif revision.agent == 'mason' %}🔨 Mason
+                        {% elif revision.agent == 'oracle' %}🔮 Oracle
+                        {% else %}🤖 {{ revision.agent }}{% endif %}
+                    </span>
+                    <span class="revision-time">{{ revision.timestamp }}</span>
+                </div>
+                <div class="revision-body">
+                    {% if revision.content is mapping %}
+                        {% if revision.content.output %}
+                        <details>
+                            <summary>View Output</summary>
+                            <div class="revision-output">{{ revision.content.output }}</div>
+                        </details>
+                        {% endif %}
+                        {% if revision.content.reasoning %}
+                        <details>
+                            <summary>View Reasoning</summary>
+                            <div class="revision-reasoning">{{ revision.content.reasoning }}</div>
+                        </details>
+                        {% endif %}
+                    {% else %}
+                    <div class="revision-text">{{ revision.content }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📜</div>
+        <h3>No Revisions Yet</h3>
+        <p>Revision history will appear here as you iterate on your project.</p>
+    </div>
+    {% endif %}
+
+    <div class="page-actions">
+        <a href="/projects/{{ project.id }}" class="btn btn-secondary">← Back to Project</a>
+    </div>
+</div>
+
+<style>
+.revisions-page {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.revision-timeline {
+    position: relative;
+    padding-left: 3rem;
+}
+
+.revision-timeline::before {
+    content: '';
+    position: absolute;
+    left: 1rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-color);
+}
+
+.revision-item {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.revision-marker {
+    position: absolute;
+    left: -3rem;
+    width: 2rem;
+    height: 2rem;
+    background: var(--matrix-green);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.revision-number {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--bg-dark);
+}
+
+.revision-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.revision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: var(--bg-darker);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.revision-agent {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    color: var(--matrix-green);
+}
+
+.revision-time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.revision-body {
+    padding: 1.5rem;
+}
+
+.revision-body details {
+    margin-bottom: 1rem;
+}
+
+.revision-body details:last-child {
+    margin-bottom: 0;
+}
+
+.revision-body summary {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.5rem;
+    background: var(--bg-input);
+    border-radius: var(--radius);
+}
+
+.revision-body summary:hover {
+    color: var(--matrix-green);
+}
+
+.revision-output,
+.revision-reasoning,
+.revision-text {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: var(--bg-card);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: var(--text-muted);
+}
+</style>
+{% endblock %}

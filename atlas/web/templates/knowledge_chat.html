@@ -1,0 +1,581 @@
+{% extends "base.html" %}
+
+{% block title %}Ask Launch - Knowledge Base - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page knowledge-chat-page">
+    <!-- Header -->
+    <header class="chat-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a>
+            <span class="separator">/</span>
+            <a href="/knowledge/">Knowledge</a>
+            <span class="separator">/</span>
+            <span>Ask Launch</span>
+        </nav>
+
+        <div class="chat-title">
+            <div class="agent-avatar launch">
+                <span>📤</span>
+            </div>
+            <div class="chat-title-text">
+                <h1>Ask Launch</h1>
+                <p>Get deployment guidance for any platform</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Chat Container -->
+    <div class="chat-container" id="chat-container">
+        <!-- Welcome Message -->
+        <div class="chat-welcome" id="chat-welcome">
+            <div class="welcome-icon">📤</div>
+            <h2>Hi, I'm Launch!</h2>
+            <p>I can help you deploy your projects to any platform. Ask me about:</p>
+
+            <div class="suggestion-grid">
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">🍎</span>
+                    <span class="suggestion-text">How do I publish an iOS app to the App Store?</span>
+                </button>
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">🤖</span>
+                    <span class="suggestion-text">What's needed to deploy to Google Play?</span>
+                </button>
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">📦</span>
+                    <span class="suggestion-text">How do I publish a package to npm?</span>
+                </button>
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">🐳</span>
+                    <span class="suggestion-text">Help me deploy with Docker</span>
+                </button>
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">💬</span>
+                    <span class="suggestion-text">How do I submit a Slack app?</span>
+                </button>
+                <button class="suggestion-card" onclick="askSuggestion(this)">
+                    <span class="suggestion-icon">🐍</span>
+                    <span class="suggestion-text">How do I publish to PyPI?</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="chat-messages" id="chat-messages"></div>
+    </div>
+
+    <!-- Chat Input -->
+    <div class="chat-input-container">
+        <form id="chat-form" class="chat-form" onsubmit="sendMessage(event)">
+            <div class="input-wrapper">
+                <textarea
+                    id="chat-input"
+                    name="message"
+                    placeholder="Ask about deploying to iOS, Android, npm, Docker, Slack..."
+                    rows="1"
+                    onkeydown="handleKeyDown(event)"
+                    oninput="autoResize(this)"></textarea>
+                <button type="submit" class="send-btn" id="send-btn">
+                    <span class="send-icon">→</span>
+                </button>
+            </div>
+            <p class="input-hint">Launch consults the ATLAS knowledge base for accurate deployment guidance</p>
+        </form>
+    </div>
+</div>
+
+<style>
+.knowledge-chat-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Header */
+.chat-header {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.chat-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.agent-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+}
+
+.agent-avatar.launch {
+    background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.chat-title-text h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.chat-title-text p {
+    margin: 0.25rem 0 0 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* Chat Container */
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 0;
+}
+
+/* Welcome */
+.chat-welcome {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.chat-welcome h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.chat-welcome > p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+/* Suggestions */
+.suggestion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.75rem;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.suggestion-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition);
+    color: var(--text-primary);
+}
+
+.suggestion-card:hover {
+    border-color: var(--accent-purple);
+    background: var(--bg-card-hover);
+}
+
+.suggestion-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.suggestion-text {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+/* Messages */
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.message {
+    display: flex;
+    gap: 0.75rem;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+}
+
+.message.user .message-avatar {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.message.assistant .message-avatar {
+    background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+    font-size: 1rem;
+}
+
+.message-content {
+    max-width: 80%;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-lg);
+    line-height: 1.6;
+    font-size: 0.9375rem;
+}
+
+.message.user .message-content {
+    background: var(--accent-green-muted);
+    border: 1px solid var(--border-accent);
+    color: var(--text-primary);
+}
+
+.message.assistant .message-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+}
+
+.message-content pre {
+    background: var(--bg-tertiary);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 0.8125rem;
+    margin: 0.75rem 0;
+}
+
+.message-content code {
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+}
+
+.message-content h2, .message-content h3, .message-content h4 {
+    margin: 1rem 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.message-content h2:first-child, .message-content h3:first-child {
+    margin-top: 0;
+}
+
+.message-content ul, .message-content ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.message-content li {
+    margin-bottom: 0.25rem;
+}
+
+/* Thinking indicator */
+.thinking {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.thinking-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background: var(--accent-purple);
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* Input */
+.chat-input-container {
+    padding: 1rem 0 1.5rem 0;
+    border-top: 1px solid var(--border-default);
+    flex-shrink: 0;
+}
+
+.chat-form {
+    max-width: 100%;
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem;
+    transition: var(--transition);
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    resize: none;
+    min-height: 24px;
+    max-height: 150px;
+    padding: 0;
+}
+
+.input-wrapper textarea:focus {
+    outline: none;
+}
+
+.input-wrapper textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent-purple);
+    border: none;
+    color: white;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.send-btn:hover {
+    background: #9333ea;
+    transform: scale(1.05);
+}
+
+.send-btn:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.input-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0 0 0;
+    text-align: center;
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .suggestion-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .message-content {
+        max-width: 90%;
+    }
+}
+</style>
+
+<script>
+const chatMessages = document.getElementById('chat-messages');
+const chatWelcome = document.getElementById('chat-welcome');
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const chatContainer = document.getElementById('chat-container');
+
+let conversationHistory = [];
+
+function autoResize(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage(event);
+    }
+}
+
+function askSuggestion(button) {
+    const text = button.querySelector('.suggestion-text').textContent;
+    chatInput.value = text;
+    sendMessage(new Event('submit'));
+}
+
+function addMessage(role, content) {
+    // Hide welcome on first message
+    if (chatWelcome.style.display !== 'none') {
+        chatWelcome.style.display = 'none';
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = role === 'user' ? 'You' : '📤';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    // Simple markdown-like rendering
+    let html = content
+        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+        .replace(/\n/g, '<br>');
+
+    contentDiv.innerHTML = html;
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    chatMessages.appendChild(messageDiv);
+
+    // Scroll to bottom
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function addThinking() {
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.className = 'message assistant';
+    thinkingDiv.id = 'thinking-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = '🚀';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'thinking';
+    contentDiv.innerHTML = `
+        <div class="thinking-dots">
+            <span></span><span></span><span></span>
+        </div>
+        <span>Launch is thinking...</span>
+    `;
+
+    thinkingDiv.appendChild(avatar);
+    thinkingDiv.appendChild(contentDiv);
+    chatMessages.appendChild(thinkingDiv);
+
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function removeThinking() {
+    const thinking = document.getElementById('thinking-message');
+    if (thinking) thinking.remove();
+}
+
+async function sendMessage(event) {
+    event.preventDefault();
+
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    // Disable input while processing
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+
+    // Add user message
+    addMessage('user', message);
+    conversationHistory.push({ role: 'user', content: message });
+
+    // Clear input
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+
+    // Show thinking indicator
+    addThinking();
+
+    try {
+        const response = await fetch('/knowledge/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                history: conversationHistory.slice(-10) // Send last 10 messages for context
+            })
+        });
+
+        const data = await response.json();
+
+        removeThinking();
+
+        if (data.error) {
+            addMessage('assistant', `Sorry, I encountered an error: ${data.error}`);
+        } else {
+            addMessage('assistant', data.response);
+            conversationHistory.push({ role: 'assistant', content: data.response });
+        }
+    } catch (error) {
+        removeThinking();
+        addMessage('assistant', 'Sorry, I had trouble connecting. Please try again.');
+    }
+
+    // Re-enable input
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    chatInput.focus();
+}
+</script>
+{% endblock %}

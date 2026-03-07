@@ -1,0 +1,505 @@
+{% extends "base.html" %}
+
+{% block title %}Deploy to {{ platform_name }} - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="deploy-wizard">
+    <!-- Header -->
+    <header class="deploy-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Deploy to {{ platform_name }}</span>
+        </nav>
+        <h1>
+            <span class="platform-icon">{{ platform_icon }}</span>
+            Deploy to {{ platform_name }}
+        </h1>
+    </header>
+
+    <!-- Prerequisites Check -->
+    <section class="deploy-section prerequisites-section">
+        <h2>📋 Prerequisites</h2>
+        <p class="section-description">Before deploying, make sure you have the following:</p>
+
+        <div class="prerequisites-checklist">
+            {% for prereq in prerequisites %}
+            <label class="prereq-item">
+                <input type="checkbox" class="prereq-checkbox" name="prereq_{{ loop.index }}">
+                <span class="prereq-text">{{ prereq }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        {% if not prerequisites %}
+        <p class="no-prereqs">✅ No special prerequisites required for this platform.</p>
+        {% endif %}
+    </section>
+
+    <!-- Deployment Guide Preview -->
+    <section class="deploy-section guide-section">
+        <h2>📖 Deployment Guide</h2>
+        <details class="guide-details">
+            <summary>View full {{ platform_name }} deployment guide</summary>
+            <div class="guide-content markdown-body">
+                {{ guide_content | safe }}
+            </div>
+        </details>
+    </section>
+
+    <!-- Commands to Execute -->
+    <section class="deploy-section commands-section">
+        <h2>🔧 Commands to Execute</h2>
+        <p class="section-description">
+            ATLAS will run these commands to deploy your project:
+        </p>
+
+        <div class="command-list">
+            {% for cmd in commands %}
+            <div class="command-item {% if cmd.risk == 'high' or cmd.risk == 'critical' %}risky{% endif %}">
+                <div class="command-number">{{ loop.index }}</div>
+                <code class="command-text">{{ cmd.command }}</code>
+                {% if cmd.risk == 'high' or cmd.risk == 'critical' %}
+                <span class="risk-badge {{ cmd.risk }}">{{ cmd.risk | upper }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if not commands %}
+        <p class="no-commands">
+            ⚠️ No automated commands available for this platform yet.
+            Please refer to the deployment guide above.
+        </p>
+        {% endif %}
+    </section>
+
+    <!-- Environment Variables -->
+    {% if env_vars_required %}
+    <section class="deploy-section env-section">
+        <h2>🔐 Environment Variables</h2>
+        <p class="section-description">These environment variables are needed for deployment:</p>
+
+        <form id="env-vars-form" class="env-vars-form">
+            {% for env_var in env_vars_required %}
+            <div class="form-group">
+                <label for="env_{{ env_var.name }}">{{ env_var.name }}</label>
+                <input type="{{ 'password' if env_var.secret else 'text' }}"
+                       id="env_{{ env_var.name }}"
+                       name="{{ env_var.name }}"
+                       placeholder="{{ env_var.description }}"
+                       {% if env_var.required %}required{% endif %}>
+                {% if env_var.hint %}
+                <small class="env-hint">{{ env_var.hint }}</small>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </form>
+    </section>
+    {% endif %}
+
+    <!-- Working Directory -->
+    <section class="deploy-section workdir-section">
+        <h2>📁 Project Directory</h2>
+        <p class="section-description">Commands will run from this directory:</p>
+
+        <div class="workdir-display">
+            {% if project_dir %}
+            <code class="workdir-path">{{ project_dir }}</code>
+            <span class="workdir-status exists">✅ Directory exists</span>
+            {% else %}
+            <p class="no-workdir">
+                ⚠️ No project files have been written yet.
+                <a href="/projects/{{ project.id }}">Go back</a> and click "Write Files to Disk" first.
+            </p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Action Buttons -->
+    <section class="deploy-section actions-section">
+        {% if commands and project_dir %}
+        <form action="/projects/{{ project.id }}/deploy/{{ platform }}/execute" method="post" class="deploy-form">
+            <input type="hidden" name="task_id" value="{{ task_id or '' }}">
+
+            <!-- Show approval warning for risky commands -->
+            {% if requires_approval %}
+            <div class="approval-warning">
+                <span class="warning-icon">⚠️</span>
+                <div class="warning-text">
+                    <strong>Approval Required</strong>
+                    <p>Some commands require your approval before execution due to their potential impact.</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="action-buttons">
+                <button type="submit" class="btn btn-primary btn-large">
+                    🚀 {% if requires_approval %}Review & Approve{% else %}Start Deployment{% endif %}
+                </button>
+                <a href="/projects/{{ project.id }}" class="btn btn-ghost">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="action-buttons">
+            <a href="/projects/{{ project.id }}" class="btn btn-ghost">← Back to Project</a>
+            {% if not project_dir %}
+            <a href="/projects/{{ project.id }}/write-files" class="btn btn-primary"
+               hx-post="/projects/{{ project.id }}/write-files"
+               hx-swap="none">
+                💾 Write Files First
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Execution Output (shown during deployment) -->
+    {% if task_id %}
+    <section class="deploy-section output-section">
+        <h2>📺 Deployment Output</h2>
+        <div class="output-terminal"
+             id="deploy-output"
+             hx-get="/projects/{{ project.id }}/deploy/{{ platform }}/status?task_id={{ task_id }}"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML">
+            <div class="output-loading">
+                <span class="spinner"></span> Starting deployment...
+            </div>
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<style>
+.deploy-wizard {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.deploy-header {
+    margin-bottom: 2rem;
+}
+
+.deploy-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    color: var(--text-primary);
+}
+
+.platform-icon {
+    font-size: 2rem;
+}
+
+.deploy-section {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.deploy-section h2 {
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin: 0 0 0.5rem 0;
+}
+
+.section-description {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+/* Prerequisites */
+.prerequisites-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.prereq-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.prereq-item:hover {
+    background: var(--bg-hover);
+}
+
+.prereq-checkbox {
+    width: 1.2rem;
+    height: 1.2rem;
+    cursor: pointer;
+}
+
+.prereq-checkbox:checked + .prereq-text {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.no-prereqs {
+    color: var(--color-success);
+    padding: 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+}
+
+/* Guide */
+.guide-details {
+    background: var(--bg-surface);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.guide-details summary {
+    padding: 1rem;
+    cursor: pointer;
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.guide-details summary:hover {
+    background: var(--bg-hover);
+}
+
+.guide-content {
+    padding: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.guide-content pre {
+    background: var(--bg-code);
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.guide-content code {
+    background: var(--bg-code);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Commands */
+.command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.command-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-primary);
+}
+
+.command-item.risky {
+    border-left-color: var(--color-warning);
+}
+
+.command-number {
+    background: var(--accent-primary);
+    color: var(--bg-dark);
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.command-text {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.risk-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.risk-badge.high {
+    background: var(--color-warning);
+    color: var(--bg-dark);
+}
+
+.risk-badge.critical {
+    background: var(--color-error);
+    color: white;
+}
+
+.no-commands {
+    padding: 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    color: var(--text-secondary);
+}
+
+/* Environment Variables */
+.env-vars-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.env-vars-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.env-vars-form label {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.env-vars-form input {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.env-vars-form input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.env-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Working Directory */
+.workdir-display {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+}
+
+.workdir-path {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+.workdir-status.exists {
+    color: var(--color-success);
+}
+
+.no-workdir {
+    color: var(--color-warning);
+}
+
+/* Approval Warning */
+.approval-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid var(--color-warning);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.warning-icon {
+    font-size: 1.5rem;
+}
+
+.warning-text strong {
+    color: var(--color-warning);
+}
+
+.warning-text p {
+    margin: 0.5rem 0 0 0;
+    color: var(--text-secondary);
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+/* Output Terminal */
+.output-terminal {
+    background: var(--bg-code);
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    min-height: 200px;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.output-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.output-command {
+    color: var(--accent-primary);
+    margin-top: 1rem;
+}
+
+.output-stdout {
+    color: var(--text-primary);
+}
+
+.output-stderr {
+    color: var(--color-error);
+}
+
+.output-success {
+    color: var(--color-success);
+    margin-top: 1rem;
+}
+
+.output-error {
+    color: var(--color-error);
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Add Custom Platform - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="deploy-wizard">
+    <!-- Header -->
+    <header class="deploy-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Add Custom Platform</span>
+        </nav>
+        <h1>
+            <span class="platform-icon">➕</span>
+            Add Custom Deployment Platform
+        </h1>
+    </header>
+
+    <!-- Intro -->
+    <section class="deploy-section">
+        <p>
+            Can't find the platform you need? Add a custom deployment configuration below.
+            ATLAS will save this for future use and can help automate the process.
+        </p>
+    </section>
+
+    <!-- Custom Platform Form -->
+    <section class="deploy-section">
+        <h2>📋 Platform Details</h2>
+        <form action="/projects/{{ project.id }}/deploy/custom/save" method="post" class="custom-platform-form">
+            <div class="form-group">
+                <label for="platform_name">Platform Name *</label>
+                <input type="text" id="platform_name" name="platform_name"
+                       placeholder="e.g., My Custom Store, Internal Server" required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="platform_icon">Icon (emoji)</label>
+                    <input type="text" id="platform_icon" name="platform_icon"
+                           placeholder="🚀" maxlength="2">
+                </div>
+                <div class="form-group">
+                    <label for="platform_category">Category</label>
+                    <select id="platform_category" name="platform_category">
+                        <option value="other">Other</option>
+                        <option value="mobile">Mobile Apps</option>
+                        <option value="web">Web Hosting</option>
+                        <option value="backend">Backend/Server</option>
+                        <option value="creative">Design & Creative</option>
+                        <option value="ecommerce">E-Commerce</option>
+                        <option value="packages">Package Registry</option>
+                        <option value="communication">Bots & Messaging</option>
+                        <option value="browser">Browser Extension</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="platform_url">Platform URL (optional)</label>
+                <input type="url" id="platform_url" name="platform_url"
+                       placeholder="https://platform.example.com">
+            </div>
+        </form>
+    </section>
+
+    <!-- Prerequisites -->
+    <section class="deploy-section">
+        <h2>📋 Prerequisites (optional)</h2>
+        <p class="section-description">List things needed before deployment (one per line)</p>
+        <form>
+            <textarea id="prerequisites" name="prerequisites" rows="4"
+                      placeholder="Developer account&#10;API key or token&#10;CLI tool installed"></textarea>
+        </form>
+    </section>
+
+    <!-- Commands -->
+    <section class="deploy-section">
+        <h2>🔧 Deployment Commands</h2>
+        <p class="section-description">
+            Enter the shell commands needed to deploy (one per line).
+            Use <code>$VAR_NAME</code> for environment variables.
+        </p>
+        <form>
+            <textarea id="commands" name="commands" rows="6"
+                      placeholder="npm run build&#10;./deploy.sh&#10;curl -X POST $API_URL -H 'Authorization: Bearer $API_TOKEN'"></textarea>
+        </form>
+    </section>
+
+    <!-- Environment Variables -->
+    <section class="deploy-section">
+        <h2>🔐 Environment Variables (optional)</h2>
+        <p class="section-description">
+            Define environment variables needed for deployment.
+        </p>
+        <div id="env-vars-container">
+            <div class="env-var-row">
+                <input type="text" name="env_name[]" placeholder="VAR_NAME">
+                <input type="text" name="env_description[]" placeholder="Description">
+                <label><input type="checkbox" name="env_secret[]"> Secret</label>
+                <button type="button" class="btn btn-ghost btn-small remove-env">✕</button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-small" id="add-env-var">
+            ➕ Add Variable
+        </button>
+    </section>
+
+    <!-- Deployment Guide -->
+    <section class="deploy-section">
+        <h2>📖 Deployment Guide (optional)</h2>
+        <p class="section-description">
+            Add detailed instructions in Markdown format. This will be saved to the knowledge base.
+        </p>
+        <form>
+            <textarea id="guide_content" name="guide_content" rows="10"
+                      placeholder="# Deployment Guide
+
+## Prerequisites
+1. First requirement
+2. Second requirement
+
+## Steps
+1. Build your project
+2. Configure settings
+3. Upload to platform
+
+## Common Issues
+- Issue and solution"></textarea>
+        </form>
+    </section>
+
+    <!-- Actions -->
+    <section class="deploy-section actions-section">
+        <div class="action-buttons">
+            <button type="submit" form="custom-platform-form" class="btn btn-primary btn-large"
+                    onclick="submitCustomPlatform(event)">
+                💾 Save Platform
+            </button>
+            <a href="/projects/{{ project.id }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </section>
+
+    <!-- Available Platforms Reference -->
+    <section class="deploy-section">
+        <details>
+            <summary>📚 Already supported platforms</summary>
+            <div class="existing-platforms">
+                <div class="platform-chips">
+                    {% for platform_id, platform in platforms.items() %}
+                    <a href="/projects/{{ project.id }}/deploy/{{ platform_id }}" class="platform-chip">
+                        {{ platform.icon }} {{ platform.name }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </details>
+    </section>
+</div>
+
+<script>
+// Add new environment variable row
+document.getElementById('add-env-var').addEventListener('click', function() {
+    const container = document.getElementById('env-vars-container');
+    const row = document.createElement('div');
+    row.className = 'env-var-row';
+    row.innerHTML = `
+        <input type="text" name="env_name[]" placeholder="VAR_NAME">
+        <input type="text" name="env_description[]" placeholder="Description">
+        <label><input type="checkbox" name="env_secret[]"> Secret</label>
+        <button type="button" class="btn btn-ghost btn-small remove-env">✕</button>
+    `;
+    container.appendChild(row);
+
+    row.querySelector('.remove-env').addEventListener('click', function() {
+        row.remove();
+    });
+});
+
+// Remove env var handlers
+document.querySelectorAll('.remove-env').forEach(btn => {
+    btn.addEventListener('click', function() {
+        this.closest('.env-var-row').remove();
+    });
+});
+
+// Submit form
+function submitCustomPlatform(event) {
+    event.preventDefault();
+
+    const data = {
+        name: document.getElementById('platform_name').value,
+        icon: document.getElementById('platform_icon').value || '🚀',
+        category: document.getElementById('platform_category').value,
+        url: document.getElementById('platform_url').value,
+        prerequisites: document.getElementById('prerequisites').value.split('\n').filter(l => l.trim()),
+        commands: document.getElementById('commands').value.split('\n').filter(l => l.trim()),
+        guide_content: document.getElementById('guide_content').value,
+        env_vars: [],
+    };
+
+    // Collect env vars
+    document.querySelectorAll('.env-var-row').forEach(row => {
+        const name = row.querySelector('input[name="env_name[]"]').value;
+        if (name) {
+            data.env_vars.push({
+                name: name,
+                description: row.querySelector('input[name="env_description[]"]').value,
+                secret: row.querySelector('input[name="env_secret[]"]').checked,
+            });
+        }
+    });
+
+    // Submit via form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/projects/{{ project.id }}/deploy/custom/save';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(data);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+
+<style>
+.deploy-wizard {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.deploy-header {
+    margin-bottom: 2rem;
+}
+
+.deploy-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    color: var(--text-primary);
+}
+
+.platform-icon {
+    font-size: 2rem;
+}
+
+.deploy-section {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.deploy-section h2 {
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin: 0 0 0.5rem 0;
+}
+
+.section-description {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.section-description code {
+    background: var(--bg-code);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+}
+
+/* Form Styles */
+.custom-platform-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+input[type="text"],
+input[type="url"],
+select,
+textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+textarea {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+/* Environment Variables */
+.env-var-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.env-var-row input[type="text"] {
+    flex: 1;
+}
+
+.env-var-row label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Platform Chips */
+.existing-platforms {
+    padding: 1rem 0;
+}
+
+.platform-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.platform-chip {
+    padding: 0.5rem 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.platform-chip:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+details summary {
+    cursor: pointer;
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+details summary:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

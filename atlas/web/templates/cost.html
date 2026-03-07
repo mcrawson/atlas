@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Cost Analysis - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="cost-page">
+    <header class="page-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Cost Analysis</span>
+        </nav>
+        <h1>Cost Analysis</h1>
+        <p class="subtitle">Token usage and estimated costs for {{ project.name }}</p>
+    </header>
+
+    <!-- Total Cost Card -->
+    <div class="cost-summary">
+        <div class="cost-total">
+            <span class="cost-label">Estimated Total Cost</span>
+            <span class="cost-value">{{ costs.formatted }}</span>
+        </div>
+        <div class="cost-note">
+            Based on current API pricing. Actual costs may vary.
+        </div>
+    </div>
+
+    <!-- Agent Breakdown -->
+    <section class="section">
+        <h2 class="section-title">Cost by Agent</h2>
+        <div class="agent-costs">
+            {% for agent_name, cost in costs.by_agent.items() %}
+            <div class="agent-cost-card">
+                <div class="agent-cost-header">
+                    <span class="agent-icon">
+                        {% if agent_name == 'architect' %}📐
+                        {% elif agent_name == 'mason' %}🔨
+                        {% elif agent_name == 'oracle' %}🔮
+                        {% else %}🤖{% endif %}
+                    </span>
+                    <h3>{{ agent_name|title }}</h3>
+                </div>
+                <div class="agent-cost-body">
+                    <div class="cost-row">
+                        <span>Input tokens</span>
+                        <span class="cost-tokens">{{ "{:,}".format(cost.prompt_tokens if cost.prompt_tokens else 0) }}</span>
+                    </div>
+                    <div class="cost-row">
+                        <span>Output tokens</span>
+                        <span class="cost-tokens">{{ "{:,}".format(cost.completion_tokens if cost.completion_tokens else 0) }}</span>
+                    </div>
+                    <div class="cost-row">
+                        <span>Input cost</span>
+                        <span class="cost-amount">${{ "%.6f"|format(cost.input_cost) }}</span>
+                    </div>
+                    <div class="cost-row">
+                        <span>Output cost</span>
+                        <span class="cost-amount">${{ "%.6f"|format(cost.output_cost) }}</span>
+                    </div>
+                    <div class="cost-row total">
+                        <span>Agent total</span>
+                        <span class="cost-amount">${{ "%.4f"|format(cost.total_cost) }}</span>
+                    </div>
+                    <div class="cost-provider">
+                        Provider: {{ cost.provider }}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                No agent costs recorded yet.
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Feedback Summary -->
+    {% if feedback.total_ratings > 0 %}
+    <section class="section">
+        <h2 class="section-title">Feedback Summary</h2>
+        <div class="feedback-summary">
+            <div class="feedback-total">
+                <span class="rating-stars">
+                    {% for i in range(5) %}
+                    <span class="star {% if i < feedback.average_rating|round %}filled{% endif %}">★</span>
+                    {% endfor %}
+                </span>
+                <span class="rating-value">{{ feedback.average_rating }}/5</span>
+                <span class="rating-count">({{ feedback.total_ratings }} rating{% if feedback.total_ratings != 1 %}s{% endif %})</span>
+            </div>
+
+            <div class="feedback-by-agent">
+                {% for agent_name, agent_fb in feedback.by_agent.items() %}
+                <div class="agent-feedback">
+                    <span class="agent-name">{{ agent_name|title }}</span>
+                    <span class="agent-rating">{{ agent_fb.average }}/5</span>
+                    <span class="agent-count">({{ agent_fb.count }})</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="page-actions">
+        <a href="/projects/{{ project.id }}" class="btn btn-secondary">← Back to Project</a>
+    </div>
+</div>
+
+<style>
+.cost-page {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.cost-summary {
+    background: linear-gradient(135deg, var(--matrix-green-subtle), var(--bg-card));
+    border: 1px solid var(--border-green);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.cost-total {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.cost-label {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cost-value {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--matrix-green);
+    text-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+}
+
+.cost-note {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.agent-costs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.agent-cost-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.agent-cost-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--bg-darker);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.agent-cost-header .agent-icon {
+    font-size: 1.5rem;
+}
+
+.agent-cost-header h3 {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    color: var(--matrix-green);
+}
+
+.agent-cost-body {
+    padding: 1.5rem;
+}
+
+.cost-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cost-row:last-of-type {
+    border-bottom: none;
+}
+
+.cost-row.total {
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-green);
+    color: var(--matrix-green);
+    font-weight: 600;
+}
+
+.cost-tokens {
+    color: var(--text-primary);
+}
+
+.cost-amount {
+    color: var(--matrix-green);
+}
+
+.cost-provider {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.feedback-summary {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+}
+
+.feedback-total {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.rating-stars {
+    font-size: 1.5rem;
+}
+
+.star {
+    color: var(--text-muted);
+}
+
+.star.filled {
+    color: var(--accent-yellow);
+}
+
+.rating-value {
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    color: var(--matrix-green);
+}
+
+.rating-count {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.feedback-by-agent {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.agent-feedback {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.agent-name {
+    color: var(--text-primary);
+}
+
+.agent-rating {
+    color: var(--matrix-green);
+}
+
+.agent-count {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}

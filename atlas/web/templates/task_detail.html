@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.title }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <nav class="breadcrumb">
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project_id }}">Project</a> /
+            <span>{{ task.title }}</span>
+        </nav>
+        <h1>{{ task.title }}</h1>
+        {% if task.description %}
+        <p class="subtitle">{{ task.description }}</p>
+        {% endif %}
+    </header>
+
+    <!-- Task Status -->
+    <section class="section">
+        <div class="task-status-bar">
+            <span class="status-badge status-{{ task.status.value }}">
+                {{ task.status.value }}
+            </span>
+            <span class="priority-badge priority-{{ task.priority }}">
+                {% if task.priority == 2 %}Urgent
+                {% elif task.priority == 1 %}High
+                {% else %}Normal{% endif %}
+            </span>
+            <span class="meta">Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% if task.completed_at %}
+            <span class="meta">Completed: {{ task.completed_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Agent Outputs -->
+    <section class="section">
+        <h2 class="section-title">Agent Outputs</h2>
+        {% if task.agent_outputs %}
+        <div class="agent-outputs">
+            {% for output in task.agent_outputs %}
+            <div class="agent-output">
+                <div class="output-header">
+                    <span class="agent-name">
+                        {% if output.agent_name == 'architect' %}
+                        💡 Sketch
+                        {% elif output.agent_name == 'mason' %}
+                        🛠️ Tinker
+                        {% elif output.agent_name == 'oracle' %}
+                        🔮 Oracle
+                        {% else %}
+                        {{ output.agent_name }}
+                        {% endif %}
+                    </span>
+                    <span class="output-time">{{ output.timestamp.strftime('%H:%M:%S') }}</span>
+                </div>
+                <div class="output-content markdown">
+                    {{ output.content }}
+                </div>
+                {% if output.metadata %}
+                <div class="output-metadata">
+                    {% for key, value in output.metadata.items() %}
+                    <span class="meta-item">{{ key }}: {{ value }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No agent outputs yet.</p>
+            {% if task.status.value == 'pending' %}
+            <form hx-post="/projects/{{ project_id }}/tasks/{{ task.id }}/execute"
+                  hx-swap="innerHTML"
+                  hx-target="body">
+                <button type="submit" class="btn btn-primary">
+                    Execute Task
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Artifacts -->
+    {% if task.artifacts %}
+    <section class="section">
+        <h2 class="section-title">Artifacts</h2>
+        <div class="artifacts">
+            {% for key, value in task.artifacts.items() %}
+            <div class="artifact">
+                <span class="artifact-key">{{ key }}</span>
+                <pre class="artifact-value">{{ value }}</pre>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <div class="page-actions">
+        <a href="/projects/{{ project_id }}" class="btn btn-secondary">Back to Project</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}New Spec - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page spec-new-page">
+    <!-- Header -->
+    <header class="spec-new-header">
+        <a href="/specs" class="back-link">← Back to Specs</a>
+        <h1>Describe your vision</h1>
+        <p class="header-desc">Tell us what you want to build and we'll create a structured specification</p>
+    </header>
+
+    <!-- Main Form -->
+    <div class="spec-form-container">
+        <form action="/specs/generate" method="post" class="spec-form">
+            <!-- Step 1: The Idea -->
+            <div class="form-step">
+                <div class="step-header">
+                    <span class="step-number">1</span>
+                    <div class="step-info">
+                        <h3>What's your idea?</h3>
+                        <p>Describe your project in plain language</p>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <textarea id="idea" name="idea" rows="4" required
+                        placeholder="I want to build a task management app where teams can collaborate in real-time, with kanban boards, due dates, and mobile support..."></textarea>
+                </div>
+            </div>
+
+            <!-- Step 2: Key Features -->
+            <div class="form-step">
+                <div class="step-header">
+                    <span class="step-number">2</span>
+                    <div class="step-info">
+                        <h3>What features matter most?</h3>
+                        <p>List the key features (one per line)</p>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <textarea id="features" name="features" rows="5"
+                        placeholder="User authentication with OAuth
+Kanban-style task boards
+Real-time collaboration
+Mobile-responsive design
+Dark mode support"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 3: Technical Details (Collapsible) -->
+            <details class="form-step-collapsible">
+                <summary class="step-header clickable">
+                    <span class="step-number">3</span>
+                    <div class="step-info">
+                        <h3>Any technical preferences?</h3>
+                        <p>Optional: Specify tech stack or constraints</p>
+                    </div>
+                    <span class="expand-icon">+</span>
+                </summary>
+                <div class="collapsible-content">
+                    <div class="form-group">
+                        <label for="technical">Tech Stack</label>
+                        <input type="text" id="technical" name="technical"
+                            placeholder="e.g., React, FastAPI, PostgreSQL">
+                    </div>
+                    <div class="form-group">
+                        <label for="constraints">Constraints</label>
+                        <input type="text" id="constraints" name="constraints"
+                            placeholder="e.g., Must work offline, WCAG 2.1 compliant">
+                    </div>
+                </div>
+            </details>
+
+            <!-- Step 4: Project Link (Collapsible) -->
+            {% if projects %}
+            <details class="form-step-collapsible">
+                <summary class="step-header clickable">
+                    <span class="step-number">4</span>
+                    <div class="step-info">
+                        <h3>Link to a project?</h3>
+                        <p>Optional: Associate this spec with an existing project</p>
+                    </div>
+                    <span class="expand-icon">+</span>
+                </summary>
+                <div class="collapsible-content">
+                    <div class="form-group">
+                        <select id="project_id" name="project_id">
+                            <option value="">-- No project --</option>
+                            {% for project in projects %}
+                            <option value="{{ project.id }}" {% if selected_project_id == project.id %}selected{% endif %}>
+                                {{ project.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </details>
+            {% endif %}
+
+            <!-- Step 5: Output Options (Collapsible) -->
+            <details class="form-step-collapsible">
+                <summary class="step-header clickable">
+                    <span class="step-number">{% if projects %}5{% else %}4{% endif %}</span>
+                    <div class="step-info">
+                        <h3>Save spec files?</h3>
+                        <p>Optional: Write .kiro spec files to disk</p>
+                    </div>
+                    <span class="expand-icon">+</span>
+                </summary>
+                <div class="collapsible-content">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="write_files" id="write_files" onchange="toggleOutputDir()">
+                            <span>Write spec files to disk</span>
+                        </label>
+                    </div>
+                    <div class="form-group" id="output_dir_group" style="display: none;">
+                        <label for="output_dir">Output Directory</label>
+                        <input type="text" id="output_dir" name="output_dir"
+                            placeholder="/path/to/your/project">
+                        <p class="form-hint">Creates .kiro/specs/[feature-name]/ with requirements.md, design.md, tasks.md</p>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Submit -->
+            <div class="form-submit">
+                <a href="/specs" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary btn-large">
+                    <span class="btn-icon">✨</span> Generate Spec
+                </button>
+            </div>
+        </form>
+
+        <!-- Info Sidebar -->
+        <aside class="spec-info-sidebar">
+            <div class="info-card">
+                <h4>What you'll get</h4>
+                <ul class="info-list">
+                    <li>
+                        <span class="info-icon">📋</span>
+                        <div>
+                            <strong>Requirements</strong>
+                            <p>User stories with acceptance criteria in EARS format</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="info-icon">🏗️</span>
+                        <div>
+                            <strong>Design</strong>
+                            <p>Technical architecture and component breakdown</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="info-icon">✅</span>
+                        <div>
+                            <strong>Tasks</strong>
+                            <p>Implementation tasks linked to requirements</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div class="info-card">
+                <h4>Then what?</h4>
+                <p class="info-text">Execute tasks through the agent pipeline:</p>
+                <div class="agent-flow">
+                    <span class="agent-chip">💡 Sketch</span>
+                    <span class="flow-arrow">→</span>
+                    <span class="agent-chip">🛠️ Tinker</span>
+                    <span class="flow-arrow">→</span>
+                    <span class="agent-chip">🔮 Oracle</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script>
+function toggleOutputDir() {
+    const checkbox = document.getElementById('write_files');
+    const group = document.getElementById('output_dir_group');
+    group.style.display = checkbox.checked ? 'block' : 'none';
+}
+</script>
+{% endblock %}

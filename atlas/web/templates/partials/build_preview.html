@@ -1,0 +1,797 @@
+<!-- Build Preview Partial -->
+<!-- Syntax Highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<div class="build-preview-container">
+    <!-- Tab Navigation -->
+    <div class="preview-tabs">
+        <button class="preview-tab active" onclick="switchPreviewTab('preview')" id="tab-preview">
+            <span class="tab-icon">👁️</span>
+            <span class="tab-label">Preview</span>
+        </button>
+        <button class="preview-tab" onclick="switchPreviewTab('code')" id="tab-code">
+            <span class="tab-icon">📝</span>
+            <span class="tab-label">Code</span>
+        </button>
+        <button class="preview-tab" onclick="switchPreviewTab('files')" id="tab-files">
+            <span class="tab-icon">📁</span>
+            <span class="tab-label">Files ({{ preview.files_list|length if preview else 0 }})</span>
+        </button>
+        <button class="preview-tab download-all" onclick="downloadAllCode()" id="tab-download">
+            <span class="tab-icon">💾</span>
+            <span class="tab-label">Download All</span>
+        </button>
+    </div>
+
+    <!-- Preview Tab Content -->
+    <div class="preview-content" id="preview-panel">
+        {% if preview %}
+            {% if preview.preview_type == 'html' %}
+            <!-- Live HTML Preview -->
+            <div class="html-preview-wrapper">
+                <div class="preview-toolbar">
+                    <span class="preview-type-badge">Live Preview</span>
+                    <div class="preview-device-toggle">
+                        <button class="device-btn active" onclick="setPreviewDevice('desktop')" title="Desktop">🖥️</button>
+                        <button class="device-btn" onclick="setPreviewDevice('tablet')" title="Tablet">📱</button>
+                        <button class="device-btn" onclick="setPreviewDevice('mobile')" title="Mobile">📲</button>
+                    </div>
+                    <button class="btn btn-small btn-ghost" onclick="togglePreviewSize()">
+                        <span id="size-icon">⬜</span>
+                    </button>
+                </div>
+                <div class="preview-frame-container" id="preview-frame-container">
+                <iframe id="live-preview-frame"
+                        class="live-preview-frame"
+                        sandbox="allow-scripts"
+                        srcdoc="{{ preview.content|e }}"></iframe>
+                </div>
+            </div>
+
+            {% elif preview.preview_type == 'tree' %}
+            <!-- Component Tree -->
+            <div class="component-tree-preview">
+                {{ preview.content|safe }}
+            </div>
+
+            {% elif preview.preview_type == 'arch' %}
+            <!-- Architecture Diagram -->
+            <div class="architecture-preview">
+                {{ preview.content|safe }}
+            </div>
+
+            {% elif preview.preview_type == 'api' %}
+            <!-- API Endpoints -->
+            <div class="api-endpoints-preview">
+                {{ preview.content|safe }}
+            </div>
+
+            {% elif preview.preview_type == 'db' %}
+            <!-- Database Schema -->
+            <div class="database-preview">
+                {{ preview.content|safe }}
+            </div>
+
+            {% elif preview.preview_type == 'terminal' %}
+            <!-- Terminal Preview -->
+            <div class="terminal-output-preview">
+                {{ preview.content|safe }}
+            </div>
+
+            {% else %}
+            <!-- Code Summary -->
+            <div class="code-summary-preview">
+                {{ preview.content|safe }}
+            </div>
+            {% endif %}
+        {% else %}
+        <!-- No Preview Available -->
+        <div class="no-preview">
+            <div class="no-preview-icon">🔍</div>
+            <div class="no-preview-message">Generating preview...</div>
+            <div class="no-preview-hint">Tinker is building your solution</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Code Tab Content -->
+    <div class="preview-content hidden" id="code-panel">
+        {% if preview and preview.code_blocks %}
+        <div class="code-blocks">
+            {% for block in preview.code_blocks %}
+            <div class="code-block">
+                <div class="code-block-header">
+                    <span class="code-language">{{ block.language }}</span>
+                    {% if block.filename %}
+                    <span class="code-filename">{{ block.filename }}</span>
+                    {% endif %}
+                    <div class="code-actions">
+                        <button class="btn-copy" onclick="copyCode(this)" data-code="{{ block.code|e }}">
+                            📋 Copy
+                        </button>
+                        <button class="btn-download" onclick="downloadCode(this, '{{ block.filename or block.language }}', '{{ block.code|e }}')" title="Download file">
+                            💾
+                        </button>
+                    </div>
+                </div>
+                <pre class="code-block-content"><code class="language-{{ block.language }}">{{ block.code }}</code></pre>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-code">
+            <div class="no-code-message">No code blocks extracted</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Files Tab Content -->
+    <div class="preview-content hidden" id="files-panel">
+        {% if preview and preview.files_list %}
+        <div class="files-tree">
+            <div class="files-tree-header">Project Files</div>
+            <ul class="files-list">
+                {% for file in preview.files_list %}
+                <li class="file-item">
+                    <span class="file-icon">
+                        {% set ext = file.split('.')[-1] %}
+                        {% if ext in ['py'] %}🐍
+                        {% elif ext in ['js', 'jsx'] %}📜
+                        {% elif ext in ['ts', 'tsx'] %}📘
+                        {% elif ext in ['html'] %}🌐
+                        {% elif ext in ['css'] %}🎨
+                        {% elif ext in ['json', 'yaml', 'yml'] %}📋
+                        {% elif ext in ['md'] %}📝
+                        {% elif ext in ['sql'] %}🗃️
+                        {% else %}📄{% endif %}
+                    </span>
+                    <span class="file-name">{{ file }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% else %}
+        <div class="no-files">
+            <div class="no-files-message">No files listed</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.build-preview-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+/* Tab Navigation */
+.preview-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-input);
+}
+
+.preview-tab {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.preview-tab:hover {
+    background: rgba(0, 255, 65, 0.05);
+    color: var(--text-primary);
+}
+
+.preview-tab.active {
+    background: var(--bg-card);
+    color: var(--matrix-green);
+    border-bottom: 2px solid var(--matrix-green);
+    margin-bottom: -1px;
+}
+
+.preview-tab.download-all {
+    flex: 0 0 auto;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-left: 1px solid var(--border-color);
+}
+
+.preview-tab.download-all:hover {
+    background: rgba(16, 185, 129, 0.2);
+}
+
+.tab-icon {
+    font-size: 1rem;
+}
+
+/* Preview Content */
+.preview-content {
+    min-height: 300px;
+    max-height: 500px;
+    overflow: auto;
+}
+
+.preview-content.hidden {
+    display: none;
+}
+
+/* HTML Preview */
+.html-preview-wrapper {
+    height: 100%;
+}
+
+.preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.preview-type-badge {
+    font-size: 0.75rem;
+    color: var(--matrix-green);
+    font-family: var(--font-mono);
+}
+
+.preview-device-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg-dark);
+    padding: 0.25rem;
+    border-radius: 6px;
+}
+
+.device-btn {
+    background: none;
+    border: none;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    opacity: 0.5;
+    transition: all 0.2s;
+}
+
+.device-btn:hover {
+    opacity: 0.8;
+}
+
+.device-btn.active {
+    background: var(--bg-input);
+    opacity: 1;
+}
+
+.preview-frame-container {
+    display: flex;
+    justify-content: center;
+    background: #333;
+    padding: 1rem;
+    transition: all 0.3s;
+}
+
+.preview-frame-container.mobile {
+    padding: 1rem 2rem;
+}
+
+.live-preview-frame {
+    width: 100%;
+    height: 400px;
+    border: none;
+    background: #fff;
+    transition: all 0.3s;
+    border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.live-preview-frame.mobile {
+    width: 375px;
+    height: 667px;
+    border-radius: 20px;
+}
+
+.live-preview-frame.tablet {
+    width: 768px;
+    height: 500px;
+    border-radius: 12px;
+}
+
+.live-preview-frame.fullsize {
+    height: 600px;
+}
+
+/* Component Tree */
+.component-tree {
+    padding: 1rem;
+}
+
+.tree-header {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tree-body {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.tree-node {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+}
+
+.tree-node:hover {
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.node-icon {
+    font-size: 1rem;
+}
+
+.node-name {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.node-file {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+.tree-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 1rem;
+}
+
+/* Architecture Diagram */
+.architecture-preview {
+    padding: 1rem;
+}
+
+.architecture-diagram {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--matrix-green);
+    background: var(--bg-input);
+    padding: 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    white-space: pre;
+}
+
+/* API Endpoints */
+.api-preview {
+    padding: 1rem;
+}
+
+.api-header {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    margin-bottom: 1rem;
+}
+
+.api-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.api-table th,
+.api-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.api-table th {
+    color: var(--text-secondary);
+    font-weight: 500;
+    background: var(--bg-input);
+}
+
+.method-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.method-badge.get { background: #10b981; color: #fff; }
+.method-badge.post { background: #3b82f6; color: #fff; }
+.method-badge.put { background: #f59e0b; color: #fff; }
+.method-badge.delete { background: #ef4444; color: #fff; }
+.method-badge.patch { background: #8b5cf6; color: #fff; }
+
+.no-data {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Database Preview */
+.db-preview {
+    padding: 1rem;
+}
+
+.db-header {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    margin-bottom: 1rem;
+}
+
+.db-table {
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.table-name {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-columns {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.column {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 0.25rem 0;
+}
+
+.col-type {
+    color: var(--text-muted);
+    margin-left: 0.5rem;
+}
+
+/* Terminal Preview */
+.terminal-preview {
+    background: #1e1e1e;
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 1rem;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #2d2d2d;
+}
+
+.terminal-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.terminal-dot.red { background: #ff5f56; }
+.terminal-dot.yellow { background: #ffbd2e; }
+.terminal-dot.green { background: #27c93f; }
+
+.terminal-title {
+    margin-left: 0.5rem;
+    color: #808080;
+    font-size: 0.8rem;
+}
+
+.terminal-body {
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: #f0f0f0;
+}
+
+.terminal-line {
+    padding: 0.25rem 0;
+}
+
+.prompt {
+    color: #27c93f;
+    margin-right: 0.5rem;
+}
+
+.cursor {
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+/* Code Blocks */
+.code-blocks {
+    padding: 1rem;
+}
+
+.code-block {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.code-block-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.code-language {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--matrix-green);
+    padding: 0.2rem 0.5rem;
+    background: rgba(0, 255, 65, 0.1);
+    border-radius: 4px;
+}
+
+.code-filename {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.code-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.btn-copy,
+.btn-download {
+    padding: 0.25rem 0.5rem;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.btn-copy:hover {
+    background: rgba(0, 255, 65, 0.1);
+    color: var(--matrix-green);
+}
+
+.code-block-content {
+    padding: 0;
+    margin: 0;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    background: #282c34;
+}
+
+.code-block-content code {
+    display: block;
+    padding: 1rem;
+    background: #282c34;
+    color: #abb2bf;
+}
+
+.code-block-content code.hljs {
+    background: #282c34;
+}
+
+/* Files Tree */
+.files-tree {
+    padding: 1rem;
+}
+
+.files-tree-header {
+    font-family: var(--font-mono);
+    color: var(--matrix-green);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.files-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.file-item:hover {
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.file-icon {
+    font-size: 1rem;
+}
+
+.file-name {
+    color: var(--text-primary);
+}
+
+/* No Content States */
+.no-preview,
+.no-code,
+.no-files {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.no-preview-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.no-preview-message {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.no-preview-hint {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+</style>
+
+<script>
+function switchPreviewTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.preview-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.getElementById('tab-' + tabName).classList.add('active');
+
+    // Update panels
+    document.querySelectorAll('.preview-content').forEach(panel => {
+        panel.classList.add('hidden');
+    });
+    document.getElementById(tabName + '-panel').classList.remove('hidden');
+}
+
+function togglePreviewSize() {
+    const frame = document.getElementById('live-preview-frame');
+    const icon = document.getElementById('size-icon');
+    if (frame) {
+        frame.classList.toggle('fullsize');
+        icon.textContent = frame.classList.contains('fullsize') ? '🔲' : '⬜';
+    }
+}
+
+function copyCode(button) {
+    const code = button.dataset.code;
+    navigator.clipboard.writeText(code).then(() => {
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied';
+        setTimeout(() => {
+            button.textContent = originalText;
+        }, 2000);
+    });
+}
+
+function setPreviewDevice(device) {
+    const frame = document.getElementById('live-preview-frame');
+    const container = document.getElementById('preview-frame-container');
+
+    // Update buttons
+    document.querySelectorAll('.device-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Update frame classes
+    frame.classList.remove('mobile', 'tablet', 'desktop');
+    container.classList.remove('mobile', 'tablet', 'desktop');
+
+    if (device === 'mobile') {
+        frame.classList.add('mobile');
+        container.classList.add('mobile');
+    } else if (device === 'tablet') {
+        frame.classList.add('tablet');
+    }
+}
+
+function downloadCode(button, filename, code) {
+    // Decode HTML entities
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = code;
+    const decodedCode = textarea.value;
+
+    // Create blob and download
+    const blob = new Blob([decodedCode], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.includes('.') ? filename : filename + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function downloadAllCode() {
+    // Collect all code blocks
+    const codeBlocks = document.querySelectorAll('.code-block');
+    let allCode = '';
+
+    codeBlocks.forEach((block, index) => {
+        const filename = block.querySelector('.code-filename')?.textContent ||
+                        block.querySelector('.code-language')?.textContent ||
+                        `file_${index + 1}`;
+        const code = block.querySelector('code')?.textContent || '';
+
+        allCode += `// ============================================\n`;
+        allCode += `// File: ${filename}\n`;
+        allCode += `// ============================================\n\n`;
+        allCode += code;
+        allCode += '\n\n';
+    });
+
+    if (allCode) {
+        const blob = new Blob([allCode], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'atlas-build-output.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+}
+
+// Initialize syntax highlighting
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof hljs !== 'undefined') {
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+});
+</script>

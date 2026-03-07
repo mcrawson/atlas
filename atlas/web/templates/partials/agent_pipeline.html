@@ -1,0 +1,112 @@
+{% set sketch_status = agents.architect.status if agents and agents.architect else 'idle' %}
+{% set tinker_status = agents.mason.status if agents and agents.mason else 'idle' %}
+{% set oracle_status = agents.oracle.status if agents and agents.oracle else 'idle' %}
+
+{% set sketch_active = sketch_status in ['working', 'thinking', 'planning'] %}
+{% set tinker_active = tinker_status in ['working', 'thinking', 'building'] %}
+{% set oracle_active = oracle_status in ['working', 'thinking', 'verifying'] %}
+
+{% set sketch_task = agents.architect.current_task if agents and agents.architect else '' %}
+{% set tinker_task = agents.mason.current_task if agents and agents.mason else '' %}
+{% set oracle_task = agents.oracle.current_task if agents and agents.oracle else '' %}
+
+<!-- Pipeline Progress Bar -->
+<div class="pipeline-progress">
+    <div class="progress-track">
+        <div class="progress-segment {% if sketch_active %}active{% elif sketch_status == 'completed' %}done{% endif %}"></div>
+        <div class="progress-segment {% if tinker_active %}active{% elif tinker_status == 'completed' %}done{% endif %}"></div>
+        <div class="progress-segment {% if oracle_active %}active{% elif oracle_status == 'completed' %}done{% endif %}"></div>
+    </div>
+</div>
+
+<!-- Pipeline Agents -->
+<div class="pipeline-agents">
+    <!-- Sketch -->
+    <div class="pipeline-agent-card {% if sketch_active %}active{% endif %}">
+        <div class="pipeline-agent-header">
+            <div class="pipeline-agent-icon {% if sketch_active %}active{% endif %}">
+                💡
+                {% if sketch_active %}
+                <div class="icon-pulse"></div>
+                {% endif %}
+            </div>
+            <div class="pipeline-agent-info">
+                <h3>Sketch</h3>
+                <span class="pipeline-agent-role">Planning</span>
+            </div>
+            <span class="pipeline-status-badge {{ sketch_status }}">
+                {% if sketch_active %}<span class="spinner-tiny"></span>{% endif %}
+                {{ sketch_status }}
+            </span>
+        </div>
+        {% if sketch_task %}
+        <div class="pipeline-agent-task">
+            {{ sketch_task[:50] }}{% if sketch_task|length > 50 %}...{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Arrow -->
+    <div class="pipeline-connector {% if tinker_active or oracle_active %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+    </div>
+
+    <!-- Tinker -->
+    <div class="pipeline-agent-card {% if tinker_active %}active{% endif %}">
+        <div class="pipeline-agent-header">
+            <div class="pipeline-agent-icon {% if tinker_active %}active{% endif %}">
+                🛠️
+                {% if tinker_active %}
+                <div class="icon-pulse"></div>
+                {% endif %}
+            </div>
+            <div class="pipeline-agent-info">
+                <h3>Tinker</h3>
+                <span class="pipeline-agent-role">Building</span>
+            </div>
+            <span class="pipeline-status-badge {{ tinker_status }}">
+                {% if tinker_active %}<span class="spinner-tiny"></span>{% endif %}
+                {{ tinker_status }}
+            </span>
+        </div>
+        {% if tinker_task %}
+        <div class="pipeline-agent-task">
+            {{ tinker_task[:50] }}{% if tinker_task|length > 50 %}...{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Arrow -->
+    <div class="pipeline-connector {% if oracle_active %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+    </div>
+
+    <!-- Oracle -->
+    <div class="pipeline-agent-card {% if oracle_active %}active{% endif %}">
+        <div class="pipeline-agent-header">
+            <div class="pipeline-agent-icon {% if oracle_active %}active{% endif %}">
+                🔮
+                {% if oracle_active %}
+                <div class="icon-pulse"></div>
+                {% endif %}
+            </div>
+            <div class="pipeline-agent-info">
+                <h3>Oracle</h3>
+                <span class="pipeline-agent-role">Reviewing</span>
+            </div>
+            <span class="pipeline-status-badge {{ oracle_status }}">
+                {% if oracle_active %}<span class="spinner-tiny"></span>{% endif %}
+                {{ oracle_status }}
+            </span>
+        </div>
+        {% if oracle_task %}
+        <div class="pipeline-agent-task">
+            {{ oracle_task[:50] }}{% if oracle_task|length > 50 %}...{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Design: {{ spec.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <div class="header-content">
+            <a href="/specs/{{ spec.id }}" class="back-link">&larr; Back to Spec</a>
+            <h1>Technical Design</h1>
+            <p class="subtitle">{{ spec.name }}</p>
+        </div>
+        <div class="header-tabs">
+            <a href="/specs/{{ spec.id }}/requirements" class="tab">Requirements</a>
+            <a href="/specs/{{ spec.id }}/design" class="tab active">Design</a>
+            <a href="/specs/{{ spec.id }}/tasks" class="tab">Tasks</a>
+        </div>
+    </header>
+
+    <!-- Design Content -->
+    <section class="section">
+        {% if design_content %}
+        <div class="markdown-content">
+            {{ design_content | safe }}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">🏗️</div>
+            <h3>Design Document</h3>
+            <p>Design file not found. The spec may not have been written to disk.</p>
+            <p class="hint">The design document contains architecture, components, data models, and API specifications.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<style>
+.header-tabs {
+    display: flex;
+    gap: 0;
+    margin-top: 1rem;
+}
+
+.tab {
+    padding: 0.75rem 1.5rem;
+    background: var(--bg-secondary, #1a1a2e);
+    color: var(--text-secondary, #888);
+    text-decoration: none;
+    border: 1px solid var(--border-color, #2a2a4a);
+    transition: all 0.2s ease;
+}
+
+.tab:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.tab:last-child {
+    border-radius: 0 6px 6px 0;
+}
+
+.tab.active {
+    background: var(--accent-color, #00ff41);
+    color: var(--bg-primary, #0a0a0f);
+    border-color: var(--accent-color, #00ff41);
+}
+
+.tab:hover:not(.active) {
+    color: var(--text-primary, #fff);
+    border-color: var(--text-secondary, #888);
+}
+
+.markdown-content {
+    background: var(--bg-secondary, #1a1a2e);
+    padding: 2rem;
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    color: var(--accent-color, #00ff41);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+    margin-top: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 1.5rem;
+    margin: 1rem 0;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content strong {
+    color: var(--text-primary, #fff);
+}
+
+.markdown-content code {
+    background: var(--bg-tertiary, #252540);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.markdown-content pre {
+    background: var(--bg-tertiary, #252540);
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary, #888);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    color: var(--text-primary, #fff);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state .hint {
+    font-size: 0.85rem;
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}

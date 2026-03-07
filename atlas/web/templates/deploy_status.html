@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+
+{% block title %}Deployment Status - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="deploy-wizard">
+    <!-- Header -->
+    <header class="deploy-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Deployment Status</span>
+        </nav>
+        <h1>
+            <span class="platform-icon">{{ platform_icon }}</span>
+            {{ platform_name }} Deployment
+        </h1>
+    </header>
+
+    <!-- Status Banner -->
+    <section class="deploy-section status-banner status-{{ task.status.value }}">
+        <div class="status-content">
+            <span class="status-icon">
+                {% if task.status.value == 'completed' %}✅
+                {% elif task.status.value == 'failed' %}❌
+                {% elif task.status.value == 'running' %}<span class="spinner"></span>
+                {% elif task.status.value == 'pending' %}⏳
+                {% elif task.status.value == 'cancelled' %}🚫
+                {% else %}📋
+                {% endif %}
+            </span>
+            <div class="status-text">
+                <h2>
+                    {% if task.status.value == 'completed' %}Deployment Successful!
+                    {% elif task.status.value == 'failed' %}Deployment Failed
+                    {% elif task.status.value == 'running' %}Deployment in Progress...
+                    {% elif task.status.value == 'pending' %}Ready to Deploy
+                    {% elif task.status.value == 'cancelled' %}Deployment Cancelled
+                    {% else %}{{ task.status.value | title }}
+                    {% endif %}
+                </h2>
+                {% if task.error %}
+                <p class="error-message">{{ task.error }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        {% if task.status.value == 'running' %}
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: {{ task.progress }}%"></div>
+        </div>
+        <div class="progress-label">
+            {{ task.progress | int }}% complete ({{ task.results | length }} / {{ task.commands | length }} commands)
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Task Info -->
+    <section class="deploy-section">
+        <h2>📋 Task Information</h2>
+        <div class="task-info-grid">
+            <div class="info-item">
+                <span class="info-label">Task ID</span>
+                <code class="info-value">{{ task.id }}</code>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Created</span>
+                <span class="info-value">{{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            {% if task.started_at %}
+            <div class="info-item">
+                <span class="info-label">Started</span>
+                <span class="info-value">{{ task.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            {% endif %}
+            {% if task.completed_at %}
+            <div class="info-item">
+                <span class="info-label">Completed</span>
+                <span class="info-value">{{ task.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            {% endif %}
+            {% if task.approved_by %}
+            <div class="info-item">
+                <span class="info-label">Approved By</span>
+                <span class="info-value">{{ task.approved_by }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Command Output -->
+    <section class="deploy-section">
+        <h2>📺 Execution Output</h2>
+        <div class="output-terminal"
+             id="deploy-output"
+             {% if task.status.value == 'running' %}
+             hx-get="/projects/{{ project.id }}/deploy/{{ platform }}/status?task_id={{ task.id }}"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML"
+             {% endif %}>
+            {% if task.results %}
+                {% for result in task.results %}
+                <div class="output-command">$ {{ result.command }}</div>
+                {% if result.stdout %}
+                <div class="output-stdout">{{ result.stdout }}</div>
+                {% endif %}
+                {% if result.stderr %}
+                <div class="output-stderr">{{ result.stderr }}</div>
+                {% endif %}
+                {% if result.success %}
+                <div class="output-result success">✓ Exit code: {{ result.exit_code }} ({{ result.duration_ms }}ms)</div>
+                {% else %}
+                <div class="output-result error">✗ Exit code: {{ result.exit_code }} ({{ result.duration_ms }}ms)</div>
+                {% endif %}
+                {% endfor %}
+
+                {% if task.status.value == 'completed' %}
+                <div class="output-success">✅ All commands completed successfully!</div>
+                {% elif task.status.value == 'failed' %}
+                <div class="output-error">❌ Deployment failed: {{ task.error }}</div>
+                {% endif %}
+            {% elif task.status.value == 'running' %}
+                <div class="output-loading">
+                    <span class="spinner"></span> Running deployment...
+                </div>
+            {% elif task.status.value == 'pending' %}
+                <div class="output-loading">
+                    Waiting to start...
+                </div>
+            {% else %}
+                <div class="output-empty">No output yet.</div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Commands List -->
+    <section class="deploy-section">
+        <h2>🔧 Commands</h2>
+        <div class="command-list">
+            {% for cmd in task.commands %}
+            <div class="command-item {% if loop.index <= task.results | length %}executed{% endif %} {% if loop.index == task.results | length + 1 and task.status.value == 'running' %}current{% endif %}">
+                <div class="command-status">
+                    {% if loop.index < task.results | length %}
+                        {% if task.results[loop.index - 1].success %}✅{% else %}❌{% endif %}
+                    {% elif loop.index == task.results | length %}
+                        {% if task.results and task.results[-1].success %}✅{% else %}❌{% endif %}
+                    {% elif loop.index == task.results | length + 1 and task.status.value == 'running' %}
+                        <span class="spinner-small"></span>
+                    {% else %}
+                        ⏳
+                    {% endif %}
+                </div>
+                <div class="command-number">{{ loop.index }}</div>
+                <code class="command-text">{{ cmd }}</code>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Action Buttons -->
+    <section class="deploy-section actions-section">
+        <div class="action-buttons">
+            <a href="/projects/{{ project.id }}" class="btn btn-primary">
+                ← Back to Project
+            </a>
+            {% if task.status.value == 'failed' %}
+            <a href="/projects/{{ project.id }}/deploy/{{ platform }}" class="btn btn-ghost">
+                🔄 Try Again
+            </a>
+            {% endif %}
+            {% if task.status.value == 'completed' %}
+            <a href="/projects/{{ project.id }}" class="btn btn-success">
+                🎉 View Completed Project
+            </a>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<style>
+.deploy-wizard {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.deploy-header {
+    margin-bottom: 2rem;
+}
+
+.deploy-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    color: var(--text-primary);
+}
+
+.platform-icon {
+    font-size: 2rem;
+}
+
+.deploy-section {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.deploy-section h2 {
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin: 0 0 1rem 0;
+}
+
+/* Status Banner */
+.status-banner {
+    padding: 2rem;
+}
+
+.status-banner.status-completed {
+    background: rgba(76, 175, 80, 0.1);
+    border-color: var(--color-success);
+}
+
+.status-banner.status-failed {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: var(--color-error);
+}
+
+.status-banner.status-running {
+    background: rgba(33, 150, 243, 0.1);
+    border-color: var(--color-info);
+}
+
+.status-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.status-icon {
+    font-size: 2.5rem;
+}
+
+.status-text h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.status-banner.status-completed .status-text h2 {
+    color: var(--color-success);
+}
+
+.status-banner.status-failed .status-text h2 {
+    color: var(--color-error);
+}
+
+.status-banner.status-running .status-text h2 {
+    color: var(--color-info);
+}
+
+.error-message {
+    color: var(--color-error);
+    margin: 0.5rem 0 0 0;
+}
+
+/* Progress Bar */
+.progress-bar {
+    margin-top: 1rem;
+    height: 8px;
+    background: var(--bg-surface);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--color-info);
+    transition: width 0.3s ease;
+}
+
+.progress-label {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Task Info Grid */
+.task-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.info-value {
+    color: var(--text-primary);
+}
+
+/* Output Terminal */
+.output-terminal {
+    background: var(--bg-code);
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    min-height: 200px;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.output-command {
+    color: var(--accent-primary);
+    margin-top: 1rem;
+    font-weight: bold;
+}
+
+.output-command:first-child {
+    margin-top: 0;
+}
+
+.output-stdout {
+    color: var(--text-primary);
+}
+
+.output-stderr {
+    color: var(--color-error);
+}
+
+.output-result {
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.output-result.success {
+    color: var(--color-success);
+}
+
+.output-result.error {
+    color: var(--color-error);
+}
+
+.output-success {
+    color: var(--color-success);
+    margin-top: 1rem;
+    font-weight: bold;
+}
+
+.output-error {
+    color: var(--color-error);
+    margin-top: 1rem;
+    font-weight: bold;
+}
+
+.output-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.output-empty {
+    color: var(--text-secondary);
+}
+
+/* Command List */
+.command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.command-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--border-color);
+    opacity: 0.6;
+}
+
+.command-item.executed {
+    opacity: 1;
+    border-left-color: var(--color-success);
+}
+
+.command-item.current {
+    opacity: 1;
+    border-left-color: var(--color-info);
+    background: rgba(33, 150, 243, 0.1);
+}
+
+.command-status {
+    width: 1.5rem;
+    text-align: center;
+}
+
+.command-number {
+    background: var(--border-color);
+    color: var(--text-secondary);
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.command-item.executed .command-number {
+    background: var(--color-success);
+    color: white;
+}
+
+.command-item.current .command-number {
+    background: var(--color-info);
+    color: white;
+}
+
+.command-text {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+/* Spinners */
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--color-info);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-success {
+    background: var(--color-success);
+    color: white;
+    border: none;
+}
+
+.btn-success:hover {
+    background: #388e3c;
+}
+</style>
+{% endblock %}

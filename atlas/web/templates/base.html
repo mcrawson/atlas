@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>{% block title %}ATLAS Dashboard{% endblock %}</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="ATLAS - Multi-agent AI system for building projects">
+    <meta name="theme-color" content="#00ff41">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ATLAS">
+    <meta name="application-name" content="ATLAS">
+    <meta name="msapplication-TileColor" content="#0a0a0f">
+    <meta name="msapplication-TileImage" content="/static/icons/icon-144.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-72.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-192.png">
+
+    <!-- Splash Screens for iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/atlas.css">
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="/static/js/atlas.js" defer></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+                    .catch(err => console.log('[PWA] Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/" class="brand-link">
+                <span class="brand-name">ATLAS</span>
+            </a>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+            <a href="/projects" class="nav-link {% if '/projects' in request.url.path %}active{% endif %}">Projects</a>
+            <a href="/agents" class="nav-link {% if '/agents' in request.url.path %}active{% endif %}">Agents</a>
+            <a href="/knowledge/" class="nav-link {% if '/knowledge' in request.url.path %}active{% endif %}">Knowledge</a>
+            <a href="/training" class="nav-link {% if '/training' in request.url.path %}active{% endif %}">Training</a>
+            <a href="/setup" class="nav-link {% if '/setup' in request.url.path %}active{% endif %}">Setup</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-brand-name">ATLAS</span>
+                <span class="footer-tagline">Automated Thinking, Learning & Advisory System</span>
+            </div>
+            <nav class="footer-nav">
+                <div class="footer-nav-group">
+                    <span class="footer-nav-title">Navigation</span>
+                    <a href="/" class="footer-link">Dashboard</a>
+                    <a href="/projects" class="footer-link">Projects</a>
+                    <a href="/agents" class="footer-link">Agents</a>
+                    <a href="/knowledge/" class="footer-link">Knowledge</a>
+                    <a href="/training" class="footer-link">Training</a>
+                    <a href="/setup" class="footer-link">Setup</a>
+                </div>
+            </nav>
+            <div class="footer-status-section">
+                <span class="footer-nav-title">System</span>
+                <div class="footer-status">
+                    <span id="ws-status" class="status-indicator disconnected">Disconnected</span>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span class="footer-copyright">© 2024 ATLAS. Built for builders.</span>
+        </div>
+    </footer>
+</body>
+</html>

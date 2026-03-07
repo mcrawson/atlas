@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Requirements: {{ spec.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page">
+    <header class="page-header">
+        <div class="header-content">
+            <a href="/specs/{{ spec.id }}" class="back-link">&larr; Back to Spec</a>
+            <h1>Requirements</h1>
+            <p class="subtitle">{{ spec.name }}</p>
+        </div>
+        <div class="header-tabs">
+            <a href="/specs/{{ spec.id }}/requirements" class="tab active">Requirements</a>
+            <a href="/specs/{{ spec.id }}/design" class="tab">Design</a>
+            <a href="/specs/{{ spec.id }}/tasks" class="tab">Tasks</a>
+        </div>
+    </header>
+
+    <!-- EARS Info -->
+    <section class="section card info-card">
+        <h3>EARS Format (Easy Approach to Requirements Syntax)</h3>
+        <div class="ears-types">
+            <div class="ears-type">
+                <strong>Ubiquitous:</strong> "The system shall..."
+            </div>
+            <div class="ears-type">
+                <strong>Event-driven:</strong> "When [trigger], the system shall..."
+            </div>
+            <div class="ears-type">
+                <strong>State-driven:</strong> "While [state], the system shall..."
+            </div>
+            <div class="ears-type">
+                <strong>Optional:</strong> "Where [feature], the system shall..."
+            </div>
+        </div>
+    </section>
+
+    <!-- Requirements Content -->
+    <section class="section">
+        {% if requirements_content %}
+        <div class="markdown-content">
+            {{ requirements_content | safe }}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>Requirements file not found. The spec may not have been written to disk.</p>
+            <p class="hint">Requirements are stored in the database and will be displayed when the spec has an associated spec_dir.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<style>
+.header-tabs {
+    display: flex;
+    gap: 0;
+    margin-top: 1rem;
+}
+
+.tab {
+    padding: 0.75rem 1.5rem;
+    background: var(--bg-secondary, #1a1a2e);
+    color: var(--text-secondary, #888);
+    text-decoration: none;
+    border: 1px solid var(--border-color, #2a2a4a);
+    transition: all 0.2s ease;
+}
+
+.tab:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.tab:last-child {
+    border-radius: 0 6px 6px 0;
+}
+
+.tab.active {
+    background: var(--accent-color, #00ff41);
+    color: var(--bg-primary, #0a0a0f);
+    border-color: var(--accent-color, #00ff41);
+}
+
+.tab:hover:not(.active) {
+    color: var(--text-primary, #fff);
+    border-color: var(--text-secondary, #888);
+}
+
+.info-card {
+    background: var(--bg-tertiary, #252540);
+}
+
+.info-card h3 {
+    color: var(--accent-color, #00ff41);
+    margin-bottom: 1rem;
+}
+
+.ears-types {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.75rem;
+}
+
+.ears-type {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #888);
+}
+
+.ears-type strong {
+    color: var(--text-primary, #fff);
+}
+
+.markdown-content {
+    background: var(--bg-secondary, #1a1a2e);
+    padding: 2rem;
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    color: var(--accent-color, #00ff41);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+    margin-top: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 1.5rem;
+    margin: 1rem 0;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content strong {
+    color: var(--text-primary, #fff);
+}
+
+.markdown-content code {
+    background: var(--bg-tertiary, #252540);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary, #888);
+}
+
+.empty-state .hint {
+    font-size: 0.85rem;
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,937 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="project-page">
+    <!-- Project Header -->
+    <header class="project-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a>
+            <span class="separator">/</span>
+            <a href="/projects">Projects</a>
+            <span class="separator">/</span>
+            <span>{{ project.name[:30] }}{% if project.name|length > 30 %}...{% endif %}</span>
+        </nav>
+
+        <div class="project-title-row">
+            <h1>{{ project.name }}</h1>
+            <div class="project-actions">
+                <a href="/projects/{{ project.id }}/edit" class="btn btn-ghost btn-small">Edit</a>
+                <a href="/projects/{{ project.id }}/delete" class="btn btn-ghost btn-small text-coral">Delete</a>
+            </div>
+        </div>
+
+        {% if project.description and project.description != project.name %}
+        <p class="project-description">{{ project.description[:200] }}{% if project.description|length > 200 %}...{% endif %}</p>
+        {% endif %}
+
+        <!-- Project Type Badge -->
+        {% set smart_conv = project.metadata.get('smart_conversation', {}) %}
+        {% set brief = smart_conv.get('brief', {}) %}
+        {% set project_type = brief.get('project_type', '') %}
+        {% set project_category = brief.get('project_category', '') %}
+        {% set idea_type = brief.get('idea_type', 'product') %}
+
+        <div class="project-type-row">
+            {% if project_type %}
+            <div class="project-type-badge" onclick="toggleProjectTypeSelector()">
+                <span class="type-label">{{ project_type.replace('_', ' ').title() }}</span>
+                <span class="type-category">({{ project_category }})</span>
+                <span class="type-edit">Change</span>
+            </div>
+            {% elif idea_type == 'product' %}
+            <button class="btn btn-ghost btn-small" onclick="toggleProjectTypeSelector()">
+                <span class="btn-icon">🏷️</span> Set Project Type
+            </button>
+            {% else %}
+            <div class="project-type-badge">
+                <span class="type-label">{{ idea_type.title() }}</span>
+            </div>
+            {% endif %}
+
+            {% if brief.get('suggested_stack') %}
+            <div class="suggested-stack">
+                {% for tech in brief.get('suggested_stack', [])[:4] %}
+                <span class="stack-tag">{{ tech }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Project Type Selector (hidden by default) -->
+        <div id="project-type-selector" class="project-type-selector" style="display: none;">
+            <div class="type-selector-header">
+                <h4>What are you building?</h4>
+                <button class="btn-close" onclick="toggleProjectTypeSelector()">×</button>
+            </div>
+            <div class="type-categories">
+                <div class="type-category-group">
+                    <h5>📱 App</h5>
+                    <button class="type-option" onclick="setProjectType('mobile_cross_platform', 'app')">Cross-Platform App</button>
+                    <button class="type-option" onclick="setProjectType('mobile_ios', 'app')">iOS App</button>
+                    <button class="type-option" onclick="setProjectType('mobile_android', 'app')">Android App</button>
+                    <button class="type-option" onclick="setProjectType('desktop_electron', 'app')">Desktop App</button>
+                </div>
+                <div class="type-category-group">
+                    <h5>🌐 Web</h5>
+                    <button class="type-option" onclick="setProjectType('web_fullstack', 'web')">Full-Stack Web App</button>
+                    <button class="type-option" onclick="setProjectType('web_spa', 'web')">Single-Page App (SPA)</button>
+                    <button class="type-option" onclick="setProjectType('web_static', 'web')">Static Website</button>
+                    <button class="type-option" onclick="setProjectType('web_landing', 'web')">Landing Page</button>
+                    <button class="type-option" onclick="setProjectType('web_dashboard', 'web')">Dashboard</button>
+                </div>
+                <div class="type-category-group">
+                    <h5>⚙️ Backend</h5>
+                    <button class="type-option" onclick="setProjectType('api_rest', 'api')">REST API</button>
+                    <button class="type-option" onclick="setProjectType('api_graphql', 'api')">GraphQL API</button>
+                    <button class="type-option" onclick="setProjectType('cli_tool', 'cli')">CLI Tool</button>
+                    <button class="type-option" onclick="setProjectType('script_automation', 'script')">Automation Script</button>
+                </div>
+                <div class="type-category-group">
+                    <h5>📦 Library</h5>
+                    <button class="type-option" onclick="setProjectType('library_npm', 'library')">NPM Package</button>
+                    <button class="type-option" onclick="setProjectType('library_pypi', 'library')">Python Package</button>
+                </div>
+                <div class="type-category-group">
+                    <h5>📝 Document</h5>
+                    <button class="type-option" onclick="setProjectType('doc_book', 'document')">Book</button>
+                    <button class="type-option" onclick="setProjectType('doc_technical', 'document')">Technical Docs</button>
+                    <button class="type-option" onclick="setProjectType('doc_guide', 'document')">Guide/Tutorial</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Pipeline Progress -->
+    {% set phase = project.metadata.get('phase', 'idea') %}
+    {% set tokens = project.metadata.get('tokens', {}) %}
+    <section class="pipeline-section">
+        <div class="pipeline-header">
+            <h3>Project Pipeline</h3>
+            <div class="token-indicator">
+                <span class="token-icon">⚡</span>
+                <span class="token-count">{{ "{:,}".format(tokens.get('total', 0)) }} tokens</span>
+            </div>
+        </div>
+        <div class="pipeline">
+            {% set phases = [
+                ('idea', 'Idea', '💡', 'Define'),
+                ('plan', 'Plan', '💡', 'Sketch'),
+                ('meeting', 'Review', '👥', 'Team'),
+                ('build', 'Build', '🛠️', 'Tinker'),
+                ('verify', 'Verify', '🔮', 'Oracle'),
+                ('deliver', 'Deliver', '📤', 'Launch')
+            ] %}
+
+            {% for phase_key, phase_name, phase_icon, phase_agent in phases %}
+            {% set is_current = phase == phase_key or (phase_key == 'plan' and phase in ['plan', 'plan_review']) or (phase_key == 'meeting' and phase == 'sprint_meeting') or (phase_key == 'build' and phase in ['build', 'build_review']) or (phase_key == 'verify' and phase == 'verify_review') %}
+            {% set phase_order = {'idea': 0, 'plan': 1, 'plan_review': 1, 'sprint_meeting': 2, 'meeting': 2, 'build': 3, 'build_review': 3, 'verify': 4, 'verify_review': 4, 'deliver': 5} %}
+            {% set current_phase_order = phase_order.get(phase, 0) %}
+            {% set is_done = loop.index0 < current_phase_order %}
+            {% set target_phase = {'idea': 'idea', 'plan': 'plan_review', 'meeting': 'sprint_meeting', 'build': 'build_review', 'verify': 'verify_review', 'deliver': 'deliver'} %}
+
+            <div class="pipeline-step {% if is_current %}current{% elif is_done %}done clickable{% endif %}"
+                 {% if is_done %}
+                 onclick="goToPhase('{{ target_phase.get(phase_key, phase_key) }}')"
+                 title="Go back to {{ phase_name }}"
+                 {% endif %}>
+                <div class="step-marker">
+                    {% if is_done %}
+                    <span class="step-check">✓</span>
+                    {% else %}
+                    <span class="step-icon">{{ phase_icon }}</span>
+                    {% endif %}
+                </div>
+                <div class="step-info">
+                    <span class="step-name">{{ phase_name }}</span>
+                    <span class="step-agent">{{ phase_agent }}</span>
+                </div>
+            </div>
+
+            {% if not loop.last %}
+            <div class="pipeline-connector {% if is_done %}done{% elif is_current %}active{% endif %}"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Phase Content -->
+    <section class="phase-content">
+        {% if phase == 'idea' %}
+        <!-- IDEA PHASE -->
+
+        <!-- Idea Clarity Progress (separated) -->
+        {% set smart_conv = project.metadata.get('smart_conversation', {}) %}
+        {% set brief = smart_conv.get('brief', {}) %}
+        {% set readiness = brief.get('readiness_score', 0) %}
+        {% include "partials/clarity_bar.html" %}
+
+        <!-- Conversation Card -->
+        <div class="phase-card">
+            <div class="phase-card-header">
+                <h2>Let's flesh out your idea</h2>
+                <p>Answer a few questions so our agents can understand what you want to build.</p>
+            </div>
+
+            <div class="conversation-container"
+                 id="idea-conversation-wrapper"
+                 hx-get="/projects/{{ project.id }}/idea/conversation"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Starting conversation...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buzz Notification Hint -->
+        <div class="buzz-hint">
+            <span class="buzz-icon">📡</span>
+            <span class="buzz-text">Buzz will notify you when your idea is ready for planning</span>
+        </div>
+
+        {% elif phase in ['plan', 'plan_review'] %}
+        <!-- SPEC REVIEW PHASE (Spec-Driven Development) -->
+        <div class="phase-card spec-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">💡</span>
+                    <span class="agent-name">Sketch</span>
+                </div>
+                <h2>Review the Specification</h2>
+                <p class="spec-subtitle">Requirements, Design & Tasks in EARS format</p>
+            </div>
+
+            {% set spec = project.metadata.get('spec', {}) %}
+
+            {% if spec %}
+            <!-- Spec Tabs -->
+            <div class="spec-tabs">
+                <button class="spec-tab active" onclick="showSpecTab('requirements')">
+                    <span class="tab-icon">📋</span>
+                    <span class="tab-label">Requirements</span>
+                    <span class="tab-count">{{ spec.get('requirements', [])|length }}</span>
+                </button>
+                <button class="spec-tab" onclick="showSpecTab('design')">
+                    <span class="tab-icon">🏗️</span>
+                    <span class="tab-label">Design</span>
+                </button>
+                <button class="spec-tab" onclick="showSpecTab('tasks')">
+                    <span class="tab-icon">✅</span>
+                    <span class="tab-label">Tasks</span>
+                    <span class="tab-count">{{ spec.get('tasks', [])|length }}</span>
+                </button>
+            </div>
+
+            <!-- Requirements Tab -->
+            <div id="spec-requirements" class="spec-panel active">
+                {% for req in spec.get('requirements', []) %}
+                <div class="requirement-card priority-{{ req.priority }}">
+                    <div class="req-header">
+                        <span class="req-id">{{ req.id }}</span>
+                        <span class="req-title">{{ req.title }}</span>
+                        <span class="req-priority {{ req.priority }}">{{ req.priority|title }}</span>
+                    </div>
+                    {% if req.user_story %}
+                    <div class="req-user-story">
+                        <em>{{ req.user_story }}</em>
+                    </div>
+                    {% endif %}
+                    <div class="req-description">
+                        <strong>EARS:</strong> {{ req.description }}
+                    </div>
+                    <div class="req-type">
+                        <span class="type-badge {{ req.type }}">{{ req.type|replace('_', ' ')|title }}</span>
+                    </div>
+                    {% if req.acceptance_criteria %}
+                    <div class="req-acceptance">
+                        <strong>Acceptance Criteria:</strong>
+                        <ul class="ac-list">
+                            {% for ac in req.acceptance_criteria %}
+                            <li class="ac-item {% if ac.verified %}verified{% endif %}">
+                                <span class="ac-check">{% if ac.verified %}✅{% else %}⬜{% endif %}</span>
+                                <span class="ac-id">{{ ac.id }}:</span>
+                                <span class="ac-desc">{{ ac.description }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No requirements generated yet.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Design Tab -->
+            <div id="spec-design" class="spec-panel" style="display: none;">
+                {% set design = spec.get('design', {}) %}
+                {% if design %}
+                <div class="design-section">
+                    <h3>Overview</h3>
+                    <p>{{ design.get('overview', 'No overview provided') }}</p>
+                </div>
+
+                {% if design.get('architecture') %}
+                <div class="design-section">
+                    <h3>Architecture</h3>
+                    <p>{{ design.get('architecture') }}</p>
+                </div>
+                {% endif %}
+
+                {% if design.get('components') %}
+                <div class="design-section">
+                    <h3>Components</h3>
+                    <div class="component-grid">
+                        {% for comp in design.get('components', []) %}
+                        <div class="component-card">
+                            <h4>{{ comp.name }}</h4>
+                            <p>{{ comp.description }}</p>
+                            {% if comp.responsibilities %}
+                            <div class="comp-responsibilities">
+                                <strong>Responsibilities:</strong>
+                                <ul>
+                                    {% for r in comp.responsibilities %}
+                                    <li>{{ r }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if comp.interfaces %}
+                            <div class="comp-interfaces">
+                                <strong>Interfaces:</strong>
+                                <ul>
+                                    {% for i in comp.interfaces %}
+                                    <li><code>{{ i }}</code></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if design.get('data_model') %}
+                <div class="design-section">
+                    <h3>Data Model</h3>
+                    <pre class="design-code">{{ design.get('data_model') }}</pre>
+                </div>
+                {% endif %}
+
+                {% if design.get('api_design') %}
+                <div class="design-section">
+                    <h3>API Design</h3>
+                    <pre class="design-code">{{ design.get('api_design') }}</pre>
+                </div>
+                {% endif %}
+
+                {% if design.get('testing_strategy') %}
+                <div class="design-section">
+                    <h3>Testing Strategy</h3>
+                    <p>{{ design.get('testing_strategy') }}</p>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="empty-state">
+                    <p>No design documentation generated yet.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Tasks Tab -->
+            <div id="spec-tasks" class="spec-panel" style="display: none;">
+                {% set tasks = spec.get('tasks', []) %}
+                {% if tasks %}
+                <div class="task-progress">
+                    {% set completed = tasks|selectattr('status', 'equalto', 'completed')|list|length %}
+                    {% set total = tasks|length %}
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ (completed / total * 100) if total else 0 }}%"></div>
+                    </div>
+                    <span class="progress-text">{{ completed }}/{{ total }} tasks completed</span>
+                </div>
+
+                <div class="task-list">
+                    {% for task in tasks %}
+                    <div class="task-card status-{{ task.status }} priority-{{ task.priority }}">
+                        <div class="task-header">
+                            <span class="task-status">
+                                {% if task.status == 'completed' %}✅
+                                {% elif task.status == 'in_progress' %}🔄
+                                {% elif task.status == 'blocked' %}🚫
+                                {% else %}⬜{% endif %}
+                            </span>
+                            <span class="task-id">{{ task.id }}</span>
+                            <span class="task-title">{{ task.title }}</span>
+                            <span class="task-priority {{ task.priority }}">{{ task.priority|title }}</span>
+                        </div>
+                        <div class="task-description">
+                            {{ task.description }}
+                        </div>
+                        {% if task.requirement_ids %}
+                        <div class="task-reqs">
+                            <strong>Implements:</strong>
+                            {% for req_id in task.requirement_ids %}
+                            <span class="req-link">{{ req_id }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if task.files_to_modify %}
+                        <div class="task-files">
+                            <strong>Files:</strong>
+                            {% for f in task.files_to_modify %}
+                            <code>{{ f }}</code>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if task.estimated_effort %}
+                        <div class="task-effort">
+                            <span class="effort-icon">⏱️</span>
+                            {{ task.estimated_effort }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No tasks generated yet.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="phase-actions">
+                <form action="/projects/{{ project.id }}/start-sprint-meeting" method="post">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-icon">👥</span> Start Team Review
+                    </button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="toggleRevisionForm()">Request Changes</button>
+            </div>
+
+            <form id="revision-form" class="revision-form" style="display: none;"
+                  action="/projects/{{ project.id }}/revise-with-feedback" method="post">
+                <input type="hidden" name="agent" value="architect">
+                <textarea name="feedback" rows="4" placeholder="What changes would you like to the spec?"></textarea>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Submit Feedback</button>
+                    <button type="button" class="btn btn-ghost" onclick="toggleRevisionForm()">Cancel</button>
+                </div>
+            </form>
+            {% else %}
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Sketch is creating your specification...</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <script>
+        function showSpecTab(tabName) {
+            // Hide all panels
+            document.querySelectorAll('.spec-panel').forEach(p => {
+                p.style.display = 'none';
+                p.classList.remove('active');
+            });
+            // Deactivate all tabs
+            document.querySelectorAll('.spec-tab').forEach(t => t.classList.remove('active'));
+
+            // Show selected panel
+            const panel = document.getElementById('spec-' + tabName);
+            if (panel) {
+                panel.style.display = 'block';
+                panel.classList.add('active');
+            }
+            // Activate selected tab
+            event.currentTarget.classList.add('active');
+        }
+        </script>
+
+        {% elif phase == 'sprint_meeting' %}
+        <!-- SPRINT MEETING PHASE -->
+        <div class="phase-card sprint-meeting-card">
+            <div class="phase-card-header">
+                <div class="agent-badge team">
+                    <span class="agent-icon">👥</span>
+                    <span class="agent-name">Team Review</span>
+                </div>
+                <h2>Sprint Meeting</h2>
+                <p>Agents are reviewing the plan from their perspectives</p>
+            </div>
+
+            {% set meeting = project.metadata.get('sprint_meeting', {}) %}
+            {% set reviews = meeting.get('reviews', []) %}
+            {% set overall_verdict = meeting.get('overall_verdict', 'pending') %}
+            {% set can_proceed = meeting.get('can_proceed', False) %}
+
+            {% if reviews %}
+            <!-- Overall Verdict -->
+            <div class="meeting-verdict {{ overall_verdict }}">
+                {% if overall_verdict == 'approved' %}
+                <span class="verdict-icon">✅</span>
+                <span class="verdict-text">All Clear - Ready to Build</span>
+                {% elif overall_verdict == 'concerns' %}
+                <span class="verdict-icon">⚠️</span>
+                <span class="verdict-text">Approved with Concerns</span>
+                {% elif overall_verdict == 'needs_revision' %}
+                <span class="verdict-icon">🔄</span>
+                <span class="verdict-text">Plan Needs Revision</span>
+                {% elif overall_verdict == 'blocked' %}
+                <span class="verdict-icon">🚫</span>
+                <span class="verdict-text">Blocked - Cannot Proceed</span>
+                {% else %}
+                <span class="verdict-icon">⏳</span>
+                <span class="verdict-text">Review in Progress</span>
+                {% endif %}
+            </div>
+
+            <!-- Agent Reviews -->
+            <div class="agent-reviews">
+                {% for review in reviews %}
+                <div class="agent-review {{ review.verdict }}">
+                    <div class="review-header">
+                        <div class="review-agent">
+                            <span class="agent-icon">{{ review.agent_icon }}</span>
+                            <span class="agent-name">{{ review.agent_name|title }}</span>
+                        </div>
+                        <span class="review-verdict-badge {{ review.verdict }}">
+                            {% if review.verdict == 'approved' %}✓ Approved
+                            {% elif review.verdict == 'concerns' %}⚠ Concerns
+                            {% elif review.verdict == 'needs_revision' %}↺ Needs Revision
+                            {% elif review.verdict == 'blocked' %}✕ Blocked
+                            {% else %}{{ review.verdict }}{% endif %}
+                        </span>
+                    </div>
+                    <div class="review-summary">
+                        {{ review.summary }}
+                    </div>
+                    {% if review.concerns %}
+                    <div class="review-section concerns">
+                        <strong>Concerns:</strong>
+                        <ul>
+                            {% for concern in review.concerns %}
+                            <li>{{ concern }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    {% if review.questions %}
+                    <div class="review-section questions">
+                        <strong>Questions:</strong>
+                        <ul>
+                            {% for question in review.questions %}
+                            <li>{{ question }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    {% if review.suggestions %}
+                    <div class="review-section suggestions">
+                        <strong>Suggestions:</strong>
+                        <ul>
+                            {% for suggestion in review.suggestions %}
+                            <li>{{ suggestion }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Actions -->
+            <div class="phase-actions">
+                {% if can_proceed %}
+                <form action="/projects/{{ project.id }}/approve-plan" method="post">
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-icon">🛠️</span> Proceed to Build
+                    </button>
+                </form>
+                {% endif %}
+                <form action="/projects/{{ project.id }}/revise-plan" method="post">
+                    <button type="submit" class="btn btn-secondary">
+                        <span class="btn-icon">💡</span> Revise Plan
+                    </button>
+                </form>
+            </div>
+
+            {% else %}
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Agents are reviewing the plan...</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% elif phase in ['build', 'build_review'] %}
+        <!-- BUILD PHASE (Spec-Driven) -->
+        <div class="phase-card build-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">🛠️</span>
+                    <span class="agent-name">Tinker</span>
+                </div>
+                <h2>Building from Spec</h2>
+                <p class="build-subtitle">Executing tasks from the approved specification</p>
+            </div>
+
+            {% set build = project.metadata.get('build', {}) %}
+            {% set spec = project.metadata.get('spec', {}) %}
+            {% set spec_tasks = spec.get('tasks', []) %}
+            {% set agent_output = build.get('agent_output', {}) %}
+            {% set preview = build.get('preview', {}) %}
+            {% set tasks_completed = build.get('tasks_completed', []) %}
+            {% set total_tasks = build.get('total_tasks', spec_tasks|length) %}
+
+            {% if build %}
+            <!-- Task Progress -->
+            {% if spec_tasks %}
+            <div class="build-task-progress">
+                <div class="progress-header">
+                    <span class="progress-label">Task Progress</span>
+                    <span class="progress-count">{{ tasks_completed|length }}/{{ total_tasks }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ (tasks_completed|length / total_tasks * 100) if total_tasks else 0 }}%"></div>
+                </div>
+            </div>
+
+            <!-- Task Checklist -->
+            <div class="build-task-list">
+                {% for task in spec_tasks %}
+                {% set is_completed = task.id in tasks_completed %}
+                {% set is_current = loop.index0 == tasks_completed|length %}
+                <div class="build-task-item {% if is_completed %}completed{% elif is_current %}current{% endif %}">
+                    <span class="task-check">
+                        {% if is_completed %}✅
+                        {% elif is_current %}🔄
+                        {% else %}⬜{% endif %}
+                    </span>
+                    <span class="task-id">{{ task.id }}</span>
+                    <span class="task-name">{{ task.title }}</span>
+                    {% if task.requirement_ids %}
+                    <span class="task-reqs-badge">{{ task.requirement_ids|join(', ') }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Customer Preview -->
+            {% include "partials/product_preview.html" %}
+
+            <!-- Technical Preview if available -->
+            {% if preview %}
+            {% include "partials/build_preview.html" %}
+            {% endif %}
+
+            <details class="output-details">
+                <summary>View Full Output</summary>
+                <pre class="output-content">{{ build.get('output', agent_output.get('content', 'No build output')) }}</pre>
+            </details>
+
+            <div class="phase-actions">
+                <form action="/projects/{{ project.id }}/approve-build" method="post">
+                    <button type="submit" class="btn btn-primary">Approve Build</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="toggleRevisionForm()">Request Changes</button>
+            </div>
+
+            <form id="revision-form" class="revision-form" style="display: none;"
+                  action="/projects/{{ project.id }}/revise-with-feedback" method="post">
+                <input type="hidden" name="agent" value="mason">
+                <textarea name="feedback" rows="4" placeholder="What changes would you like?"></textarea>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Submit Feedback</button>
+                    <button type="button" class="btn btn-ghost" onclick="toggleRevisionForm()">Cancel</button>
+                </div>
+            </form>
+            {% else %}
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Tinker is implementing the spec tasks...</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% elif phase == 'verify_review' %}
+        <!-- VERIFY PHASE -->
+        <div class="phase-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">🔮</span>
+                    <span class="agent-name">Oracle</span>
+                </div>
+                <h2>Verification Report</h2>
+            </div>
+
+            {% set verification = project.metadata.get('verification', {}) %}
+            {% set agent_output = verification.get('agent_output', {}) %}
+            {% set verdict = verification.get('verdict', 'UNKNOWN') %}
+
+            <div class="verdict-badge {{ 'approved' if verdict == 'APPROVED' else 'revision' }}">
+                {{ '✓ APPROVED' if verdict == 'APPROVED' else '⚠ NEEDS REVISION' }}
+            </div>
+
+            <details class="output-details" open>
+                <summary>Verification Details</summary>
+                <pre class="output-content">{{ verification.get('output', agent_output.get('content', 'No verification report')) }}</pre>
+            </details>
+
+            <div class="phase-actions">
+                <form action="/projects/{{ project.id }}/approve-verification" method="post">
+                    <button type="submit" class="btn btn-primary">Accept & Deliver</button>
+                </form>
+                <form action="/projects/{{ project.id }}/request-revision" method="post">
+                    <input type="hidden" name="agent" value="oracle">
+                    <button type="submit" class="btn btn-secondary">Request Re-review</button>
+                </form>
+            </div>
+        </div>
+
+        {% elif phase == 'deliver' %}
+        <!-- DELIVER PHASE -->
+        <div class="phase-card">
+            <div class="phase-card-header">
+                <h2>Project Complete!</h2>
+                <p>Your project has been verified and is ready for delivery.</p>
+            </div>
+
+            <!-- Customer Preview -->
+            {% include "partials/product_preview.html" %}
+
+            <div class="delivery-actions">
+                <a href="/projects/{{ project.id }}/export" class="action-card">
+                    <span class="action-icon">📦</span>
+                    <span class="action-title">Download ZIP</span>
+                    <span class="action-desc">Export all files</span>
+                </a>
+
+                <form action="/projects/{{ project.id }}/write-files" method="post" class="action-card-form">
+                    <button type="submit" class="action-card">
+                        <span class="action-icon">💾</span>
+                        <span class="action-title">Write to Disk</span>
+                        <span class="action-desc">Save files locally</span>
+                    </button>
+                </form>
+
+                <form action="/projects/{{ project.id }}/generate-deployment" method="post" class="action-card-form">
+                    <button type="submit" class="action-card">
+                        <span class="action-icon">🚀</span>
+                        <span class="action-title">Deployment Guide</span>
+                        <span class="action-desc">App Store, npm, etc.</span>
+                    </button>
+                </form>
+            </div>
+
+            {% set files_written = project.metadata.get('files_written', {}) %}
+            {% if files_written.get('success') %}
+            <div class="files-written-info">
+                <h4>Files Written</h4>
+                <code class="files-path">{{ files_written.get('project_dir') }}</code>
+                <ul class="files-list">
+                    {% for file in files_written.get('files_written', [])[:5] %}
+                    <li>{{ file }}</li>
+                    {% endfor %}
+                    {% if files_written.get('files_written', [])|length > 5 %}
+                    <li class="more">+{{ files_written.get('files_written', [])|length - 5 }} more</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- GitHub Integration -->
+            {% set github_info = project.metadata.get('github', {}) %}
+            <div class="github-section">
+                <div class="github-header">
+                    <span class="github-icon">
+                        <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                        </svg>
+                    </span>
+                    <h4>GitHub</h4>
+                </div>
+
+                {% if github_info.get('repo') %}
+                <!-- Repository already linked -->
+                <div class="github-repo-info">
+                    <a href="{{ github_info.get('url') }}" target="_blank" class="repo-link">
+                        <span class="repo-icon">📁</span>
+                        {{ github_info.get('repo') }}
+                        <span class="external-icon">↗</span>
+                    </a>
+                    <button class="btn btn-small btn-secondary" onclick="pushToGitHub()">
+                        <span class="btn-icon">⬆️</span> Push Updates
+                    </button>
+                </div>
+                <div id="github-status" class="github-status"></div>
+                {% else %}
+                <!-- No repository yet -->
+                <div class="github-create">
+                    <p class="github-hint">Create a GitHub repository to version control and share your project.</p>
+                    <form id="github-create-form" onsubmit="createGitHubRepo(event)">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="private" id="github-private">
+                            <span>Private repository</span>
+                        </label>
+                        <button type="submit" class="btn btn-secondary">
+                            <span class="btn-icon">
+                                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                                </svg>
+                            </span>
+                            Create Repository
+                        </button>
+                    </form>
+                    <div id="github-status" class="github-status"></div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Platform Publishing -->
+            {% include "partials/platform_selector.html" %}
+
+            <!-- Deployment Instructions (from Launch agent) -->
+            {% set deployment = project.metadata.get('deployment', {}) %}
+            {% if deployment.get('instructions') %}
+            <div class="deployment-guide">
+                <div class="deployment-header">
+                    <div class="agent-badge">
+                        <span class="agent-icon">📤</span>
+                        <span class="agent-name">Launch</span>
+                    </div>
+                    <h3>Deployment Guide</h3>
+                </div>
+
+                {% if deployment.get('platforms') %}
+                <div class="deployment-platforms">
+                    <strong>Target Platforms:</strong>
+                    {% for platform in deployment.get('platforms', []) %}
+                    <span class="platform-tag">{{ platform }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="deployment-content">
+                    <pre class="output-content">{{ deployment.get('instructions', '') }}</pre>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="phase-actions">
+                <form action="/projects/{{ project.id }}/complete" method="post">
+                    <button type="submit" class="btn btn-primary">Mark Complete</button>
+                </form>
+                <button type="button" class="btn btn-secondary" onclick="goToPhase('plan_review')">
+                    <span class="btn-icon">💡</span> Re-plan Project
+                </button>
+                <button type="button" class="btn btn-ghost" onclick="goToPhase('idea')">
+                    <span class="btn-icon">🔄</span> Start Over
+                </button>
+                <a href="/" class="btn btn-ghost">New Project</a>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<!-- Hidden form for phase navigation -->
+<form id="phase-nav-form" action="/projects/{{ project.id }}/goto-phase" method="post" style="display: none;">
+    <input type="hidden" name="phase" id="phase-nav-input" value="">
+</form>
+
+<script>
+function toggleRevisionForm() {
+    const form = document.getElementById('revision-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function goToPhase(phase) {
+    if (confirm('Go back to ' + phase.replace('_', ' ') + ' phase? You can always return here.')) {
+        document.getElementById('phase-nav-input').value = phase;
+        document.getElementById('phase-nav-form').submit();
+    }
+}
+
+function toggleProjectTypeSelector() {
+    const selector = document.getElementById('project-type-selector');
+    selector.style.display = selector.style.display === 'none' ? 'block' : 'none';
+}
+
+function setProjectType(projectType, category) {
+    document.getElementById('project-type-input').value = projectType;
+    document.getElementById('project-category-input').value = category;
+    document.getElementById('project-type-form').submit();
+}
+
+// GitHub integration functions
+async function createGitHubRepo(event) {
+    event.preventDefault();
+    const statusEl = document.getElementById('github-status');
+    const isPrivate = document.getElementById('github-private').checked;
+
+    statusEl.innerHTML = '<span class="loading">Creating repository...</span>';
+    statusEl.className = 'github-status loading';
+
+    try {
+        const formData = new FormData();
+        formData.append('private', isPrivate);
+
+        const response = await fetch('/projects/{{ project.id }}/github/create-repo', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusEl.innerHTML = `<span class="success">Repository created: <a href="${data.url}" target="_blank">${data.repo}</a></span>`;
+            statusEl.className = 'github-status success';
+            // Reload page to show the new repo info
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            statusEl.innerHTML = `<span class="error">Error: ${data.error}</span>`;
+            statusEl.className = 'github-status error';
+        }
+    } catch (err) {
+        statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+        statusEl.className = 'github-status error';
+    }
+}
+
+async function pushToGitHub() {
+    const statusEl = document.getElementById('github-status');
+    statusEl.innerHTML = '<span class="loading">Pushing files to GitHub...</span>';
+    statusEl.className = 'github-status loading';
+
+    try {
+        const response = await fetch('/projects/{{ project.id }}/github/push', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusEl.innerHTML = `<span class="success">Pushed ${data.files_pushed} files to ${data.repo}</span>`;
+            statusEl.className = 'github-status success';
+        } else {
+            statusEl.innerHTML = `<span class="error">Error: ${data.error}</span>`;
+            statusEl.className = 'github-status error';
+        }
+    } catch (err) {
+        statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+        statusEl.className = 'github-status error';
+    }
+}
+</script>
+
+<!-- Hidden form for project type -->
+<form id="project-type-form" action="/projects/{{ project.id }}/set-project-type" method="post" style="display: none;">
+    <input type="hidden" name="project_type" id="project-type-input" value="">
+    <input type="hidden" name="project_category" id="project-category-input" value="">
+</form>
+{% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Project Templates - ATLAS{% endblock %}
+
+{% block content %}
+<div class="templates-page">
+    <header class="page-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <span>Templates</span>
+        </nav>
+        <h1>Project Templates</h1>
+        <p class="subtitle">Quick-start your project with a pre-configured template</p>
+    </header>
+
+    <div class="templates-grid">
+        {% for template_id, template in templates.items() %}
+        <div class="template-card">
+            <div class="template-icon">{{ template.icon }}</div>
+            <h3>{{ template.name }}</h3>
+            <p class="template-desc">{{ template.description }}</p>
+
+            <div class="template-defaults">
+                <h4>Includes:</h4>
+                <ul>
+                    {% for feature in template.defaults.features[:3] %}
+                    <li>{{ feature }}</li>
+                    {% endfor %}
+                    {% if template.defaults.features|length > 3 %}
+                    <li class="more">+{{ template.defaults.features|length - 3 }} more</li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <div class="template-tech">
+                <span class="tech-label">Tech:</span>
+                <span class="tech-value">{{ template.defaults.technical[:50] }}{% if template.defaults.technical|length > 50 %}...{% endif %}</span>
+            </div>
+
+            <form action="/projects/from-template/{{ template_id }}" method="post" class="template-form">
+                <input type="text" name="name" placeholder="Project name (optional)">
+                <button type="submit" class="btn btn-primary">
+                    Use Template
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="custom-option">
+        <p>Or start from scratch:</p>
+        <a href="/" class="btn btn-secondary">Create Custom Project</a>
+    </div>
+</div>
+
+<style>
+.templates-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.template-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    transition: all 0.3s;
+}
+
+.template-card:hover {
+    border-color: var(--border-green);
+    box-shadow: var(--shadow-green);
+    transform: translateY(-2px);
+}
+
+.template-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.template-card h3 {
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    color: var(--matrix-green);
+    margin-bottom: 0.5rem;
+}
+
+.template-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.template-defaults h4 {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+}
+
+.template-defaults ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+}
+
+.template-defaults li {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 0.25rem 0;
+    padding-left: 1rem;
+    position: relative;
+}
+
+.template-defaults li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--matrix-green-dim);
+    font-size: 0.75rem;
+}
+
+.template-defaults li.more {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.template-defaults li.more::before {
+    content: '';
+}
+
+.template-tech {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+}
+
+.tech-label {
+    color: var(--text-muted);
+}
+
+.tech-value {
+    color: var(--matrix-green-dim);
+}
+
+.template-form {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.template-form input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+}
+
+.template-form .btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+}
+
+.custom-option {
+    text-align: center;
+    padding: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.custom-option p {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}

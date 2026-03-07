@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Outer ring -->
+  <circle cx="16" cy="16" r="14" fill="rgba(0, 255, 136, 0.15)" stroke="#00ff88" stroke-width="2"/>
+  <!-- Inner solid orb -->
+  <circle cx="16" cy="16" r="7" fill="#00ff88"/>
+</svg>

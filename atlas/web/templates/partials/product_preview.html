@@ -1,0 +1,1156 @@
+<!-- Product Preview Partial -->
+<!-- Shows what customers will see: App Store listings, book covers, website screenshots -->
+
+{% set brief = project.metadata.get('smart_conversation', {}).get('brief', {}) %}
+{% set project_type = brief.get('project_type', '') %}
+{% set project_category = brief.get('project_category', '') %}
+{% set build = project.metadata.get('build', {}) %}
+{% set preview_data = project.metadata.get('product_preview', {}) %}
+
+<div class="product-preview-container">
+    <div class="product-preview-header">
+        <span class="preview-badge">👁️ Customer Preview</span>
+        <h3>What Your Customers Will See</h3>
+    </div>
+
+    <div class="product-preview-content">
+        {% if project_category == 'app' %}
+        <!-- App Store Preview -->
+        <div class="app-store-preview">
+            <div class="device-mockup">
+                <div class="device-frame iphone">
+                    <div class="device-screen">
+                        {% if preview_data.get('screenshot') %}
+                        <img src="{{ preview_data.screenshot }}" alt="App Screenshot" />
+                        {% else %}
+                        <div class="placeholder-screen">
+                            <div class="placeholder-header"></div>
+                            <div class="placeholder-content">
+                                <div class="placeholder-card"></div>
+                                <div class="placeholder-card"></div>
+                                <div class="placeholder-list">
+                                    <div class="placeholder-item"></div>
+                                    <div class="placeholder-item"></div>
+                                    <div class="placeholder-item"></div>
+                                </div>
+                            </div>
+                            <div class="placeholder-nav"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="device-notch"></div>
+                </div>
+            </div>
+
+            <div class="store-listing">
+                <div class="store-header">
+                    <div class="app-icon-preview">
+                        {% if preview_data.get('icon') %}
+                        <img src="{{ preview_data.icon }}" alt="App Icon" />
+                        {% else %}
+                        <div class="icon-placeholder">{{ project.name[0]|upper }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="app-info">
+                        <h4 class="app-title">{{ project.name }}</h4>
+                        <p class="app-subtitle">{{ brief.get('tagline', 'Your new favorite app') }}</p>
+                        <div class="app-rating">
+                            <span class="stars">★★★★★</span>
+                            <span class="rating-text">5.0 • New</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="store-button">GET</button>
+                <div class="store-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Age</span>
+                        <span class="meta-value">4+</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Category</span>
+                        <span class="meta-value">{{ brief.get('app_category', 'Productivity') }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Price</span>
+                        <span class="meta-value">Free</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% elif project_category == 'document' %}
+        <!-- Book/Document Preview -->
+        <div class="book-preview">
+            <div class="book-cover-mockup">
+                <div class="book-3d">
+                    <div class="book-front">
+                        {% if preview_data.get('cover') %}
+                        <img src="{{ preview_data.cover }}" alt="Book Cover" />
+                        {% else %}
+                        <div class="cover-placeholder">
+                            <div class="cover-title">{{ project.name }}</div>
+                            <div class="cover-subtitle">{{ brief.get('subtitle', '') }}</div>
+                            <div class="cover-author">{{ brief.get('author', 'Your Name') }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="book-spine"></div>
+                </div>
+            </div>
+
+            <div class="amazon-listing">
+                <h4 class="book-title">{{ project.name }}</h4>
+                {% if brief.get('subtitle') %}
+                <p class="book-subtitle">{{ brief.subtitle }}</p>
+                {% endif %}
+                <p class="book-author">by <span class="author-name">{{ brief.get('author', 'Your Name') }}</span></p>
+                <div class="book-rating">
+                    <span class="stars">★★★★★</span>
+                    <span class="rating-count">New Release</span>
+                </div>
+                <div class="book-formats">
+                    <div class="format-option selected">
+                        <span class="format-type">Kindle</span>
+                        <span class="format-price">${{ brief.get('kindle_price', '9.99') }}</span>
+                    </div>
+                    <div class="format-option">
+                        <span class="format-type">Paperback</span>
+                        <span class="format-price">${{ brief.get('paperback_price', '14.99') }}</span>
+                    </div>
+                    {% if brief.get('hardcover_price') %}
+                    <div class="format-option">
+                        <span class="format-type">Hardcover</span>
+                        <span class="format-price">${{ brief.hardcover_price }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                <button class="amazon-button">Buy now with 1-Click</button>
+            </div>
+        </div>
+
+        {% elif project_category == 'web' %}
+        <!-- Website Preview -->
+        <div class="website-preview">
+            <div class="browser-mockup">
+                <div class="browser-chrome">
+                    <div class="browser-dots">
+                        <span class="dot red"></span>
+                        <span class="dot yellow"></span>
+                        <span class="dot green"></span>
+                    </div>
+                    <div class="browser-url">
+                        <span class="url-icon">🔒</span>
+                        <span class="url-text">{{ brief.get('domain', project.name|lower|replace(' ', '') + '.com') }}</span>
+                    </div>
+                </div>
+                <div class="browser-content">
+                    {% if preview_data.get('screenshot') %}
+                    <img src="{{ preview_data.screenshot }}" alt="Website Screenshot" />
+                    {% else %}
+                    <div class="website-placeholder">
+                        <div class="wp-header">
+                            <div class="wp-logo"></div>
+                            <div class="wp-nav">
+                                <div class="wp-nav-item"></div>
+                                <div class="wp-nav-item"></div>
+                                <div class="wp-nav-item"></div>
+                            </div>
+                        </div>
+                        <div class="wp-hero">
+                            <div class="wp-hero-title">{{ project.name }}</div>
+                            <div class="wp-hero-subtitle">{{ brief.get('tagline', 'Welcome to your new website') }}</div>
+                            <div class="wp-cta"></div>
+                        </div>
+                        <div class="wp-features">
+                            <div class="wp-feature"></div>
+                            <div class="wp-feature"></div>
+                            <div class="wp-feature"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="website-meta">
+                <div class="meta-card">
+                    <span class="meta-icon">🌐</span>
+                    <span class="meta-text">{{ brief.get('domain', project.name|lower|replace(' ', '') + '.com') }}</span>
+                </div>
+                <div class="meta-card">
+                    <span class="meta-icon">📱</span>
+                    <span class="meta-text">Mobile Responsive</span>
+                </div>
+                <div class="meta-card">
+                    <span class="meta-icon">⚡</span>
+                    <span class="meta-text">{{ brief.get('hosting', 'Vercel') }}</span>
+                </div>
+            </div>
+        </div>
+
+        {% elif project_category == 'api' %}
+        <!-- API Preview -->
+        <div class="api-preview-customer">
+            <div class="api-docs-mockup">
+                <div class="api-sidebar">
+                    <div class="api-logo">{{ project.name }}</div>
+                    <div class="api-nav-item active">Overview</div>
+                    <div class="api-nav-item">Authentication</div>
+                    <div class="api-nav-item">Endpoints</div>
+                    <div class="api-nav-item">Examples</div>
+                </div>
+                <div class="api-main">
+                    <h4>{{ project.name }} API</h4>
+                    <p class="api-desc">{{ brief.get('description', 'A powerful API for your applications') }}</p>
+                    <div class="api-endpoint-example">
+                        <div class="endpoint-badge get">GET</div>
+                        <code>/api/v1/{{ project.name|lower|replace(' ', '-') }}</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% elif project_category == 'cli' %}
+        <!-- CLI Preview -->
+        <div class="cli-preview-customer">
+            <div class="terminal-mockup">
+                <div class="terminal-chrome">
+                    <div class="terminal-dots">
+                        <span class="dot red"></span>
+                        <span class="dot yellow"></span>
+                        <span class="dot green"></span>
+                    </div>
+                    <span class="terminal-title">Terminal</span>
+                </div>
+                <div class="terminal-content">
+                    <div class="terminal-line">
+                        <span class="prompt">$</span> npm install -g {{ project.name|lower|replace(' ', '-') }}
+                    </div>
+                    <div class="terminal-line output">
+                        <span class="success">✓</span> Installed {{ project.name|lower|replace(' ', '-') }}@1.0.0
+                    </div>
+                    <div class="terminal-line">
+                        <span class="prompt">$</span> {{ project.name|lower|replace(' ', '-') }} --help
+                    </div>
+                    <div class="terminal-line output">
+                        <span class="dim">Usage: {{ project.name|lower|replace(' ', '-') }} [command] [options]</span>
+                    </div>
+                    <div class="terminal-line output">
+                        <span class="dim">{{ brief.get('description', 'A powerful CLI tool') }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% elif project_category == 'library' %}
+        <!-- Library/Package Preview -->
+        <div class="package-preview">
+            <div class="npm-card">
+                <div class="npm-header">
+                    <span class="npm-icon">📦</span>
+                    <h4>{{ project.name|lower|replace(' ', '-') }}</h4>
+                </div>
+                <p class="npm-desc">{{ brief.get('description', 'A JavaScript library') }}</p>
+                <div class="npm-stats">
+                    <div class="npm-stat">
+                        <span class="stat-value">1.0.0</span>
+                        <span class="stat-label">version</span>
+                    </div>
+                    <div class="npm-stat">
+                        <span class="stat-value">MIT</span>
+                        <span class="stat-label">license</span>
+                    </div>
+                    <div class="npm-stat">
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">deps</span>
+                    </div>
+                </div>
+                <div class="npm-install">
+                    <code>npm install {{ project.name|lower|replace(' ', '-') }}</code>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- Generic Preview -->
+        <div class="generic-preview">
+            <div class="product-card">
+                <div class="product-icon">{{ brief.get('icon', '🚀') }}</div>
+                <h4>{{ project.name }}</h4>
+                <p>{{ brief.get('description', project.description or 'Your new project') }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="preview-actions">
+        <button class="btn btn-ghost btn-small" onclick="togglePreviewEdit()">
+            <span class="btn-icon">✏️</span> Customize Preview
+        </button>
+    </div>
+</div>
+
+<style>
+/* Product Preview Container */
+.product-preview-container {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 39, 48, 0.95) 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.product-preview-header {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.preview-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    font-size: 0.75rem;
+    border-radius: 20px;
+    margin-bottom: 0.5rem;
+}
+
+.product-preview-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+.product-preview-content {
+    display: flex;
+    justify-content: center;
+}
+
+.preview-actions {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+/* ============================================
+   App Store Preview
+   ============================================ */
+.app-store-preview {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.device-mockup {
+    flex-shrink: 0;
+}
+
+.device-frame.iphone {
+    width: 220px;
+    height: 440px;
+    background: #1c1c1e;
+    border-radius: 36px;
+    padding: 10px;
+    position: relative;
+    box-shadow:
+        0 0 0 2px #3a3a3c,
+        0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.device-screen {
+    width: 100%;
+    height: 100%;
+    background: #fff;
+    border-radius: 26px;
+    overflow: hidden;
+}
+
+.device-notch {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 24px;
+    background: #1c1c1e;
+    border-radius: 0 0 14px 14px;
+}
+
+.placeholder-screen {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #f0f0f5 0%, #e8e8ed 100%);
+    padding: 40px 12px 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.placeholder-header {
+    height: 50px;
+    background: linear-gradient(90deg, #e0e0e5 0%, #d5d5da 100%);
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.placeholder-content {
+    flex: 1;
+}
+
+.placeholder-card {
+    height: 80px;
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.placeholder-list {
+    margin-top: 12px;
+}
+
+.placeholder-item {
+    height: 40px;
+    background: #fff;
+    border-radius: 8px;
+    margin-bottom: 6px;
+}
+
+.placeholder-nav {
+    height: 50px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 0 0 26px 26px;
+    backdrop-filter: blur(10px);
+}
+
+/* Store Listing */
+.store-listing {
+    max-width: 280px;
+}
+
+.store-header {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.app-icon-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.app-icon-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.icon-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.app-info {
+    flex: 1;
+}
+
+.app-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.app-subtitle {
+    margin: 0 0 0.25rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.app-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stars {
+    color: #ffb800;
+    font-size: 0.75rem;
+}
+
+.rating-text {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.store-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: #007aff;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+
+.store-meta {
+    display: flex;
+    justify-content: space-around;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.meta-item {
+    text-align: center;
+}
+
+.meta-label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.meta-value {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+/* ============================================
+   Book Preview
+   ============================================ */
+.book-preview {
+    display: flex;
+    gap: 2.5rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.book-cover-mockup {
+    perspective: 1000px;
+}
+
+.book-3d {
+    position: relative;
+    width: 180px;
+    height: 270px;
+    transform-style: preserve-3d;
+    transform: rotateY(-15deg);
+    transition: transform 0.3s;
+}
+
+.book-3d:hover {
+    transform: rotateY(-5deg);
+}
+
+.book-front {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 0 4px 4px 0;
+    box-shadow:
+        5px 5px 20px rgba(0, 0, 0, 0.3),
+        inset -2px 0 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.book-front img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cover-placeholder {
+    width: 100%;
+    height: 100%;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    color: #fff;
+}
+
+.cover-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.cover-subtitle {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-top: 0.5rem;
+}
+
+.cover-author {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.book-spine {
+    position: absolute;
+    left: -15px;
+    top: 0;
+    width: 15px;
+    height: 100%;
+    background: linear-gradient(90deg, #0f0f1a 0%, #1a1a2e 100%);
+    transform: rotateY(90deg);
+    transform-origin: right;
+}
+
+/* Amazon Listing */
+.amazon-listing {
+    max-width: 280px;
+}
+
+.book-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+
+.book-subtitle {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.book-author {
+    margin: 0 0 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.author-name {
+    color: #007aff;
+}
+
+.book-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.rating-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.book-formats {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.format-option {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.format-option.selected {
+    border-color: #ff9900;
+    background: rgba(255, 153, 0, 0.1);
+}
+
+.format-type {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.format-price {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.amazon-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: linear-gradient(180deg, #f7ca00 0%, #f0c14b 100%);
+    color: #111;
+    border: 1px solid #a88734;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* ============================================
+   Website Preview
+   ============================================ */
+.website-preview {
+    width: 100%;
+    max-width: 600px;
+}
+
+.browser-mockup {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.browser-chrome {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #2d2d2d;
+    gap: 1rem;
+}
+
+.browser-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.browser-url {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #3d3d3d;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.url-icon {
+    font-size: 0.7rem;
+}
+
+.url-text {
+    color: #a0a0a0;
+}
+
+.browser-content {
+    min-height: 300px;
+    background: #fff;
+}
+
+.browser-content img {
+    width: 100%;
+    display: block;
+}
+
+.website-placeholder {
+    padding: 0;
+}
+
+.wp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #fafafa;
+    border-bottom: 1px solid #eee;
+}
+
+.wp-logo {
+    width: 80px;
+    height: 24px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+}
+
+.wp-nav {
+    display: flex;
+    gap: 1rem;
+}
+
+.wp-nav-item {
+    width: 50px;
+    height: 12px;
+    background: #ddd;
+    border-radius: 2px;
+}
+
+.wp-hero {
+    padding: 3rem 2rem;
+    text-align: center;
+    background: linear-gradient(180deg, #f8f9fa 0%, #fff 100%);
+}
+
+.wp-hero-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 0.5rem;
+}
+
+.wp-hero-subtitle {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 1.5rem;
+}
+
+.wp-cta {
+    display: inline-block;
+    width: 120px;
+    height: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+}
+
+.wp-features {
+    display: flex;
+    gap: 1rem;
+    padding: 2rem;
+    justify-content: center;
+}
+
+.wp-feature {
+    width: 100px;
+    height: 80px;
+    background: #f5f5f5;
+    border-radius: 8px;
+}
+
+.website-meta {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.meta-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-input);
+    border-radius: 8px;
+    font-size: 0.8rem;
+}
+
+.meta-icon {
+    font-size: 1rem;
+}
+
+.meta-text {
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   API Preview
+   ============================================ */
+.api-preview-customer {
+    width: 100%;
+    max-width: 600px;
+}
+
+.api-docs-mockup {
+    display: flex;
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    min-height: 300px;
+}
+
+.api-sidebar {
+    width: 180px;
+    background: #252526;
+    padding: 1rem 0;
+}
+
+.api-logo {
+    padding: 0.5rem 1rem 1rem;
+    font-weight: 600;
+    color: #fff;
+    border-bottom: 1px solid #3d3d3d;
+    margin-bottom: 0.5rem;
+}
+
+.api-nav-item {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    color: #a0a0a0;
+    cursor: pointer;
+}
+
+.api-nav-item:hover {
+    background: #2d2d2d;
+}
+
+.api-nav-item.active {
+    color: #fff;
+    background: #37373d;
+    border-left: 2px solid #007acc;
+}
+
+.api-main {
+    flex: 1;
+    padding: 1.5rem;
+}
+
+.api-main h4 {
+    margin: 0 0 0.5rem;
+    color: #fff;
+}
+
+.api-desc {
+    color: #a0a0a0;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.api-endpoint-example {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #2d2d2d;
+    border-radius: 6px;
+}
+
+.endpoint-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.endpoint-badge.get {
+    background: #10b981;
+    color: #fff;
+}
+
+.api-endpoint-example code {
+    color: #e0e0e0;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   CLI Preview
+   ============================================ */
+.cli-preview-customer {
+    width: 100%;
+    max-width: 500px;
+}
+
+.terminal-mockup {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.terminal-chrome {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #2d2d2d;
+    gap: 0.75rem;
+}
+
+.terminal-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.terminal-title {
+    color: #808080;
+    font-size: 0.8rem;
+    flex: 1;
+    text-align: center;
+}
+
+.terminal-content {
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    min-height: 150px;
+}
+
+.terminal-line {
+    padding: 0.25rem 0;
+    color: #f0f0f0;
+}
+
+.terminal-line .prompt {
+    color: #27c93f;
+    margin-right: 0.5rem;
+}
+
+.terminal-line.output {
+    color: #a0a0a0;
+}
+
+.terminal-line .success {
+    color: #27c93f;
+    margin-right: 0.5rem;
+}
+
+.terminal-line .dim {
+    opacity: 0.7;
+}
+
+/* ============================================
+   Package Preview
+   ============================================ */
+.package-preview {
+    width: 100%;
+    max-width: 400px;
+}
+
+.npm-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.npm-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.npm-icon {
+    font-size: 1.5rem;
+}
+
+.npm-header h4 {
+    margin: 0;
+    color: #cb3837;
+    font-family: var(--font-mono);
+}
+
+.npm-desc {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.npm-stats {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.npm-stat {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-weight: 600;
+    color: #333;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.npm-install {
+    background: #f5f5f5;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+}
+
+.npm-install code {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: #333;
+}
+
+/* ============================================
+   Generic Preview
+   ============================================ */
+.generic-preview {
+    width: 100%;
+    max-width: 400px;
+}
+
+.product-card {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 39, 48, 0.95) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+}
+
+.product-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.product-card h4 {
+    margin: 0 0 0.5rem;
+    color: var(--text-primary);
+}
+
+.product-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 768px) {
+    .app-store-preview,
+    .book-preview {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .store-listing,
+    .amazon-listing {
+        max-width: 100%;
+        text-align: center;
+    }
+
+    .device-frame.iphone {
+        width: 180px;
+        height: 360px;
+    }
+
+    .book-3d {
+        width: 150px;
+        height: 225px;
+    }
+}
+</style>
+
+<script>
+function togglePreviewEdit() {
+    // TODO: Open modal to customize preview data (icon, screenshot, etc.)
+    alert('Preview customization coming soon! For now, the preview is generated from your project details.');
+}
+</script>

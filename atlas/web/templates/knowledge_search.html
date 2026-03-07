@@ -1,0 +1,74 @@
+{% if results %}
+    {% for result in results %}
+    {% set category = result.entry.category.value %}
+    <a href="/knowledge/{{ result.entry.id }}" class="knowledge-card" data-category="{{ category }}" data-platform="{{ result.entry.platform or 'general' }}">
+        <div class="knowledge-card-icon">
+            {% if result.entry.platform == 'python' %}🐍
+            {% elif result.entry.platform == 'node' %}📦
+            {% elif result.entry.platform == 'docker' %}🐳
+            {% elif result.entry.platform == 'ios' %}🍎
+            {% elif result.entry.platform == 'android' %}🤖
+            {% elif result.entry.platform == 'web' %}🌐
+            {% elif result.entry.platform == 'flutter' %}💙
+            {% elif category == 'deployment' %}🚀
+            {% elif category == 'best_practice' %}✨
+            {% elif category == 'troubleshooting' %}🔥
+            {% elif category == 'tool' %}🔧
+            {% elif category == 'framework' %}🏗️
+            {% else %}📄
+            {% endif %}
+        </div>
+        <div class="knowledge-card-content">
+            <h3>{{ result.entry.title }}</h3>
+            <span class="knowledge-card-role">{{ result.entry.platform|title if result.entry.platform else 'General' }} · {{ category|replace('_', ' ')|title }}</span>
+            <p class="knowledge-card-desc">
+                {% if result.entry.description %}
+                    {{ result.entry.description[:120] }}{% if result.entry.description|length > 120 %}...{% endif %}
+                {% else %}
+                    Guide for {{ result.entry.title|lower }}. Contains step-by-step instructions and best practices.
+                {% endif %}
+            </p>
+            <div class="knowledge-card-usecase">
+                <span class="usecase-label">Use this for:</span>
+                <span class="usecase-text">
+                    {% if category == 'deployment' %}
+                        Deploying and releasing {{ result.entry.platform|title if result.entry.platform else 'your' }} applications
+                    {% elif category == 'troubleshooting' %}
+                        Debugging and fixing {{ result.entry.platform|title if result.entry.platform else 'common' }} issues
+                    {% elif category == 'best_practice' %}
+                        Writing better, cleaner {{ result.entry.platform|title if result.entry.platform else '' }} code
+                    {% elif category == 'tool' %}
+                        Setting up and using {{ result.entry.title|lower }}
+                    {% elif category == 'framework' %}
+                        Building apps with {{ result.entry.platform|title if result.entry.platform else result.entry.title }}
+                    {% elif category == 'platform' %}
+                        Working with {{ result.entry.platform|title if result.entry.platform else result.entry.title }}
+                    {% else %}
+                        Reference and guidance
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="knowledge-card-meta">
+            {% if result.entry.commands %}
+            <span class="meta-item commands">
+                <span class="meta-icon">⚡</span> {{ result.entry.commands|length }} commands
+            </span>
+            {% endif %}
+            {% if result.entry.tags %}
+            <div class="meta-tags">
+                {% for tag in result.entry.tags[:3] %}
+                <span class="tag">{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+{% elif query %}
+    <div class="empty-state-card" style="grid-column: 1 / -1;">
+        <div class="empty-icon">🔍</div>
+        <h3>No results found</h3>
+        <p>No guides match "{{ query }}". Try different keywords.</p>
+    </div>
+{% endif %}

@@ -1,0 +1,47 @@
+<div class="task-card" data-task-id="{{ task.task_id }}">
+    <div class="task-header">
+        <div class="task-title-group">
+            <span class="task-id">{{ task.task_id }}</span>
+            <span class="task-title">{{ task.title }}</span>
+        </div>
+        <span class="task-priority priority-{{ task.priority }}">{{ task.priority }}</span>
+    </div>
+
+    <div class="task-meta">
+        {% if task.requirement_ids %}
+        <span>Requirements: {{ task.requirement_ids }}</span>
+        {% endif %}
+        {% if task.completed_at %}
+        <span>Completed: {{ task.completed_at[:10] }}</span>
+        {% endif %}
+    </div>
+
+    <div class="task-actions">
+        {% if task.status == 'pending' %}
+        <form action="/specs/{{ spec.id }}/tasks/{{ task.task_id }}/status" method="post" style="display: inline;">
+            <input type="hidden" name="status" value="in_progress">
+            <button type="submit" class="btn-status">Start Task</button>
+        </form>
+        <a href="/specs/{{ spec.id }}/execute" class="btn-status btn-execute">Execute with Agents</a>
+        {% elif task.status == 'in_progress' %}
+        <form action="/specs/{{ spec.id }}/tasks/{{ task.task_id }}/status" method="post" style="display: inline;">
+            <input type="hidden" name="status" value="completed">
+            <button type="submit" class="btn-status">Mark Complete</button>
+        </form>
+        <form action="/specs/{{ spec.id }}/tasks/{{ task.task_id }}/status" method="post" style="display: inline;">
+            <input type="hidden" name="status" value="blocked">
+            <button type="submit" class="btn-status">Mark Blocked</button>
+        </form>
+        {% elif task.status == 'blocked' %}
+        <form action="/specs/{{ spec.id }}/tasks/{{ task.task_id }}/status" method="post" style="display: inline;">
+            <input type="hidden" name="status" value="pending">
+            <button type="submit" class="btn-status">Unblock</button>
+        </form>
+        {% elif task.status == 'completed' %}
+        <form action="/specs/{{ spec.id }}/tasks/{{ task.task_id }}/status" method="post" style="display: inline;">
+            <input type="hidden" name="status" value="pending">
+            <button type="submit" class="btn-status">Reopen</button>
+        </form>
+        {% endif %}
+    </div>
+</div>

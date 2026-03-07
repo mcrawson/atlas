@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.name }} - Automation{% endblock %}
+
+{% block content %}
+<div class="task-container">
+    <nav class="breadcrumb">
+        <a href="/automation/">Automation</a>
+        <span>/</span>
+        <span>{{ task.name }}</span>
+    </nav>
+
+    <header class="task-header">
+        <div class="header-main">
+            <span class="status-badge {{ task.status.value }}">{{ task.status.value }}</span>
+            <h1>{{ task.name }}</h1>
+        </div>
+        {% if task.description %}
+        <p class="description">{{ task.description }}</p>
+        {% endif %}
+        <div class="task-meta">
+            <span class="risk-badge {{ task.risk_level.value }}">Risk: {{ task.risk_level.value }}</span>
+            <span>Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% if task.source %}
+            <span>Source: <a href="/knowledge/{{ task.source.split(':')[1] }}">{{ task.source }}</a></span>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Actions -->
+    <div class="actions">
+        {% if task.status.value == 'awaiting_approval' %}
+        <form action="/automation/task/{{ task.id }}/approve" method="POST" style="display:inline;">
+            <button type="submit" class="btn-approve">Approve & Run</button>
+        </form>
+        <form action="/automation/task/{{ task.id }}/cancel" method="POST" style="display:inline;">
+            <button type="submit" class="btn-cancel">Cancel</button>
+        </form>
+        {% elif task.status.value == 'pending' %}
+        <form action="/automation/task/{{ task.id }}/execute" method="POST" style="display:inline;">
+            <button type="submit" class="btn-run">Run Now</button>
+        </form>
+        {% elif task.status.value == 'running' %}
+        <span class="running-indicator">Running... {{ "%.0f"|format(task.progress) }}%</span>
+        {% endif %}
+    </div>
+
+    <!-- Commands -->
+    <section class="commands-section">
+        <h2>Commands</h2>
+        <div class="command-list">
+            {% for item in command_risks %}
+            <div class="command-item {% if loop.index0 < task.results|length %}executed{% endif %}">
+                <div class="command-header">
+                    <span class="command-num">#{{ loop.index }}</span>
+                    <span class="risk-indicator {{ item.risk }}">{{ item.risk }}</span>
+                    {% if loop.index0 < task.results|length %}
+                        {% if task.results[loop.index0].success %}
+                        <span class="result-icon success">✓</span>
+                        {% else %}
+                        <span class="result-icon failed">✗</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <code class="command-text">{{ item.command }}</code>
+                {% if item.reason %}
+                <span class="risk-reason">{{ item.reason }}</span>
+                {% endif %}
+
+                {% if loop.index0 < task.results|length %}
+                <div class="command-result">
+                    <div class="result-meta">
+                        Exit code: {{ task.results[loop.index0].exit_code }} |
+                        Duration: {{ task.results[loop.index0].duration_ms }}ms
+                    </div>
+                    {% if task.results[loop.index0].stdout %}
+                    <pre class="output stdout">{{ task.results[loop.index0].stdout }}</pre>
+                    {% endif %}
+                    {% if task.results[loop.index0].stderr %}
+                    <pre class="output stderr">{{ task.results[loop.index0].stderr }}</pre>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% if task.error %}
+    <section class="error-section">
+        <h2>Error</h2>
+        <pre class="error-message">{{ task.error }}</pre>
+    </section>
+    {% endif %}
+</div>
+
+<style>
+.task-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.breadcrumb {
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.breadcrumb a {
+    color: var(--accent-purple);
+    text-decoration: none;
+}
+
+.task-header {
+    margin-bottom: 2rem;
+}
+
+.header-main {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.header-main h1 {
+    margin: 0;
+}
+
+.status-badge {
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.completed { background: #10b981; color: white; }
+.status-badge.failed { background: #ef4444; color: white; }
+.status-badge.running { background: #3b82f6; color: white; }
+.status-badge.pending { background: #6b7280; color: white; }
+.status-badge.awaiting_approval { background: #f59e0b; color: black; }
+.status-badge.cancelled { background: #374151; color: white; }
+
+.description {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.task-meta {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.risk-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.risk-badge.low { background: #10b981; color: white; }
+.risk-badge.medium { background: #f59e0b; color: black; }
+.risk-badge.high { background: #ef4444; color: white; }
+.risk-badge.critical { background: #7c3aed; color: white; }
+
+.actions {
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 1rem;
+}
+
+.btn-approve {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-run {
+    background: var(--accent-purple);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-cancel {
+    background: #374151;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.running-indicator {
+    color: #3b82f6;
+    font-weight: 500;
+}
+
+.commands-section h2 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.command-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.command-item.executed {
+    border-left: 3px solid #10b981;
+}
+
+.command-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.command-num {
+    background: var(--bg-tertiary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.risk-indicator {
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.risk-indicator.low { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.risk-indicator.medium { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.risk-indicator.high { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.risk-indicator.critical { background: rgba(124, 58, 237, 0.2); color: #7c3aed; }
+
+.result-icon {
+    font-weight: bold;
+}
+
+.result-icon.success { color: #10b981; }
+.result-icon.failed { color: #ef4444; }
+
+.command-text {
+    display: block;
+    background: var(--bg-primary);
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-family: monospace;
+    overflow-x: auto;
+}
+
+.risk-reason {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.command-result {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.result-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.output {
+    background: var(--bg-primary);
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.output.stderr {
+    border-left: 3px solid #ef4444;
+}
+
+.error-section {
+    margin-top: 2rem;
+}
+
+.error-section h2 {
+    color: #ef4444;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.error-message {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid #ef4444;
+    padding: 1rem;
+    border-radius: 8px;
+    color: #ef4444;
+}
+</style>
+
+{% if task.status.value == 'running' %}
+<script>
+// Poll for updates while running
+setInterval(function() {
+    fetch('/automation/api/task/{{ task.id }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'running') {
+                location.reload();
+            }
+        });
+}, 2000);
+</script>
+{% endif %}
+{% endblock %}

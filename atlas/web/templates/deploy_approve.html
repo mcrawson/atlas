@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Approve Deployment - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="deploy-wizard">
+    <!-- Header -->
+    <header class="deploy-header">
+        <nav class="breadcrumb">
+            <a href="/">ATLAS</a> /
+            <a href="/projects">Projects</a> /
+            <a href="/projects/{{ project.id }}">{{ project.name }}</a> /
+            <span>Approve Deployment</span>
+        </nav>
+        <h1>
+            <span class="platform-icon">{{ platform_icon }}</span>
+            Approve {{ platform_name }} Deployment
+        </h1>
+    </header>
+
+    <!-- Approval Warning -->
+    <section class="deploy-section warning-section">
+        <div class="approval-banner">
+            <span class="banner-icon">⚠️</span>
+            <div class="banner-content">
+                <h2>Review Required</h2>
+                <p>
+                    This deployment contains commands that could have significant impact.
+                    Please review them carefully before approving.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task Details -->
+    <section class="deploy-section">
+        <h2>📋 Task Details</h2>
+        <div class="task-details">
+            <div class="detail-row">
+                <span class="detail-label">Task ID:</span>
+                <code class="detail-value">{{ task.id }}</code>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Name:</span>
+                <span class="detail-value">{{ task.name }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Risk Level:</span>
+                <span class="risk-badge {{ task.risk_level.value }}">{{ task.risk_level.value | upper }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Working Directory:</span>
+                <code class="detail-value">{{ task.working_dir or 'Not specified' }}</code>
+            </div>
+        </div>
+    </section>
+
+    <!-- Commands to Approve -->
+    <section class="deploy-section">
+        <h2>🔧 Commands to Execute</h2>
+        <p class="section-description">
+            These commands will be executed in order. Review each one carefully:
+        </p>
+
+        <div class="command-list approval-list">
+            {% for cmd in task.commands %}
+            <div class="command-item">
+                <div class="command-number">{{ loop.index }}</div>
+                <code class="command-text">{{ cmd }}</code>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Environment Variables (masked) -->
+    {% if task.env_vars %}
+    <section class="deploy-section">
+        <h2>🔐 Environment Variables</h2>
+        <p class="section-description">
+            These environment variables will be available during execution (values hidden):
+        </p>
+        <div class="env-list">
+            {% for key in task.env_vars.keys() %}
+            <div class="env-item">
+                <code class="env-name">{{ key }}</code>
+                <span class="env-value">***</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <section class="deploy-section actions-section">
+        <form action="/projects/{{ project.id }}/deploy/{{ platform }}/approve" method="post">
+            <input type="hidden" name="task_id" value="{{ task.id }}">
+
+            <div class="approval-checkbox">
+                <label>
+                    <input type="checkbox" id="confirm-checkbox" required>
+                    I have reviewed the commands above and understand they will make changes to my system.
+                </label>
+            </div>
+
+            <div class="action-buttons">
+                <button type="submit" class="btn btn-primary btn-large" id="approve-btn" disabled>
+                    ✅ Approve & Execute
+                </button>
+                <a href="/projects/{{ project.id }}/deploy/{{ platform }}" class="btn btn-ghost">
+                    ← Go Back
+                </a>
+                <form action="/projects/{{ project.id }}" method="get" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        ❌ Cancel Deployment
+                    </button>
+                </form>
+            </div>
+        </form>
+    </section>
+</div>
+
+<script>
+document.getElementById('confirm-checkbox').addEventListener('change', function() {
+    document.getElementById('approve-btn').disabled = !this.checked;
+});
+</script>
+
+<style>
+.deploy-wizard {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.deploy-header {
+    margin-bottom: 2rem;
+}
+
+.deploy-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.8rem;
+    color: var(--text-primary);
+}
+
+.platform-icon {
+    font-size: 2rem;
+}
+
+.deploy-section {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.deploy-section h2 {
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin: 0 0 0.5rem 0;
+}
+
+.section-description {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+/* Warning Banner */
+.warning-section {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: var(--color-warning);
+}
+
+.approval-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.banner-icon {
+    font-size: 2.5rem;
+}
+
+.banner-content h2 {
+    color: var(--color-warning);
+    margin: 0;
+}
+
+.banner-content p {
+    margin: 0.5rem 0 0 0;
+    color: var(--text-secondary);
+}
+
+/* Task Details */
+.task-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+    min-width: 150px;
+}
+
+.detail-value {
+    color: var(--text-primary);
+}
+
+/* Commands */
+.command-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.command-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-primary);
+}
+
+.command-number {
+    background: var(--accent-primary);
+    color: var(--bg-dark);
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.command-text {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+/* Risk Badge */
+.risk-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.risk-badge.low {
+    background: var(--color-success);
+    color: white;
+}
+
+.risk-badge.medium {
+    background: var(--color-info);
+    color: white;
+}
+
+.risk-badge.high {
+    background: var(--color-warning);
+    color: var(--bg-dark);
+}
+
+.risk-badge.critical {
+    background: var(--color-error);
+    color: white;
+}
+
+/* Environment Variables */
+.env-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.env-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-surface);
+    border-radius: 6px;
+}
+
+.env-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent-primary);
+}
+
+.env-value {
+    color: var(--text-secondary);
+}
+
+/* Approval Checkbox */
+.approval-checkbox {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-surface);
+    border-radius: 8px;
+}
+
+.approval-checkbox label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.approval-checkbox input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+}
+
+.btn-danger {
+    background: var(--color-error);
+    color: white;
+    border: none;
+}
+
+.btn-danger:hover {
+    background: #d32f2f;
+}
+
+#approve-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}

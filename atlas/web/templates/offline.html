@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - ATLAS</title>
+    <link rel="stylesheet" href="/static/css/atlas.css">
+    <style>
+        .offline-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            text-align: center;
+            padding: 2rem;
+        }
+        .offline-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.6;
+        }
+        .offline-title {
+            font-family: var(--font-mono);
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+        .offline-message {
+            color: var(--text-muted);
+            max-width: 400px;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .retry-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--matrix-green);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: var(--radius);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .retry-btn:hover {
+            transform: scale(1.05);
+            box-shadow: var(--shadow-green);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">&#x1F52D;</span>
+            <span class="brand-name">ATLAS 2.0</span>
+        </div>
+        <div class="nav-status">
+            <span class="status-indicator disconnected">Offline</span>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="offline-page">
+            <div class="offline-icon">&#x1F4F5;</div>
+            <h1 class="offline-title">You're Offline</h1>
+            <p class="offline-message">
+                ATLAS needs an internet connection to communicate with AI agents.
+                Please check your connection and try again.
+            </p>
+            <button class="retry-btn" onclick="location.reload()">
+                <span>&#x1F504;</span>
+                <span>Retry Connection</span>
+            </button>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <span>ATLAS - Automated Thinking, Learning & Advisory System</span>
+    </footer>
+</body>
+</html>

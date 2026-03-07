@@ -1,0 +1,47 @@
+{% set tasks = tasks if tasks is defined else project.tasks if project is defined else [] %}
+{% set project_id = project_id if project_id is defined else project.id if project is defined else 0 %}
+
+{% if tasks %}
+    {% for task in tasks %}
+    <div class="task-item status-{{ task.status.value }}">
+        <div class="task-header">
+            <a href="/projects/{{ project_id }}/tasks/{{ task.id }}" class="task-title">
+                {{ task.title }}
+            </a>
+            <div class="task-badges">
+                {% if task.priority > 0 %}
+                <span class="priority-badge priority-{{ task.priority }}">
+                    {% if task.priority == 2 %}Urgent
+                    {% elif task.priority == 1 %}High{% endif %}
+                </span>
+                {% endif %}
+                <span class="status-badge status-{{ task.status.value }}">
+                    {{ task.status.value }}
+                </span>
+            </div>
+        </div>
+        {% if task.description %}
+        <p class="task-description">{{ task.description[:100] }}{% if task.description|length > 100 %}...{% endif %}</p>
+        {% endif %}
+        <div class="task-actions">
+            {% if task.status.value == 'pending' %}
+            <button class="btn btn-small btn-primary"
+                    hx-post="/projects/{{ project_id }}/tasks/{{ task.id }}/execute"
+                    hx-target="#task-list"
+                    hx-swap="innerHTML"
+                    hx-indicator=".task-indicator-{{ task.id }}">
+                Execute
+                <span class="htmx-indicator task-indicator-{{ task.id }}">...</span>
+            </button>
+            {% endif %}
+            {% if task.agent_outputs %}
+            <span class="output-count">{{ task.agent_outputs|length }} outputs</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <p>No tasks yet. Add a task above to get started.</p>
+    </div>
+{% endif %}

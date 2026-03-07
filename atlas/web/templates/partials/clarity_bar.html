@@ -1,0 +1,16 @@
+<div class="clarity-card" id="clarity-bar">
+    <div class="clarity-header">
+        <span class="clarity-label">Idea Clarity</span>
+        <span class="clarity-score">{{ readiness }}%</span>
+    </div>
+    <div class="clarity-bar">
+        <div class="clarity-fill {% if readiness >= 80 %}ready{% elif readiness >= 50 %}good{% elif readiness >= 30 %}partial{% endif %}"
+             style="width: {{ readiness }}%"></div>
+    </div>
+    <p class="clarity-hint">
+        {% if readiness < 30 %}Let's explore your idea further...
+        {% elif readiness < 50 %}Getting clearer, need more details
+        {% elif readiness < 80 %}Almost there! A few more clarifications...
+        {% else %}Ready for planning!{% endif %}
+    </p>
+</div>

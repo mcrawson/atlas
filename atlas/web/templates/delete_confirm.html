@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Project - {{ project.name }} - ATLAS{% endblock %}
+
+{% block content %}
+<div class="delete-page">
+    <div class="delete-card">
+        <div class="delete-icon">⚠️</div>
+        <h1>Delete Project?</h1>
+        <p class="delete-warning">This action cannot be undone. All project data, agent outputs, and history will be permanently deleted.</p>
+
+        <div class="project-info">
+            <div class="project-name">{{ project.name }}</div>
+            {% if project.description %}
+            <div class="project-desc">{{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}</div>
+            {% endif %}
+            {% set tokens = project.metadata.get('tokens', {}) %}
+            {% if tokens.get('total', 0) > 0 %}
+            <div class="project-tokens">{{ "{:,}".format(tokens.get('total', 0)) }} tokens used</div>
+            {% endif %}
+        </div>
+
+        <form action="/projects/{{ project.id }}/delete" method="post" class="delete-form">
+            <div class="form-group">
+                <label>Why are you deleting this project?</label>
+                <textarea name="reason" rows="3" placeholder="e.g., No longer needed, started over, testing..." required></textarea>
+                <p class="form-hint">This helps improve ATLAS</p>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-danger">
+                    <span>🗑️ Delete Permanently</span>
+                </button>
+                <a href="/projects/{{ project.id }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.delete-page {
+    max-width: 500px;
+    margin: 2rem auto;
+}
+
+.delete-card {
+    background: var(--bg-card);
+    border: 1px solid var(--accent-red);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(255, 0, 64, 0.1);
+}
+
+.delete-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.delete-card h1 {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    color: var(--accent-red);
+    margin-bottom: 1rem;
+}
+
+.delete-warning {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.project-info {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.project-info .project-name {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.project-info .project-desc {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.project-info .project-tokens {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.delete-form .form-group {
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+
+.delete-form label {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.delete-form label strong {
+    color: var(--text-primary);
+}
+
+.delete-form textarea {
+    width: 100%;
+    padding: 1rem;
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+.delete-form .form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.btn-danger {
+    background: rgba(255, 0, 64, 0.1);
+    color: var(--accent-red);
+    border-color: rgba(255, 0, 64, 0.3);
+}
+
+.btn-danger:hover {
+    background: rgba(255, 0, 64, 0.2);
+    box-shadow: 0 0 20px rgba(255, 0, 64, 0.2);
+}
+</style>
+{% endblock %}

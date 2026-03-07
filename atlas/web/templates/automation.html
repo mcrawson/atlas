@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Automation - ATLAS{% endblock %}
+
+{% block content %}
+<div class="automation-container">
+    <header class="page-header">
+        <h1>Automation</h1>
+        <p class="subtitle">Execute deployment commands and automated workflows</p>
+    </header>
+
+    <!-- Create Task Form -->
+    <section class="create-task">
+        <h2>Create New Task</h2>
+        <form action="/automation/task/create" method="POST" class="task-form">
+            <div class="form-group">
+                <label for="name">Task Name</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Deploy to Production" required>
+            </div>
+            <div class="form-group">
+                <label for="commands">Commands (one per line)</label>
+                <textarea id="commands" name="commands" rows="5" placeholder="npm run build
+npm run deploy" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="working_dir">Working Directory (optional)</label>
+                <input type="text" id="working_dir" name="working_dir" placeholder="~/my-project">
+            </div>
+            <button type="submit" class="btn-primary">Create Task</button>
+        </form>
+    </section>
+
+    <!-- Pending Approval -->
+    {% if pending_tasks %}
+    <section class="pending-tasks">
+        <h2>Awaiting Approval</h2>
+        <div class="task-list">
+            {% for task in pending_tasks %}
+            <a href="/automation/task/{{ task.id }}" class="task-card awaiting">
+                <div class="task-header">
+                    <span class="risk-badge {{ task.risk_level.value }}">{{ task.risk_level.value }}</span>
+                    <h3>{{ task.name }}</h3>
+                </div>
+                <div class="task-meta">
+                    <span>{{ task.commands | length }} commands</span>
+                    <span class="status">{{ task.status.value }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Recent Tasks -->
+    <section class="recent-tasks">
+        <h2>Recent Tasks</h2>
+        {% if recent_tasks %}
+        <div class="task-list">
+            {% for task in recent_tasks %}
+            <a href="/automation/task/{{ task.id }}" class="task-card {{ task.status.value }}">
+                <div class="task-header">
+                    <span class="status-icon">
+                        {% if task.status.value == 'completed' %}✓{% endif %}
+                        {% if task.status.value == 'failed' %}✗{% endif %}
+                        {% if task.status.value == 'running' %}⟳{% endif %}
+                        {% if task.status.value == 'pending' %}○{% endif %}
+                        {% if task.status.value == 'awaiting_approval' %}⚠{% endif %}
+                        {% if task.status.value == 'cancelled' %}⊘{% endif %}
+                    </span>
+                    <h3>{{ task.name }}</h3>
+                </div>
+                <div class="task-meta">
+                    <span>{{ task.commands | length }} commands</span>
+                    <span class="status">{{ task.status.value }}</span>
+                    {% if task.completed_at %}
+                    <span class="time">{{ task.completed_at.strftime('%m/%d %H:%M') }}</span>
+                    {% endif %}
+                </div>
+                {% if task.status.value == 'running' %}
+                <div class="progress-bar">
+                    <div class="progress" style="width: {{ task.progress }}%"></div>
+                </div>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty">No tasks yet. Create one above or run commands from the Knowledge Base.</p>
+        {% endif %}
+    </section>
+
+    <!-- Link to Knowledge Base -->
+    <section class="knowledge-link">
+        <p>Run deployment commands from the <a href="/knowledge/">Knowledge Base</a></p>
+    </section>
+</div>
+
+<style>
+.automation-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+}
+
+.create-task {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.create-task h2 {
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.task-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.form-group textarea {
+    font-family: monospace;
+    resize: vertical;
+}
+
+.btn-primary {
+    background: var(--accent-purple);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    align-self: flex-start;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.pending-tasks,
+.recent-tasks {
+    margin-bottom: 2rem;
+}
+
+.pending-tasks h2,
+.recent-tasks h2 {
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.task-card {
+    display: block;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+.task-card:hover {
+    border-color: var(--accent-purple);
+}
+
+.task-card.awaiting {
+    border-left: 3px solid #f59e0b;
+}
+
+.task-card.completed {
+    border-left: 3px solid #10b981;
+}
+
+.task-card.failed {
+    border-left: 3px solid #ef4444;
+}
+
+.task-card.running {
+    border-left: 3px solid #3b82f6;
+}
+
+.task-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.status-icon {
+    font-size: 1.2rem;
+}
+
+.task-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.risk-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.risk-badge.low { background: #10b981; color: white; }
+.risk-badge.medium { background: #f59e0b; color: black; }
+.risk-badge.high { background: #ef4444; color: white; }
+.risk-badge.critical { background: #7c3aed; color: white; }
+
+.task-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.progress-bar {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    margin-top: 0.75rem;
+    overflow: hidden;
+}
+
+.progress {
+    height: 100%;
+    background: var(--accent-purple);
+    transition: width 0.3s;
+}
+
+.empty {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 2rem;
+}
+
+.knowledge-link {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.knowledge-link a {
+    color: var(--accent-purple);
+}
+</style>
+{% endblock %}

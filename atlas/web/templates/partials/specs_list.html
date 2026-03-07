@@ -1,0 +1,27 @@
+{% if specs %}
+<div class="specs-list-content">
+    {% for spec in specs %}
+    <a href="/specs/{{ spec.id }}" class="spec-item">
+        <div class="spec-info">
+            <span class="spec-name">{{ spec.name[:50] }}{% if spec.name|length > 50 %}...{% endif %}</span>
+            <span class="spec-meta">
+                v{{ spec.version or '1.0.0' }} •
+                {{ spec.requirements_count }} requirements •
+                {{ spec.tasks_completed }}/{{ spec.tasks_count }} tasks
+            </span>
+        </div>
+        <div class="spec-progress">
+            {% set progress = (spec.tasks_completed / spec.tasks_count * 100) if spec.tasks_count > 0 else 0 %}
+            <div class="progress-bar small">
+                <div class="progress-fill" style="width: {{ progress }}%"></div>
+            </div>
+            <span class="progress-label">{{ "%.0f"|format(progress) }}%</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="specs-empty">
+    <p>No specs for this project yet. Generate one to get started with structured development.</p>
+</div>
+{% endif %}
