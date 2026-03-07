@@ -14,6 +14,10 @@ from pathlib import Path
 atlas_root = Path(__file__).parent.parent
 sys.path.insert(0, str(atlas_root))
 
+# Load .env file
+from dotenv import load_dotenv
+load_dotenv(atlas_root / ".env")
+
 from atlas.core import Config
 from atlas.memory import MemoryManager
 from atlas.routing import Router, UsageTracker
