@@ -1,0 +1,146 @@
+#!/home/mcrawson/ai-workspace/atlas/.venv/bin/python3
+"""ATLAS Web Dashboard Server.
+
+Launches the FastAPI web server for the ATLAS 2.0 multi-agent dashboard.
+"""
+
+import argparse
+import asyncio
+import sys
+import webbrowser
+from pathlib import Path
+
+# Add atlas package to path
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+from atlas.core import Config
+from atlas.memory import MemoryManager
+from atlas.routing import Router, UsageTracker
+from atlas.routing.providers import (
+    ClaudeProvider,
+    OpenAIProvider,
+    GeminiProvider,
+    OllamaProvider,
+)
+from atlas.agents import AgentManager
+from atlas.projects import ProjectManager
+from atlas.web import create_app
+
+
+def init_providers(config: Config) -> dict:
+    """Initialize AI providers."""
+    providers = {}
+
+    # Claude
+    if config.get("providers", "claude", "enabled", default=True):
+        providers["claude"] = ClaudeProvider()
+
+    # OpenAI
+    if config.get("providers", "openai", "enabled", default=True):
+        api_key = config.get_api_key("openai")
+        providers["openai"] = OpenAIProvider(api_key=api_key)
+
+    # Gemini
+    if config.get("providers", "gemini", "enabled", default=True):
+        api_key = config.get_api_key("gemini")
+        providers["gemini"] = GeminiProvider(api_key=api_key)
+
+    # Ollama (always available as fallback)
+    ollama_config = config.get("providers", "ollama", default={})
+    providers["ollama"] = OllamaProvider(
+        base_url=ollama_config.get("base_url", "http://localhost:11434"),
+        model=ollama_config.get("models", {}).get("default", "llama3"),
+        code_model=ollama_config.get("models", {}).get("code", "codellama:13b"),
+        fast_model=ollama_config.get("models", {}).get("fast", "llama3.2:3b"),
+    )
+
+    return providers
+
+
+def main():
+    """Run the ATLAS web server."""
+    parser = argparse.ArgumentParser(
+        description="ATLAS 2.0 Web Dashboard Server"
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to (default: 0.0.0.0 for remote access)"
+    )
+    parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=8080,
+        help="Port to bind to (default: 8080)"
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload for development"
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Don't open browser automatically"
+    )
+
+    args = parser.parse_args()
+
+    # Initialize configuration
+    print("\n[ATLAS] Initializing configuration...")
+    config = Config()
+
+    # Initialize core components
+    print("[ATLAS] Initializing providers...")
+    providers = init_providers(config)
+
+    available_providers = [name for name, p in providers.items() if p.is_available()]
+    print(f"[ATLAS] Available providers: {', '.join(available_providers) or 'None'}")
+
+    print("[ATLAS] Initializing router and memory...")
+    usage = UsageTracker()
+    router = Router(usage)
+    memory = MemoryManager(config.memory_dir)
+
+    print("[ATLAS] Initializing agent manager...")
+    agent_manager = AgentManager(router, memory, providers)
+
+    print("[ATLAS] Initializing project manager...")
+    project_manager = ProjectManager(config.data_dir)
+
+    # Initialize project database
+    asyncio.run(project_manager.init_db())
+
+    # Create FastAPI app
+    print("[ATLAS] Creating web application...")
+    app = create_app(
+        agent_manager=agent_manager,
+        project_manager=project_manager,
+        router=router,
+        memory=memory,
+        providers=providers,
+    )
+
+    # Open browser
+    if not args.no_browser:
+        url = f"http://{args.host}:{args.port}"
+        print(f"[ATLAS] Opening browser at {url}")
+        webbrowser.open(url)
+
+    # Run server
+    print(f"\n[ATLAS] Starting web server on http://{args.host}:{args.port}")
+    print("[ATLAS] Press Ctrl+C to stop\n")
+
+    import uvicorn
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    main()

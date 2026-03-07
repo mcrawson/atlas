@@ -1,0 +1,317 @@
+#!/home/mcrawson/ai-workspace/atlas/.venv/bin/python3
+"""ATLAS Voice Mode - Speech-based interaction.
+
+This script provides voice-based interaction with ATLAS using:
+- Whisper for speech-to-text
+- Piper for text-to-speech with British voice
+"""
+
+import asyncio
+import sys
+from pathlib import Path
+
+# Add atlas package to path
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+from atlas.core import Butler, Config
+from atlas.core.session import SessionManager
+from atlas.core.briefings import BriefingEnhancer
+from atlas.core.preferences import UserPreferences
+from atlas.memory import MemoryManager
+from atlas.routing import Router, UsageTracker
+from atlas.routing.providers import (
+    ClaudeProvider,
+    OpenAIProvider,
+    GeminiProvider,
+    OllamaProvider,
+    ProviderError,
+)
+from atlas.tasks import TaskQueue
+from atlas.voice.stt import WhisperSTT, AudioRecorder
+from atlas.voice.tts import PiperTTS
+
+
+class AtlasVoice:
+    """Voice-based interface for ATLAS."""
+
+    def __init__(self):
+        """Initialize voice mode."""
+        self.config = Config()
+        self.butler = Butler(name=self.config.name)
+        self.memory = MemoryManager(self.config.memory_dir)
+        self.usage = UsageTracker()
+        self.router = Router(self.usage)
+        self.session = SessionManager(self.config.data_dir)
+        self.briefing_enhancer = BriefingEnhancer(self.config.data_dir, self.config.memory_dir)
+        self.preferences = UserPreferences(self.config.data_dir)
+        self.queue = TaskQueue()
+
+        # Voice components
+        voice_config = self.config.get("voice", default={})
+        self.stt = WhisperSTT(model_size=voice_config.get("whisper_model", "base.en"))
+        self.tts = PiperTTS(voice=voice_config.get("piper_voice", "en_GB-alan-medium"))
+        self.recorder = AudioRecorder()
+
+        # Providers
+        self.providers = {}
+        self._init_providers()
+
+        self.running = True
+
+    def _init_providers(self):
+        """Initialize AI providers."""
+        if self.config.get("providers", "claude", "enabled", default=True):
+            self.providers["claude"] = ClaudeProvider()
+
+        if self.config.get("providers", "openai", "enabled", default=True):
+            api_key = self.config.get_api_key("openai")
+            self.providers["openai"] = OpenAIProvider(api_key=api_key)
+
+        if self.config.get("providers", "gemini", "enabled", default=True):
+            api_key = self.config.get_api_key("gemini")
+            self.providers["gemini"] = GeminiProvider(api_key=api_key)
+
+        ollama_config = self.config.get("providers", "ollama", default={})
+        self.providers["ollama"] = OllamaProvider(
+            base_url=ollama_config.get("base_url", "http://localhost:11434"),
+            model=ollama_config.get("models", {}).get("default", "llama3"),
+        )
+
+    def check_voice_support(self) -> dict:
+        """Check voice support status.
+
+        Returns:
+            Dictionary of component availability
+        """
+        return {
+            "whisper": self.stt.is_available(),
+            "piper": self.tts.is_available(),
+            "microphone": self.recorder.is_available(),
+        }
+
+    def speak(self, text: str) -> None:
+        """Speak text using TTS.
+
+        Args:
+            text: Text to speak
+        """
+        # Also print to console
+        print(f"[{self.butler.name}] {text}")
+
+        if self.tts.is_available():
+            self.tts.speak(text)
+
+    def listen(self) -> str:
+        """Listen for speech and transcribe.
+
+        Returns:
+            Transcribed text or empty string
+        """
+        if not self.recorder.is_available():
+            print("Microphone not available. Please type your message:")
+            return input("You: ").strip()
+
+        print("Listening... (speak now, silence to finish)")
+
+        audio_data = self.recorder.record_until_silence()
+        if not audio_data:
+            print("No audio captured.")
+            return ""
+
+        print("Transcribing...")
+        text = self.stt.transcribe_bytes(audio_data)
+
+        if text:
+            print(f"You said: {text}")
+            return text
+        else:
+            print("Could not transcribe audio.")
+            return ""
+
+    async def process_message_async(self, message: str) -> str:
+        """Process a message and get response."""
+        # Get routing decision
+        routing = self.router.route(message)
+        provider_name = routing["provider"]
+        task_type = routing["task_type"]
+
+        provider = self.providers.get(provider_name)
+
+        # Find available provider
+        if not provider or not provider.is_available():
+            for fallback in ["ollama", "gemini", "claude", "openai"]:
+                if fallback in self.providers and self.providers[fallback].is_available():
+                    provider = self.providers[fallback]
+                    provider_name = fallback
+                    break
+            else:
+                return "I apologize, but no AI providers are currently available."
+
+        # Get user context for personalization
+        user_context = self.preferences.get_context_prompt()
+
+        # Get recent conversation history
+        recent_convos = self.memory.get_recent_conversations(days=1)
+        conversation_history = ""
+        if recent_convos:
+            history_lines = []
+            for conv in recent_convos[-5:]:
+                user_msg = conv.get("user_message", "")[:100]
+                history_lines.append(f"User: {user_msg}")
+            conversation_history = "\n".join(history_lines)
+
+        # Build system prompt with context
+        system_prompt = provider.get_system_prompt(user_context, conversation_history)
+
+        try:
+            response = await provider.generate(message, system_prompt=system_prompt)
+
+            # Log usage
+            self.router.log_completion(provider_name, task_type)
+
+            # Save to memory
+            self.memory.save_conversation(
+                user_message=message,
+                assistant_response=response,
+                model=provider_name,
+                task_type=task_type,
+            )
+
+            return response
+
+        except ProviderError as e:
+            return f"I regret to inform you, that an error occurred: {e}"
+        except Exception as e:
+            return f"Most unfortunate. An unexpected error occurred: {e}"
+
+    def process_message(self, message: str) -> str:
+        """Sync wrapper for async processing."""
+        return asyncio.run(self.process_message_async(message))
+
+    def _generate_morning_briefing(self) -> str:
+        """Generate the visual morning briefing."""
+        # Get queue stats
+        queue_stats = asyncio.run(self.queue.get_queue_stats())
+        completed_overnight = asyncio.run(self.queue.get_recent_completed(hours=12))
+
+        # Get weekly usage stats
+        weekly_usage = self.briefing_enhancer.get_weekly_usage_stats(self.usage)
+
+        # Get reminders
+        reminders = self.briefing_enhancer.get_reminders()
+
+        # Get system status
+        system_status = self.briefing_enhancer.get_system_status()
+
+        # Get quote of the day
+        quote = self.briefing_enhancer.get_quote_of_the_day()
+
+        # Get news headlines
+        try:
+            news = asyncio.run(self.briefing_enhancer.get_news_headlines())
+        except Exception:
+            news = {}
+
+        # Generate briefing
+        briefing = self.session.generate_morning_briefing(
+            pending_tasks=queue_stats.get("pending", 0),
+            completed_overnight=len(completed_overnight),
+            usage_stats={},
+        )
+
+        # Add enhanced data
+        briefing['weekly_usage'] = weekly_usage
+        briefing['reminders'] = reminders
+        briefing['system_status'] = system_status
+        briefing['quote'] = quote
+        briefing['news'] = news
+
+        # Get yesterday's summary
+        yesterday = self.session.get_yesterday_summary()
+
+        return self.butler.format_morning_briefing(briefing, yesterday)
+
+    def run(self) -> None:
+        """Run voice mode."""
+        # Check voice support
+        support = self.check_voice_support()
+        print("\nATLAS Voice Mode")
+        print("=" * 40)
+        print(f"Whisper (STT): {'✓' if support['whisper'] else '✗'}")
+        print(f"Piper (TTS):   {'✓' if support['piper'] else '✗'}")
+        print(f"Microphone:    {'✓' if support['microphone'] else '✗'}")
+        print("=" * 40)
+
+        if not support['whisper']:
+            print("\nWARNING: Whisper not available. Install with: pip install openai-whisper")
+        if not support['piper']:
+            print("\nWARNING: Piper not available. Voice output will be text-only.")
+        if not support['microphone']:
+            print("\nWARNING: Microphone not available. Falling back to text input.")
+
+        print("\nCommands:")
+        print("  'quit' or 'exit' - Exit voice mode")
+        print("  Press Enter to start listening (or type a message)")
+        print()
+
+        # Check if first session of the day
+        is_first_session = self.session.is_first_session_today()
+
+        if is_first_session:
+            # Short spoken greeting - don't read the whole briefing
+            self.speak("Good morning, sir. Here is your morning briefing.")
+
+            # Show visual briefing (not spoken)
+            print()
+            print(self._generate_morning_briefing())
+            print()
+        else:
+            # Regular greeting
+            greeting = "Good day, sir. ATLAS voice mode is active. How may I assist you?"
+            self.speak(greeting)
+
+        while self.running:
+            try:
+                # Prompt for input method
+                user_input = input("\n[Press Enter to speak, or type message]: ").strip()
+
+                if user_input.lower() in ("quit", "exit", "/quit", "/exit"):
+                    farewell = "Very good, sir. Until next time."
+                    self.speak(farewell)
+                    break
+
+                # If user typed something, use that
+                if user_input:
+                    message = user_input
+                else:
+                    # Otherwise, listen for speech
+                    message = self.listen()
+
+                if not message:
+                    continue
+
+                # Process and respond
+                print("\nThinking...")
+                response = self.process_message(message)
+
+                # Speak the response (also prints it)
+                self.speak(response)
+
+            except KeyboardInterrupt:
+                print("\n")
+                farewell = "Interrupted, sir. Farewell."
+                self.speak(farewell)
+                break
+            except EOFError:
+                break
+
+
+def main():
+    """Entry point."""
+    voice = AtlasVoice()
+    voice.run()
+
+
+if __name__ == "__main__":
+    main()

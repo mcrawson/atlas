@@ -1,0 +1,94 @@
+atlas:
+  name: "ATLAS"
+  personality: "butler"
+
+providers:
+  claude:
+    enabled: true
+    daily_limit: 45
+  openai:
+    enabled: true
+    daily_limit: 40
+    api_key_env: "OPENAI_API_KEY"
+  gemini:
+    enabled: true
+    daily_limit: 100
+    api_key_env: "GEMINI_API_KEY"
+    api_key_file: "~/.gemini/api_key"
+  ollama:
+    enabled: true
+    base_url: "http://localhost:11434"
+    models:
+      default: "llama3"
+      code: "codellama:13b"
+      fast: "llama3.2:3b"
+
+memory:
+  conversation_retention_days: 30
+
+notifications:
+  urgent_sound: true
+  desktop_notifications: true
+  windows_toast: true
+
+voice:
+  enabled: false
+  whisper_model: "base.en"
+  piper_voice: "en_GB-alan-medium"
+
+# Phase 6: Proactive Monitoring
+monitoring:
+  enabled: true
+  interval: 300  # seconds between checks
+  system:
+    enabled: true
+    cpu_threshold: 80
+    memory_threshold: 85
+    disk_threshold: 90
+  git:
+    enabled: true
+    repos:
+      - "~/ai-workspace/atlas"
+    check_uncommitted: true
+    check_unpushed: true
+  web:
+    enabled: false
+    urls: []  # Add URLs to monitor
+
+# Phase 7: Ambient Daemon
+daemon:
+  ambient_mode: true
+  tray:
+    enabled: true
+    show_status: true
+
+# Phase 8: Smart Home (Home Assistant)
+integrations:
+  home_assistant:
+    enabled: false  # Enable when configured
+    url: "http://homeassistant.local:8123"
+    token_env: "HA_TOKEN"
+    entities:
+      office_lights: "light.office"
+      bedroom_lights: "light.bedroom"
+      thermostat: "climate.main"
+      front_door: "lock.front_door"
+
+  # Phase 9: Google Integration
+  google:
+    enabled: false  # Enable after OAuth setup
+    credentials_file: "~/.config/atlas/google_credentials.json"
+    scopes:
+      - calendar.readonly
+      - gmail.readonly
+    calendar:
+      reminder_minutes: [15, 5]
+    email:
+      important_senders: []
+
+# Phase 11: Anticipation Engine
+anticipation:
+  enabled: true
+  learning: true
+  confidence_threshold: 0.70
+  suggestion_frequency: "occasional"  # never, occasional, proactive

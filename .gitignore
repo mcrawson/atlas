@@ -37,5 +37,6 @@ ENV/
 Thumbs.db
 
 # ATLAS specific
-data/*.db
+data/
+memory/
 *.log

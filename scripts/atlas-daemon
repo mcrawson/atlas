@@ -1,0 +1,181 @@
+#!/home/mcrawson/ai-workspace/atlas/.venv/bin/python3
+"""ATLAS Daemon - Background task processor.
+
+This daemon runs continuously, processing queued tasks using
+the configured AI providers.
+"""
+
+import asyncio
+import logging
+import signal
+import sys
+from pathlib import Path
+
+# Add atlas package to path
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+from atlas.core import Config
+from atlas.tasks import TaskQueue, TaskWorker
+from atlas.tasks.worker import BriefingGenerator
+from atlas.notifications import Notifier
+from atlas.routing import Router, UsageTracker
+from atlas.routing.providers import (
+    ClaudeProvider,
+    OpenAIProvider,
+    GeminiProvider,
+    OllamaProvider,
+    ProviderError,
+)
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - ATLAS - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(Path.home() / "ai-workspace" / "atlas" / "data" / "daemon.log"),
+    ]
+)
+logger = logging.getLogger("atlas.daemon")
+
+
+class AtlasDaemon:
+    """ATLAS background daemon."""
+
+    def __init__(self):
+        """Initialize daemon."""
+        self.config = Config()
+        self.queue = TaskQueue()
+        self.usage = UsageTracker()
+        self.router = Router(self.usage)
+        self.notifier = Notifier(
+            enable_sound=self.config.get("notifications", "urgent_sound", default=True),
+            enable_desktop=self.config.get("notifications", "desktop_notifications", default=True),
+        )
+
+        # Initialize providers
+        self.providers = {}
+        self._init_providers()
+
+        # Create worker
+        self.worker = TaskWorker(
+            queue=self.queue,
+            process_func=self.process_task,
+            poll_interval=30.0,
+            on_complete=self.on_task_complete,
+            on_error=self.on_task_error,
+        )
+
+        self.briefing_generator = BriefingGenerator(self.queue, self.config.memory_dir)
+
+    def _init_providers(self):
+        """Initialize AI providers."""
+        if self.config.get("providers", "claude", "enabled", default=True):
+            self.providers["claude"] = ClaudeProvider()
+
+        if self.config.get("providers", "openai", "enabled", default=True):
+            api_key = self.config.get_api_key("openai")
+            self.providers["openai"] = OpenAIProvider(api_key=api_key)
+
+        if self.config.get("providers", "gemini", "enabled", default=True):
+            api_key = self.config.get_api_key("gemini")
+            self.providers["gemini"] = GeminiProvider(api_key=api_key)
+
+        ollama_config = self.config.get("providers", "ollama", default={})
+        self.providers["ollama"] = OllamaProvider(
+            base_url=ollama_config.get("base_url", "http://localhost:11434"),
+            model=ollama_config.get("models", {}).get("default", "llama3"),
+        )
+
+    async def process_task(self, prompt: str, task_type: str) -> tuple[str, str]:
+        """Process a task using the appropriate provider.
+
+        Args:
+            prompt: Task prompt
+            task_type: Type of task
+
+        Returns:
+            Tuple of (result, model_used)
+        """
+        # Get routing decision
+        routing = self.router.route(prompt)
+        provider_name = routing["provider"]
+
+        provider = self.providers.get(provider_name)
+
+        # Try primary provider
+        if provider and provider.is_available():
+            try:
+                result = await provider.generate(prompt)
+                self.router.log_completion(provider_name, task_type)
+                return result, provider_name
+            except ProviderError as e:
+                logger.warning(f"Primary provider {provider_name} failed: {e}")
+
+        # Try fallbacks
+        for fallback_name in ["ollama", "gemini", "claude"]:
+            if fallback_name != provider_name and fallback_name in self.providers:
+                fallback = self.providers[fallback_name]
+                if fallback.is_available():
+                    try:
+                        result = await fallback.generate(prompt)
+                        self.router.log_completion(fallback_name, task_type)
+                        return result, fallback_name
+                    except ProviderError as e:
+                        logger.warning(f"Fallback {fallback_name} failed: {e}")
+                        continue
+
+        raise ProviderError("All providers failed", "daemon", recoverable=False)
+
+    async def on_task_complete(self, task: dict, result: str) -> None:
+        """Handle task completion.
+
+        Args:
+            task: Completed task
+            result: Task result
+        """
+        self.notifier.task_completed(
+            task["prompt"],
+            result[:200] if result else None,
+        )
+
+    async def on_task_error(self, task: dict, error: Exception) -> None:
+        """Handle task failure.
+
+        Args:
+            task: Failed task
+            error: Error that occurred
+        """
+        self.notifier.task_failed(task["prompt"], str(error))
+
+    async def run(self) -> None:
+        """Run the daemon."""
+        logger.info("ATLAS Daemon starting...")
+
+        # Setup signal handlers
+        loop = asyncio.get_event_loop()
+
+        def handle_signal():
+            logger.info("Shutdown signal received")
+            self.worker.stop()
+
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, handle_signal)
+
+        logger.info("ATLAS Daemon ready - processing background tasks")
+
+        # Run the worker
+        await self.worker.run()
+
+        logger.info("ATLAS Daemon shutdown complete")
+
+
+async def main():
+    """Entry point."""
+    daemon = AtlasDaemon()
+    await daemon.run()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

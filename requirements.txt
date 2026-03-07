@@ -1,0 +1,43 @@
+# ATLAS - Automated Thinking, Learning & Advisory System
+# Requirements file
+
+# Core (Phase 1)
+pyyaml>=6.0
+python-dateutil>=2.8
+
+# Routing & Providers (Phase 2)
+aiohttp>=3.9
+openai>=1.0
+anthropic>=0.18
+google-generativeai>=0.3
+
+# Background Tasks (Phase 3)
+aiosqlite>=0.19
+
+# Web Dashboard (ATLAS 2.0)
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.0
+python-multipart>=0.0.6
+websockets>=12.0
+
+# External Integrations (Slack, GitHub)
+httpx>=0.27.0
+
+# MCP Server (Oracle) - AI assistant integration
+mcp>=0.9.0
+
+# Voice Interface (Phase 4) - uncomment when needed
+# openai-whisper>=20231117
+# piper-tts>=1.2
+# sounddevice>=0.4
+# numpy>=1.24
+
+# Google Integration (Phase 9) - uncomment when needed
+# google-auth>=2.0
+# google-auth-oauthlib>=1.0
+# google-api-python-client>=2.0
+
+# Windows System Tray (Phase 7, Windows side only)
+# pystray>=0.19
+# Pillow>=10.0

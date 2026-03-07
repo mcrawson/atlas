@@ -1,0 +1,19 @@
+[Unit]
+Description=ATLAS - Automated Thinking, Learning & Advisory System Daemon
+Documentation=https://github.com/your-repo/atlas
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/mcrawson/ai-workspace/atlas/scripts/atlas-daemon
+WorkingDirectory=/home/mcrawson/ai-workspace/atlas
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/mcrawson/ai-workspace/atlas/data/daemon.log
+StandardError=append:/home/mcrawson/ai-workspace/atlas/data/daemon.log
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Set up remote access for ATLAS Web Dashboard."""
+
+import sys
+import os
+import subprocess
+import argparse
+from pathlib import Path
+
+# Add parent to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def check_command(cmd):
+    """Check if a command is available."""
+    try:
+        subprocess.run([cmd, "--version"], capture_output=True, check=False)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def setup_ngrok(port=8080):
+    """Set up ngrok tunnel."""
+    if not check_command("ngrok"):
+        print("ngrok not found. Install it:")
+        print("  curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc")
+        print("  echo 'deb https://ngrok-agent.s3.amazonaws.com buster main' | sudo tee /etc/apt/sources.list.d/ngrok.list")
+        print("  sudo apt update && sudo apt install ngrok")
+        print()
+        print("Or download from: https://ngrok.com/download")
+        return False
+
+    print(f"Starting ngrok tunnel to port {port}...")
+    print()
+    print("Your ATLAS dashboard will be accessible at the ngrok URL.")
+    print("Press Ctrl+C to stop.")
+    print()
+
+    try:
+        subprocess.run(["ngrok", "http", str(port)])
+    except KeyboardInterrupt:
+        print("\nTunnel stopped.")
+
+    return True
+
+
+def setup_cloudflared(port=8080, hostname=None):
+    """Set up Cloudflare Tunnel."""
+    if not check_command("cloudflared"):
+        print("cloudflared not found. Install it:")
+        print("  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb")
+        print("  sudo dpkg -i cloudflared.deb")
+        print()
+        print("Or download from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/")
+        return False
+
+    print(f"Starting Cloudflare Tunnel to port {port}...")
+    print()
+
+    cmd = ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"]
+    if hostname:
+        cmd.extend(["--hostname", hostname])
+
+    print("Your ATLAS dashboard will be accessible at the Cloudflare URL.")
+    print("Press Ctrl+C to stop.")
+    print()
+
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        print("\nTunnel stopped.")
+
+    return True
+
+
+def setup_tailscale(port=8080):
+    """Instructions for Tailscale."""
+    print("Tailscale Setup for ATLAS Remote Access")
+    print("=" * 50)
+    print()
+    print("Tailscale creates a secure VPN between your devices.")
+    print()
+    print("1. Install Tailscale on this machine:")
+    print("   curl -fsSL https://tailscale.com/install.sh | sh")
+    print()
+    print("2. Start Tailscale and authenticate:")
+    print("   sudo tailscale up")
+    print()
+    print("3. Install Tailscale on your laptop/phone:")
+    print("   https://tailscale.com/download")
+    print()
+    print("4. Access ATLAS using the Tailscale IP:")
+    print(f"   http://<tailscale-ip>:{port}")
+    print()
+    print("To find your Tailscale IP:")
+    print("   tailscale ip -4")
+    print()
+
+    # Check if tailscale is installed
+    if check_command("tailscale"):
+        try:
+            result = subprocess.run(
+                ["tailscale", "ip", "-4"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                ip = result.stdout.strip()
+                print(f"Your Tailscale IP: {ip}")
+                print(f"Access ATLAS at: http://{ip}:{port}")
+        except Exception:
+            pass
+
+
+def main():
+    parser = argparse.ArgumentParser(description="ATLAS Remote Access Setup")
+    parser.add_argument(
+        "method",
+        choices=["ngrok", "cloudflare", "tailscale", "status"],
+        help="Remote access method"
+    )
+    parser.add_argument("--port", type=int, default=8080,
+                       help="Port to expose (default: 8080)")
+    parser.add_argument("--hostname",
+                       help="Hostname for Cloudflare (optional)")
+
+    args = parser.parse_args()
+
+    if args.method == "status":
+        print("Remote Access Status")
+        print("=" * 50)
+        print()
+        print(f"ATLAS Port: {args.port}")
+        print()
+        print("Available methods:")
+        print(f"  ngrok:       {'✓ installed' if check_command('ngrok') else '✗ not installed'}")
+        print(f"  cloudflared: {'✓ installed' if check_command('cloudflared') else '✗ not installed'}")
+        print(f"  tailscale:   {'✓ installed' if check_command('tailscale') else '✗ not installed'}")
+        return
+
+    # Check if auth is enabled (only for actual tunneling)
+    from atlas.web.auth import is_auth_enabled
+
+    print()
+    if not is_auth_enabled():
+        print("⚠️  WARNING: Authentication is NOT enabled!")
+        print("   Anyone with the URL can access your ATLAS dashboard.")
+        print()
+        print("   Run 'scripts/atlas-auth setup' to enable authentication")
+        print("   before exposing ATLAS remotely.")
+        print()
+        response = input("Continue anyway? [y/N] ")
+        if response.lower() != 'y':
+            print("Cancelled.")
+            return
+        print()
+
+    if args.method == "ngrok":
+        setup_ngrok(args.port)
+    elif args.method == "cloudflare":
+        setup_cloudflared(args.port, args.hostname)
+    elif args.method == "tailscale":
+        setup_tailscale(args.port)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Set up authentication for ATLAS Web Dashboard."""
+
+import sys
+import argparse
+from pathlib import Path
+
+# Add parent to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from atlas.web.auth import setup_auth, get_auth_status, get_credentials_file
+
+
+def main():
+    parser = argparse.ArgumentParser(description="ATLAS Authentication Setup")
+    parser.add_argument("action", choices=["setup", "status", "disable"],
+                       help="Action to perform")
+    parser.add_argument("--username", default="atlas",
+                       help="Username (default: atlas)")
+    parser.add_argument("--password",
+                       help="Password (generates random if not provided)")
+
+    args = parser.parse_args()
+
+    if args.action == "setup":
+        print("Setting up ATLAS authentication...")
+        print()
+
+        creds = setup_auth(username=args.username, password=args.password)
+
+        print("=" * 50)
+        print("ATLAS Authentication Configured!")
+        print("=" * 50)
+        print()
+        print(f"  Username: {creds['username']}")
+        print(f"  Password: {creds['password']}")
+        print()
+        print("IMPORTANT: Save these credentials!")
+        print("They are required to access the dashboard.")
+        print()
+        print(f"Credentials stored in: {get_credentials_file()}")
+        print()
+        print("Restart ATLAS web server for changes to take effect.")
+
+    elif args.action == "status":
+        status = get_auth_status()
+        if status["enabled"]:
+            print(f"Authentication: ENABLED")
+            print(f"Username: {status['username']}")
+            print(f"Credentials file: {get_credentials_file()}")
+        else:
+            print("Authentication: DISABLED")
+            print("Run 'atlas-auth setup' to enable.")
+
+    elif args.action == "disable":
+        creds_file = get_credentials_file()
+        if creds_file.exists():
+            creds_file.unlink()
+            print("Authentication disabled.")
+            print("Restart ATLAS web server for changes to take effect.")
+        else:
+            print("Authentication was not enabled.")
+
+
+if __name__ == "__main__":
+    main()

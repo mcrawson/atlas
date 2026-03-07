@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # ATLAS Web Application
+  # ==========================================================================
+  atlas:
+    build:
+      context: .
+      target: production
+    container_name: atlas-web
+    ports:
+      - "8888:8888"
+    environment:
+      - ATLAS_ENV=production
+      - PYTHONUNBUFFERED=1
+      # API Keys (set in .env file or environment)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - atlas-data:/app/data
+      - atlas-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - atlas-network
+
+  # ==========================================================================
+  # Ollama (Local LLM)
+  # ==========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: atlas-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    # GPU support (uncomment if you have NVIDIA GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - atlas-network
+
+  # ==========================================================================
+  # Development Configuration
+  # ==========================================================================
+  atlas-dev:
+    build:
+      context: .
+      target: development
+    container_name: atlas-dev
+    ports:
+      - "8888:8888"
+    environment:
+      - ATLAS_ENV=development
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./atlas:/app/atlas:ro
+      - ./tests:/app/tests:ro
+      - ./config:/app/config:ro
+      - atlas-data:/app/data
+    depends_on:
+      - ollama
+    networks:
+      - atlas-network
+    profiles:
+      - dev
+
+volumes:
+  atlas-data:
+    name: atlas-data
+  atlas-logs:
+    name: atlas-logs
+  ollama-data:
+    name: atlas-ollama-data
+
+networks:
+  atlas-network:
+    name: atlas-network
+    driver: bridge

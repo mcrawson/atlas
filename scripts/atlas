@@ -1,0 +1,1475 @@
+#!/home/mcrawson/ai-workspace/atlas/.venv/bin/python3
+"""ATLAS - Automated Thinking, Learning & Advisory System
+
+Main CLI entry point with interactive REPL and background task support.
+"""
+
+# Suppress deprecation warnings from google.generativeai before it loads
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*google.generativeai.*")
+
+import argparse
+import asyncio
+import sys
+import readline
+from pathlib import Path
+
+# Add atlas package to path
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+from atlas.core import Butler, Config
+from atlas.core.session import SessionManager
+from atlas.core.briefings import BriefingEnhancer
+from atlas.core.preferences import UserPreferences
+from atlas.memory import MemoryManager
+from atlas.routing import Router, UsageTracker
+from atlas.routing.providers import (
+    ClaudeProvider,
+    OpenAIProvider,
+    GeminiProvider,
+    OllamaProvider,
+    ProviderError,
+)
+from atlas.tasks import TaskQueue, TaskStatus
+from atlas.tasks.worker import BriefingGenerator
+from atlas.integrations.google_auth import GoogleAuth, setup_google_auth
+from atlas.integrations.calendar import CalendarClient
+from atlas.integrations.email import EmailClient
+from atlas.integrations.home_assistant import HomeAssistantClient
+
+
+class AtlasCLI:
+    """Interactive command-line interface for ATLAS."""
+
+    # Common error patterns and suggested fixes
+    ERROR_SUGGESTIONS = {
+        "Event loop is closed": (
+            "The async event loop closed unexpectedly.\n"
+            "Try: Restart ATLAS"
+        ),
+        "No module named": (
+            "A required Python package is missing.\n"
+            "Try: pip install <package_name>"
+        ),
+        "ANTHROPIC_API_KEY": (
+            "Claude API key not set.\n"
+            "Try: export ANTHROPIC_API_KEY='your-key'"
+        ),
+        "OPENAI_API_KEY": (
+            "OpenAI API key not set.\n"
+            "Try: export OPENAI_API_KEY='your-key'"
+        ),
+        "GEMINI_API_KEY": (
+            "Gemini API key not set.\n"
+            "Try: export GEMINI_API_KEY='your-key' or create ~/.gemini/api_key"
+        ),
+        "Connection refused": (
+            "Cannot connect to the service.\n"
+            "Try: Check if Ollama/Home Assistant is running"
+        ),
+        "429": (
+            "Rate limit exceeded.\n"
+            "Try: Wait a few minutes or use a different model (/model ollama)"
+        ),
+        "401": (
+            "Authentication failed.\n"
+            "Try: Check your API key is valid"
+        ),
+        "404": (
+            "Resource not found.\n"
+            "Try: Check the entity ID or URL is correct"
+        ),
+        "google_credentials.json": (
+            "Google OAuth credentials not found.\n"
+            "Try: Run /google for setup instructions"
+        ),
+        "HA_TOKEN": (
+            "Home Assistant token not configured.\n"
+            "Try: Run /home for setup instructions"
+        ),
+    }
+
+    COMMANDS = {
+        "/help": "Show available commands",
+        "/status": "Show current status and usage",
+        "/morning": "Show morning briefing (news, reminders, system status)",
+        "/briefing": "Get quick session briefing",
+        "/startsession": "Show session start briefing",
+        "/endsession": "Show session end summary and exit",
+        "/endday": "End of day report and wrap-up",
+        "/reminder": "Add a reminder (e.g., /reminder Review PR tomorrow)",
+        "/remember": "Remember something (e.g., /remember I prefer dark mode)",
+        "/memory": "Show memory summary",
+        "/decision": "Record an important decision",
+        "/model": "Force use of specific model (e.g., /model claude)",
+        "/queue": "Manage background task queue",
+        "/google": "Setup Google integration (Calendar & Gmail)",
+        "/calendar": "Show today's calendar events",
+        "/email": "Show important emails",
+        "/home": "Home Assistant control (e.g., /home status, /home lights)",
+        "/agents": "Show multi-agent system status",
+        "/plan": "Execute task through agent pipeline (e.g., /plan Build a REST API)",
+        "/project": "Manage projects (e.g., /project new MyProject)",
+        "/web": "Open web dashboard in browser",
+        "/debug": "Toggle debug mode (verbose errors)",
+        "/quit": "Exit ATLAS",
+        "/exit": "Exit ATLAS",
+    }
+
+    def __init__(self):
+        """Initialize the CLI."""
+        self.config = Config()
+        self.butler = Butler(name=self.config.name)
+        self.memory = MemoryManager(self.config.memory_dir)
+        self.usage = UsageTracker()
+        self.router = Router(self.usage)
+        self.queue = TaskQueue()
+        self.briefing_gen = BriefingGenerator(self.queue, self.config.memory_dir)
+        self.session = SessionManager(self.config.data_dir)
+        self.briefing_enhancer = BriefingEnhancer(self.config.data_dir, self.config.memory_dir)
+        self.preferences = UserPreferences(self.config.data_dir)
+        self.running = True
+        self.forced_provider = None
+        self.debug_mode = False  # Set to True for verbose errors
+
+        # Create a persistent event loop to avoid "Event loop is closed" errors
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        # Initialize providers
+        self.providers = {}
+        self._init_providers()
+
+    def _run_async(self, coro):
+        """Run an async coroutine using the persistent event loop.
+
+        This avoids 'Event loop is closed' errors by reusing the same loop.
+        """
+        try:
+            return self._loop.run_until_complete(coro)
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                # Recreate the loop if it was closed
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+                return self._loop.run_until_complete(coro)
+            raise
+
+    def _format_error(self, error: Exception, context: str = "") -> str:
+        """Format an error with helpful suggestions.
+
+        Args:
+            error: The exception that occurred
+            context: What was being attempted
+
+        Returns:
+            Formatted error message with suggestions
+        """
+        error_str = str(error)
+        error_type = type(error).__name__
+
+        lines = []
+        if context:
+            lines.append(f"Error while {context}:")
+        else:
+            lines.append("Error:")
+
+        lines.append(f"  {error_type}: {error_str}")
+
+        # Look for matching suggestions
+        suggestion = None
+        for pattern, fix in self.ERROR_SUGGESTIONS.items():
+            if pattern.lower() in error_str.lower() or pattern.lower() in error_type.lower():
+                suggestion = fix
+                break
+
+        if suggestion:
+            lines.append("")
+            lines.append("Suggestion:")
+            for line in suggestion.split("\n"):
+                lines.append(f"  {line}")
+
+        # In debug mode, add traceback
+        if self.debug_mode:
+            import traceback
+            lines.append("")
+            lines.append("Debug traceback:")
+            lines.append(traceback.format_exc())
+
+        return self.butler.error("\n".join(lines))
+
+    def _init_providers(self):
+        """Initialize available AI providers."""
+        # Claude
+        if self.config.get("providers", "claude", "enabled", default=True):
+            self.providers["claude"] = ClaudeProvider()
+
+        # OpenAI
+        if self.config.get("providers", "openai", "enabled", default=True):
+            api_key = self.config.get_api_key("openai")
+            self.providers["openai"] = OpenAIProvider(api_key=api_key)
+
+        # Gemini
+        if self.config.get("providers", "gemini", "enabled", default=True):
+            api_key = self.config.get_api_key("gemini")
+            self.providers["gemini"] = GeminiProvider(api_key=api_key)
+
+        # Ollama (always available as fallback)
+        ollama_config = self.config.get("providers", "ollama", default={})
+        self.providers["ollama"] = OllamaProvider(
+            base_url=ollama_config.get("base_url", "http://localhost:11434"),
+            model=ollama_config.get("models", {}).get("default", "llama3"),
+            code_model=ollama_config.get("models", {}).get("code", "codellama:13b"),
+            fast_model=ollama_config.get("models", {}).get("fast", "llama3.2:3b"),
+        )
+
+    async def _get_system_context_async(self) -> str:
+        """Get current system context for AI awareness (async version)."""
+        context_lines = []
+
+        # Queue status - use gather for parallel fetching
+        try:
+            queue_stats, pending_tasks = await asyncio.gather(
+                self.queue.get_queue_stats(),
+                self.queue.get_tasks_by_status(TaskStatus.PENDING, limit=5)
+            )
+            pending = queue_stats.get("pending", 0)
+            completed = queue_stats.get("completed", 0)
+
+            if pending > 0 or completed > 0:
+                context_lines.append(f"Background Queue: {pending} pending, {completed} completed today")
+
+            # Add actual pending task descriptions
+            if pending_tasks:
+                context_lines.append("Pending tasks:")
+                for task in pending_tasks:
+                    prompt_preview = task["prompt"][:60] + "..." if len(task["prompt"]) > 60 else task["prompt"]
+                    context_lines.append(f"  - {prompt_preview}")
+        except Exception:
+            pass
+
+        # Reminders (sync, fast from file)
+        try:
+            reminders = self.briefing_enhancer.get_reminders()
+            if reminders:
+                context_lines.append(f"Active reminders: {len(reminders)}")
+                for r in reminders[:3]:
+                    context_lines.append(f"  - {r.get('text', '')[:50]}")
+        except Exception:
+            pass
+
+        # Session info
+        session_num = self.session.get_session_count_today()
+        if session_num > 1:
+            context_lines.append(f"This is session #{session_num} today")
+
+        return "\n".join(context_lines) if context_lines else ""
+
+    def show_help(self) -> str:
+        """Show available commands."""
+        lines = ["Available commands:", ""]
+        for cmd, desc in self.COMMANDS.items():
+            lines.append(f"  {cmd:12} - {desc}")
+        lines.extend([
+            "",
+            "Queue commands:",
+            "  /queue add <task>     - Add background task",
+            "  /queue status         - Show queue status",
+            "  /queue pending        - List pending tasks",
+            "  /queue completed      - List completed tasks",
+            "",
+            "Or simply type your question or task.",
+            "I will route it to the most appropriate assistant.",
+            "",
+            "Task routing:",
+            "  - Code/debugging → OpenAI GPT",
+            "  - Research/search → Gemini",
+            "  - Review/critique → Claude",
+            "  - Writing/drafts  → Gemini",
+            "  - General         → Ollama (local)",
+        ])
+        return self.butler.complete("\n".join(lines), include_closing=False)
+
+    def show_status(self) -> str:
+        """Show current status using new usage tracker."""
+        status_text = self.usage.format_status()
+
+        # Add provider availability
+        lines = [status_text, "", "Provider Availability:"]
+        for name, provider in self.providers.items():
+            available = "✓" if provider.is_available() else "✗"
+            lines.append(f"  {name.title():8} {available}")
+
+        if self.forced_provider:
+            lines.extend(["", f"Forced provider: {self.forced_provider}"])
+
+        return f"[{self.butler.name}]\n\n" + "\n".join(lines)
+
+    def show_briefing(self) -> str:
+        """Show session briefing with queue info."""
+        usage = self.usage.get_all_usage()
+        decisions = self.memory.get_recent_decisions(limit=3)
+        decision_titles = [d["title"] for d in decisions]
+
+        # Get queue stats
+        queue_stats = self._run_async(self.queue.get_queue_stats())
+
+        briefing = {
+            "usage": usage if any(usage.values()) else {"No usage recorded": "today"},
+            "recent_decisions": decision_titles,
+            "pending_tasks": queue_stats.get("pending", 0),
+            "completed_tasks": queue_stats.get("completed", 0),
+        }
+
+        return self.butler.format_briefing(briefing)
+
+    async def _show_morning_briefing_async(self) -> str:
+        """Show morning/start-of-day briefing with enhanced features (async)."""
+        # Fetch async data in parallel
+        queue_stats, completed_overnight, news = await asyncio.gather(
+            self.queue.get_queue_stats(),
+            self.queue.get_recent_completed(hours=12),
+            self.briefing_enhancer.get_news_headlines(),
+            return_exceptions=True
+        )
+
+        # Handle any exceptions from gather
+        if isinstance(queue_stats, Exception):
+            queue_stats = {}
+        if isinstance(completed_overnight, Exception):
+            completed_overnight = []
+        if isinstance(news, Exception):
+            news = []
+
+        # Get sync data (fast, from files/memory)
+        weekly_usage = self.briefing_enhancer.get_weekly_usage_stats(self.usage)
+        reminders = self.briefing_enhancer.get_reminders()
+        system_status = self.briefing_enhancer.get_system_status()
+        quote = self.briefing_enhancer.get_quote_of_the_day()
+
+        # Generate briefing
+        briefing = self.session.generate_morning_briefing(
+            pending_tasks=queue_stats.get("pending", 0),
+            completed_overnight=len(completed_overnight),
+            usage_stats={},  # Replaced by weekly_usage
+        )
+
+        # Add enhanced data to briefing
+        briefing['weekly_usage'] = weekly_usage
+        briefing['reminders'] = reminders
+        briefing['system_status'] = system_status
+        briefing['quote'] = quote
+        briefing['news'] = news
+
+        # Get yesterday's summary
+        yesterday = self.session.get_yesterday_summary()
+
+        return self.butler.format_morning_briefing(briefing, yesterday)
+
+    def show_morning_briefing(self) -> str:
+        """Show morning/start-of-day briefing with enhanced features."""
+        return self._run_async(self._show_morning_briefing_async())
+
+    async def _show_end_of_day_async(self) -> str:
+        """Show end of day report and wrap-up with AI-generated insights (async)."""
+        print(f"\n[{self.butler.name}] Generating end of day report, sir. One moment...")
+
+        # Get usage stats (cached, fast)
+        usage_stats = {}
+        for provider in ["claude", "openai", "gemini", "ollama"]:
+            current = self.usage.get_usage(provider)
+            if current > 0:
+                usage_stats[provider] = current
+
+        # Get queue stats
+        queue_stats = await self.queue.get_queue_stats()
+
+        # Generate base report
+        report = self.session.generate_end_of_day_report(
+            usage_stats=usage_stats,
+            queue_stats=queue_stats,
+        )
+
+        # Get today's conversations for AI analysis
+        conversations = self.memory.get_recent_conversations(days=1)
+
+        # Choose a provider for generating insights (prefer Gemini for summaries)
+        insight_provider = None
+        for provider_name in ["gemini", "claude", "ollama"]:
+            if provider_name in self.providers and self.providers[provider_name].is_available():
+                insight_provider = self.providers[provider_name]
+                break
+
+        if insight_provider and conversations:
+            try:
+                # Generate AI insights in parallel
+                insights, action_items, suggestions = await asyncio.gather(
+                    self.briefing_enhancer.generate_day_insights(conversations, insight_provider),
+                    self.briefing_enhancer.extract_action_items(conversations, insight_provider),
+                    self.briefing_enhancer.generate_tomorrow_suggestions(conversations, insight_provider),
+                    return_exceptions=True
+                )
+
+                if not isinstance(insights, Exception):
+                    report['insights'] = insights
+                if not isinstance(action_items, Exception):
+                    report['action_items'] = action_items
+                if not isinstance(suggestions, Exception):
+                    report['tomorrow_suggestions'] = suggestions
+            except Exception as e:
+                report['insights'] = f"Could not generate insights: {e}"
+
+        # Get weekly trends (sync, fast)
+        report['weekly_trends'] = self.briefing_enhancer.get_weekly_trends(self.usage)
+
+        # Export daily notes
+        try:
+            export_path = self.briefing_enhancer.export_daily_notes(report)
+            report['export_path'] = str(export_path)
+        except Exception:
+            pass
+
+        return self.butler.format_end_of_day_report(report)
+
+    def show_end_of_day(self) -> str:
+        """Show end of day report and wrap-up with AI-generated insights."""
+        return self._run_async(self._show_end_of_day_async())
+
+    def add_reminder(self, command: str) -> str:
+        """Add a reminder that will show in morning briefing."""
+        parts = command.split(maxsplit=1)
+        if len(parts) < 2:
+            # Show current reminders
+            reminders = self.briefing_enhancer.get_reminders()
+            if not reminders:
+                return self.butler.complete(
+                    "No active reminders, sir.\n\n"
+                    "Usage: /reminder <text> - Add a reminder\n"
+                    "Example: /reminder Review the API changes"
+                )
+            lines = ["Current reminders:", ""]
+            for r in reminders:
+                lines.append(f"  [{r['id']}] {r['text']}")
+            lines.append("\nTo add: /reminder <text>")
+            lines.append("To complete: /reminder done <id>")
+            return self.butler.complete("\n".join(lines), include_closing=False)
+
+        text = parts[1]
+
+        # Check if completing a reminder
+        if text.lower().startswith("done "):
+            try:
+                reminder_id = int(text.split()[1])
+                if self.briefing_enhancer.complete_reminder(reminder_id):
+                    return self.butler.complete(f"Reminder {reminder_id} marked complete, sir.")
+                return self.butler.error(f"Could not find reminder {reminder_id}")
+            except (ValueError, IndexError):
+                return self.butler.error("Usage: /reminder done <id>")
+
+        # Add new reminder
+        reminder = self.briefing_enhancer.add_reminder(text)
+        return self.butler.complete(
+            f"Reminder added, sir.\n\n"
+            f"ID: {reminder['id']}\n"
+            f"Text: {reminder['text']}\n\n"
+            "This will appear in your morning briefing."
+        )
+
+    def remember_fact(self, command: str) -> str:
+        """Remember a fact about the user."""
+        parts = command.split(maxsplit=1)
+        if len(parts) < 2:
+            # Show current remembered facts
+            facts = self.preferences.get_facts()
+            title = self.preferences.title
+            name = self.preferences.name
+
+            lines = ["What I remember about you, sir:", ""]
+            lines.append(f"  Title: {title}")
+            if name:
+                lines.append(f"  Name: {name}")
+            if facts:
+                lines.append("\n  Facts:")
+                for i, fact in enumerate(facts, 1):
+                    lines.append(f"    {i}. {fact}")
+            else:
+                lines.append("\n  No additional facts stored.")
+
+            lines.append("\nUsage:")
+            lines.append("  /remember <fact> - Remember a fact")
+            lines.append("  /remember title <sir/madam/etc> - Set preferred title")
+            lines.append("  /remember name <your name> - Set your name")
+            lines.append("  /remember forget <number> - Forget a fact")
+            return self.butler.complete("\n".join(lines), include_closing=False)
+
+        text = parts[1]
+
+        # Handle special commands
+        if text.lower().startswith("title "):
+            new_title = text[6:].strip()
+            self.preferences.title = new_title
+            return self.butler.complete(f"Very good. I shall address you as '{new_title}' from now on.")
+
+        if text.lower().startswith("name "):
+            new_name = text[5:].strip()
+            self.preferences.name = new_name
+            return self.butler.complete(f"Understood. I shall remember that your name is {new_name}.")
+
+        if text.lower().startswith("forget "):
+            try:
+                idx = int(text[7:].strip()) - 1
+                facts = self.preferences.get_facts()
+                if 0 <= idx < len(facts):
+                    fact = facts[idx]
+                    self.preferences.remove_fact(fact)
+                    return self.butler.complete(f"I have forgotten: {fact}")
+                return self.butler.error("Invalid fact number.")
+            except ValueError:
+                return self.butler.error("Usage: /remember forget <number>")
+
+        # Add as a new fact
+        self.preferences.add_fact(text)
+        return self.butler.complete(
+            f"I shall remember that, sir.\n\n"
+            f"Stored: {text}"
+        )
+
+    def show_session_start(self) -> str:
+        """Show session start briefing."""
+        # Get queue stats
+        queue_stats = self._run_async(self.queue.get_queue_stats())
+
+        # Get usage stats
+        usage_stats = {}
+        for provider in ["claude", "openai", "gemini"]:
+            limit = self.config.get("providers", provider, "daily_limit", default=50)
+            used = self.usage.get_usage(provider)
+            usage_stats[provider] = {"used": used, "limit": limit}
+
+        # Get system status
+        system_status = self.briefing_enhancer.get_system_status()
+
+        # Check for warnings
+        disk = system_status.get('disk', {})
+        system_status['disk_warning'] = disk.get('percent_used', 0) > 85
+        system_status['disk_percent'] = disk.get('percent_used', 0)
+
+        # Generate briefing
+        briefing = self.session.generate_session_start(
+            pending_tasks=queue_stats.get("pending", 0),
+            usage_stats=usage_stats,
+            system_status=system_status,
+        )
+
+        return self.butler.format_session_start(briefing)
+
+    def show_session_end(self) -> str:
+        """Show session end summary."""
+        summary = self.session.generate_session_end()
+        return self.butler.format_session_end(summary)
+
+    def show_memory_summary(self) -> str:
+        """Show memory summary."""
+        conversations = self.memory.get_recent_conversations(days=7)
+        decisions = self.memory.get_recent_decisions(limit=5)
+
+        lines = [
+            f"Conversation files (last 7 days): {len(conversations)}",
+            f"Recent decisions: {len(decisions)}",
+        ]
+
+        if decisions:
+            lines.append("\nRecent Decisions:")
+            for dec in decisions:
+                lines.append(f"  - [{dec['date']}] {dec['title']}")
+
+        return self.butler.complete("\n".join(lines), include_closing=False)
+
+    def set_model(self, args: str) -> str:
+        """Set forced model for subsequent requests."""
+        parts = args.split()
+        if len(parts) < 2:
+            if self.forced_provider:
+                self.forced_provider = None
+                return self.butler.complete("Automatic routing restored, sir.")
+            return self.butler.error(
+                "Usage: /model <provider>\n\n"
+                "Providers: claude, openai, gemini, ollama\n"
+                "Use /model without arguments to restore automatic routing."
+            )
+
+        provider = parts[1].lower()
+        if provider not in self.providers:
+            return self.butler.error(f"Unknown provider: {provider}")
+
+        self.forced_provider = provider
+        return self.butler.complete(f"Very good, sir. All requests will now be directed to {provider.title()}.")
+
+    def handle_queue_command(self, args: str) -> str:
+        """Handle queue management commands."""
+        parts = args.split(maxsplit=2)
+
+        if len(parts) < 2:
+            # Show queue help
+            return self.butler.complete(
+                "Queue commands:\n\n"
+                "  /queue add <task>     - Add a background task\n"
+                "  /queue status         - Show queue statistics\n"
+                "  /queue pending        - List pending tasks\n"
+                "  /queue completed      - List completed tasks"
+            )
+
+        subcmd = parts[1].lower()
+
+        if subcmd == "add":
+            if len(parts) < 3:
+                return self.butler.error("Please provide a task description, sir.")
+
+            task_prompt = parts[2]
+            task_type = self.router.classify_task(task_prompt)
+            task_id = self._run_async(self.queue.add_task(task_prompt, task_type=task_type))
+
+            return self.butler.complete(
+                f"Task queued successfully, sir.\n\n"
+                f"Task ID: {task_id}\n"
+                f"Type: {task_type}\n\n"
+                f"The daemon will process this in the background."
+            )
+
+        elif subcmd == "status":
+            stats = self._run_async(self.queue.get_queue_stats())
+            lines = [
+                "Background Task Queue Status:",
+                "",
+                f"  Pending:   {stats.get('pending', 0)}",
+                f"  Running:   {stats.get('running', 0)}",
+                f"  Completed: {stats.get('completed', 0)}",
+                f"  Failed:    {stats.get('failed', 0)}",
+            ]
+            return self.butler.complete("\n".join(lines))
+
+        elif subcmd == "pending":
+            tasks = self._run_async(self.queue.get_tasks_by_status(TaskStatus.PENDING, limit=10))
+            if not tasks:
+                return self.butler.complete("No pending tasks in the queue, sir.")
+
+            lines = ["Pending Tasks:", ""]
+            for task in tasks:
+                prompt_preview = task["prompt"][:50] + "..." if len(task["prompt"]) > 50 else task["prompt"]
+                lines.append(f"  [{task['id']}] {prompt_preview}")
+
+            return self.butler.complete("\n".join(lines))
+
+        elif subcmd == "completed":
+            tasks = self._run_async(self.queue.get_recent_completed(hours=24))
+            if not tasks:
+                return self.butler.complete("No completed tasks in the last 24 hours, sir.")
+
+            lines = ["Recently Completed Tasks:", ""]
+            for task in tasks[:10]:
+                prompt_preview = task["prompt"][:40] + "..." if len(task["prompt"]) > 40 else task["prompt"]
+                model = task.get("model_used", "unknown")
+                lines.append(f"  [{task['id']}] {prompt_preview} (via {model})")
+
+            return self.butler.complete("\n".join(lines))
+
+        else:
+            return self.butler.error(f"Unknown queue command: {subcmd}")
+
+    def record_decision(self) -> str:
+        """Interactive decision recording."""
+        print(self.butler.acknowledge())
+        print("\nPlease provide the following details:\n")
+
+        title = input("Decision title: ").strip()
+        if not title:
+            return self.butler.error("A title is required, sir.")
+
+        context = input("Context (what prompted this): ").strip()
+        decision = input("The decision: ").strip()
+        reasoning = input("Reasoning: ").strip()
+
+        alt_input = input("Alternatives considered (comma-separated, or Enter to skip): ").strip()
+        alternatives = [a.strip() for a in alt_input.split(",")] if alt_input else None
+
+        path = self.memory.save_decision(
+            title=title,
+            context=context,
+            decision=decision,
+            reasoning=reasoning,
+            alternatives=alternatives,
+        )
+
+        return self.butler.complete(f"Decision recorded successfully.\n\nSaved to: {path}")
+
+    def handle_google_setup(self) -> str:
+        """Setup Google integration (Calendar & Gmail)."""
+        auth = GoogleAuth()
+
+        if not auth.is_configured():
+            lines = [
+                "Google integration requires OAuth credentials.",
+                "",
+                "To set up:",
+                "1. Go to https://console.cloud.google.com/",
+                "2. Create a new project (or select existing)",
+                "3. Enable 'Google Calendar API' and 'Gmail API'",
+                "4. Go to 'APIs & Services' > 'Credentials'",
+                "5. Create 'OAuth 2.0 Client ID' (Desktop app)",
+                "6. Download the JSON file",
+                f"7. Save it as: {auth.credentials_file}",
+                "",
+                "Then run /google again to authenticate.",
+            ]
+            return self.butler.complete("\n".join(lines))
+
+        if auth.is_authenticated():
+            return self.butler.complete(
+                "Google integration is already configured and authenticated, sir.\n\n"
+                "Available commands:\n"
+                "  /calendar  - Show today's events\n"
+                "  /email     - Show important emails"
+            )
+
+        # Run authentication
+        print(f"\n[{self.butler.name}] Opening browser for Google authentication...")
+        success = auth.authenticate_interactive()
+
+        if success:
+            return self.butler.complete(
+                "Google authentication successful, sir.\n\n"
+                "You can now use:\n"
+                "  /calendar  - Show today's events\n"
+                "  /email     - Show important emails"
+            )
+        else:
+            return self.butler.error("Google authentication failed. Please try again.")
+
+    def show_calendar(self) -> str:
+        """Show today's calendar events."""
+        auth = GoogleAuth()
+        if not auth.is_authenticated():
+            return self.butler.error(
+                "Google Calendar not connected.\n\n"
+                "Run /google to set up the integration first."
+            )
+
+        calendar = CalendarClient(auth)
+        try:
+            summary = self._run_async(calendar.get_schedule_summary())
+            return self.butler.complete(f"Today's Schedule:\n\n{summary}")
+        except Exception as e:
+            return self._format_error(e, "fetching calendar")
+
+    def show_email(self) -> str:
+        """Show important emails."""
+        auth = GoogleAuth()
+        if not auth.is_authenticated():
+            return self.butler.error(
+                "Gmail not connected.\n\n"
+                "Run /google to set up the integration first."
+            )
+
+        email_client = EmailClient(auth)
+        try:
+            unread_count = self._run_async(email_client.get_unread_count())
+            important = self._run_async(email_client.get_important_unread(limit=5))
+
+            lines = [f"Unread emails: {unread_count}"]
+
+            if important:
+                lines.append("\nImportant/Starred:")
+                for email in important:
+                    sender = email.get("from", "Unknown")[:30]
+                    subject = email.get("subject", "No subject")[:40]
+                    lines.append(f"  - {sender}: {subject}")
+            else:
+                lines.append("\nNo important unread emails, sir.")
+
+            return self.butler.complete("\n".join(lines))
+        except Exception as e:
+            return self._format_error(e, "fetching emails")
+
+    def handle_home_command(self, command: str) -> str:
+        """Handle Home Assistant commands."""
+        parts = command.split()
+        subcmd = parts[1].lower() if len(parts) > 1 else "status"
+
+        ha = HomeAssistantClient()
+
+        # Check configuration
+        if not ha.is_configured():
+            lines = [
+                "Home Assistant not configured.",
+                "",
+                "To set up:",
+                "1. Get a long-lived access token from Home Assistant:",
+                "   - Go to your HA profile (click username bottom-left)",
+                "   - Scroll to 'Long-Lived Access Tokens'",
+                "   - Create a new token",
+                "",
+                "2. Set environment variables:",
+                "   export HA_URL='http://homeassistant.local:8123'",
+                "   export HA_TOKEN='your-token-here'",
+                "",
+                "Or add to ~/.bashrc for persistence.",
+            ]
+            return self.butler.complete("\n".join(lines))
+
+        if subcmd == "status":
+            # Test connection and show status
+            try:
+                connected = self._run_async(ha.test_connection())
+                if connected:
+                    # Get some basic info
+                    lights = self._run_async(ha.get_entities_by_domain("light"))
+                    switches = self._run_async(ha.get_entities_by_domain("switch"))
+                    climate = self._run_async(ha.get_entities_by_domain("climate"))
+
+                    lines = [
+                        "Home Assistant: Connected",
+                        f"  URL: {ha.url}",
+                        "",
+                        "Entities found:",
+                        f"  Lights: {len(lights)}",
+                        f"  Switches: {len(switches)}",
+                        f"  Climate: {len(climate)}",
+                        "",
+                        "Commands:",
+                        "  /home lights      - List lights",
+                        "  /home on <entity> - Turn on",
+                        "  /home off <entity> - Turn off",
+                    ]
+                    return self.butler.complete("\n".join(lines))
+                else:
+                    return self.butler.error(
+                        f"Cannot connect to Home Assistant at {ha.url}\n\n"
+                        "Check that Home Assistant is running and the token is valid."
+                    )
+            except Exception as e:
+                return self._format_error(e, "connecting to Home Assistant")
+
+        elif subcmd == "lights":
+            try:
+                lights = self._run_async(ha.get_entities_by_domain("light"))
+                if not lights:
+                    return self.butler.complete("No lights found, sir.")
+
+                lines = ["Lights:"]
+                for light in lights[:15]:  # Limit to 15
+                    entity_id = light.get("entity_id", "")
+                    state = light.get("state", "unknown")
+                    name = light.get("attributes", {}).get("friendly_name", entity_id)
+                    icon = "💡" if state == "on" else "○"
+                    lines.append(f"  {icon} {name} ({state})")
+                    lines.append(f"      ID: {entity_id}")
+
+                if len(lights) > 15:
+                    lines.append(f"  ...and {len(lights) - 15} more")
+
+                return self.butler.complete("\n".join(lines))
+            except Exception as e:
+                return self._format_error(e, "getting lights")
+
+        elif subcmd == "on" and len(parts) > 2:
+            entity_id = parts[2]
+            try:
+                success = self._run_async(ha.turn_on(entity_id))
+                if success:
+                    return self.butler.complete(f"Turned on {entity_id}, sir.")
+                else:
+                    return self.butler.error(f"Failed to turn on {entity_id}. Check the entity ID is correct.")
+            except Exception as e:
+                return self._format_error(e, f"turning on {entity_id}")
+
+        elif subcmd == "off" and len(parts) > 2:
+            entity_id = parts[2]
+            try:
+                success = self._run_async(ha.turn_off(entity_id))
+                if success:
+                    return self.butler.complete(f"Turned off {entity_id}, sir.")
+                else:
+                    return self.butler.error(f"Failed to turn off {entity_id}. Check the entity ID is correct.")
+            except Exception as e:
+                return self._format_error(e, f"turning off {entity_id}")
+
+        else:
+            return self.butler.complete(
+                "Home Assistant commands:\n\n"
+                "  /home status       - Check connection\n"
+                "  /home lights       - List all lights\n"
+                "  /home on <entity>  - Turn on entity\n"
+                "  /home off <entity> - Turn off entity\n\n"
+                "Example: /home on light.office"
+            )
+
+    def show_agents_status(self) -> str:
+        """Show multi-agent system status."""
+        try:
+            from atlas.agents import AgentManager
+
+            # Create agent manager if needed
+            if not hasattr(self, 'agent_manager'):
+                self.agent_manager = AgentManager(self.router, self.memory, self.providers)
+
+            status = self.agent_manager.get_all_status()
+
+            lines = ["Multi-Agent System Status:", ""]
+            for name, agent in status.items():
+                icon = agent.get("icon", "🤖")
+                desc = agent.get("description", "Agent")
+                agent_status = agent.get("status", "idle")
+                current_task = agent.get("current_task", "")
+
+                status_icon = "●" if agent_status == "idle" else "◉"
+                lines.append(f"  {icon} {name.title():12} [{status_icon} {agent_status}]")
+                lines.append(f"      {desc}")
+                if current_task:
+                    lines.append(f"      Working on: {current_task[:50]}...")
+                lines.append("")
+
+            lines.extend([
+                "Workflow Modes:",
+                "  sequential   - Egon → Gadget → Splinter",
+                "  direct_build - Gadget → Splinter",
+                "  verify_only  - Splinter only",
+                "",
+                "Use /plan <task> to execute through the pipeline.",
+            ])
+
+            return self.butler.complete("\n".join(lines), include_closing=False)
+
+        except ImportError:
+            return self.butler.error("Agent system not available. Install required dependencies.")
+        except Exception as e:
+            return self._format_error(e, "getting agent status")
+
+    def handle_plan_command(self, command: str) -> str:
+        """Execute a task through the multi-agent pipeline."""
+        parts = command.split(maxsplit=1)
+        if len(parts) < 2:
+            return self.butler.complete(
+                "Plan command - Execute task through multi-agent pipeline\n\n"
+                "Usage: /plan <task description>\n\n"
+                "Example: /plan Create a REST API for user management\n\n"
+                "The task will flow through:\n"
+                "  1. Egon - Plans the approach\n"
+                "  2. Gadget - Implements the solution\n"
+                "  3. Splinter - Verifies the work"
+            )
+
+        task = parts[1]
+
+        try:
+            from atlas.agents import AgentManager
+            from atlas.agents.manager import WorkflowMode
+
+            # Create agent manager if needed
+            if not hasattr(self, 'agent_manager'):
+                self.agent_manager = AgentManager(self.router, self.memory, self.providers)
+
+            print(f"\n[{self.butler.name}] Initiating multi-agent workflow...\n")
+
+            # Execute workflow
+            outputs = self._run_async(
+                self.agent_manager.execute_workflow(task, WorkflowMode.SEQUENTIAL)
+            )
+
+            # Format output
+            lines = ["Multi-Agent Workflow Complete", "=" * 40, ""]
+
+            for agent_name, output in outputs.items():
+                if hasattr(output, 'content'):
+                    # Skip intermediate revision outputs
+                    if '_' in agent_name and not agent_name.endswith('_0'):
+                        continue
+
+                    display_name = agent_name.split('_')[0].title()
+                    icon = {"architect": "📐", "mason": "🔨", "oracle": "🔮"}.get(
+                        agent_name.split('_')[0], "🤖"
+                    )
+
+                    lines.append(f"{icon} {display_name}")
+                    lines.append("-" * 40)
+                    lines.append(output.content[:2000])
+                    if len(output.content) > 2000:
+                        lines.append("... (truncated)")
+                    lines.append("")
+
+            # Add final verdict
+            oracle = outputs.get("oracle")
+            if oracle and hasattr(oracle, 'metadata'):
+                verdict = oracle.metadata.get("verdict", "UNKNOWN")
+                lines.append(f"Final Verdict: {verdict}")
+
+            return self.butler.complete("\n".join(lines), include_closing=True)
+
+        except ImportError:
+            return self.butler.error("Agent system not available. Install required dependencies.")
+        except Exception as e:
+            return self._format_error(e, "executing multi-agent workflow")
+
+    def handle_project_command(self, command: str) -> str:
+        """Handle project management commands."""
+        parts = command.split()
+        subcmd = parts[1].lower() if len(parts) > 1 else "list"
+
+        try:
+            from atlas.projects import ProjectManager, ProjectStatus
+
+            # Create project manager if needed
+            if not hasattr(self, 'project_manager'):
+                self.project_manager = ProjectManager(self.config.data_dir)
+                self._run_async(self.project_manager.init_db())
+
+            if subcmd == "list":
+                projects = self._run_async(self.project_manager.get_projects(limit=10))
+                if not projects:
+                    return self.butler.complete(
+                        "No projects yet.\n\n"
+                        "Create one with: /project new <name>"
+                    )
+
+                lines = ["Projects:", ""]
+                for p in projects:
+                    status_icon = {"active": "●", "completed": "✓", "paused": "◐"}.get(
+                        p.status.value, "○"
+                    )
+                    lines.append(f"  [{p.id}] {status_icon} {p.name}")
+                    if p.description:
+                        lines.append(f"        {p.description[:50]}")
+
+                return self.butler.complete("\n".join(lines), include_closing=False)
+
+            elif subcmd == "new" and len(parts) > 2:
+                name = " ".join(parts[2:])
+                project = self._run_async(self.project_manager.create_project(name))
+                return self.butler.complete(
+                    f"Project created, sir.\n\n"
+                    f"ID: {project.id}\n"
+                    f"Name: {project.name}\n\n"
+                    f"Add tasks with: /project task {project.id} <task description>"
+                )
+
+            elif subcmd == "task" and len(parts) > 3:
+                try:
+                    project_id = int(parts[2])
+                    title = " ".join(parts[3:])
+                    task = self._run_async(
+                        self.project_manager.add_task(project_id, title)
+                    )
+                    if task:
+                        return self.butler.complete(
+                            f"Task added to project {project_id}.\n\n"
+                            f"Task ID: {task.id}\n"
+                            f"Title: {task.title}"
+                        )
+                    return self.butler.error(f"Project {project_id} not found.")
+                except ValueError:
+                    return self.butler.error("Invalid project ID.")
+
+            elif subcmd == "stats":
+                stats = self._run_async(self.project_manager.get_stats())
+                lines = [
+                    "Project Statistics:",
+                    "",
+                    f"  Total Projects: {stats.get('total_projects', 0)}",
+                    f"  Total Tasks: {stats.get('total_tasks', 0)}",
+                    "",
+                    "  Tasks by Status:",
+                ]
+                for status, count in stats.get('tasks_by_status', {}).items():
+                    lines.append(f"    {status}: {count}")
+
+                return self.butler.complete("\n".join(lines), include_closing=False)
+
+            else:
+                return self.butler.complete(
+                    "Project commands:\n\n"
+                    "  /project list                - List all projects\n"
+                    "  /project new <name>          - Create new project\n"
+                    "  /project task <id> <title>   - Add task to project\n"
+                    "  /project stats               - Show statistics\n\n"
+                    "Or use the web dashboard: /web"
+                )
+
+        except ImportError:
+            return self.butler.error("Project system not available. Install required dependencies.")
+        except Exception as e:
+            return self._format_error(e, "managing projects")
+
+    def open_web_dashboard(self) -> str:
+        """Open the web dashboard in browser."""
+        import webbrowser
+        import subprocess
+        import shutil
+
+        # Check if atlas-web script exists
+        atlas_web = Path(__file__).parent / "atlas-web"
+
+        if not atlas_web.exists():
+            return self.butler.error(
+                "Web dashboard script not found.\n\n"
+                "The web dashboard requires the atlas-web script."
+            )
+
+        # Try to start the server and open browser
+        try:
+            url = "http://127.0.0.1:8080"
+
+            # Check if server is already running
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('127.0.0.1', 8080))
+            sock.close()
+
+            if result == 0:
+                # Server already running
+                webbrowser.open(url)
+                return self.butler.complete(
+                    f"Opening web dashboard at {url}\n\n"
+                    "Server is already running."
+                )
+
+            # Start server in background
+            print(f"\n[{self.butler.name}] Starting web server...")
+            subprocess.Popen(
+                [str(atlas_web), "--no-browser"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            # Wait a moment for server to start
+            import time
+            time.sleep(2)
+
+            webbrowser.open(url)
+            return self.butler.complete(
+                f"Web dashboard starting at {url}\n\n"
+                "The server is running in the background.\n"
+                "Stop it with: pkill -f atlas-web"
+            )
+
+        except Exception as e:
+            return self._format_error(e, "opening web dashboard")
+
+    def handle_command(self, command: str) -> str:
+        """Handle a slash command."""
+        cmd = command.lower().split()[0]
+
+        if cmd in ("/help", "/?"):
+            return self.show_help()
+        elif cmd == "/status":
+            return self.show_status()
+        elif cmd == "/morning":
+            return self.show_morning_briefing()
+        elif cmd == "/briefing":
+            return self.show_briefing()
+        elif cmd == "/startsession":
+            return self.show_session_start()
+        elif cmd == "/endsession":
+            response = self.show_session_end()
+            self.running = False
+            return response
+        elif cmd == "/endday":
+            return self.show_end_of_day()
+        elif cmd == "/reminder":
+            return self.add_reminder(command)
+        elif cmd == "/remember":
+            return self.remember_fact(command)
+        elif cmd == "/memory":
+            return self.show_memory_summary()
+        elif cmd == "/decision":
+            return self.record_decision()
+        elif cmd == "/model":
+            return self.set_model(command)
+        elif cmd == "/queue":
+            return self.handle_queue_command(command)
+        elif cmd == "/google":
+            return self.handle_google_setup()
+        elif cmd == "/calendar":
+            return self.show_calendar()
+        elif cmd == "/email":
+            return self.show_email()
+        elif cmd == "/home":
+            return self.handle_home_command(command)
+        elif cmd == "/agents":
+            return self.show_agents_status()
+        elif cmd == "/plan":
+            return self.handle_plan_command(command)
+        elif cmd == "/project":
+            return self.handle_project_command(command)
+        elif cmd == "/web":
+            return self.open_web_dashboard()
+        elif cmd == "/debug":
+            self.debug_mode = not self.debug_mode
+            status = "ON" if self.debug_mode else "OFF"
+            return self.butler.complete(f"Debug mode: {status}\n\nVerbose error reporting is now {'enabled' if self.debug_mode else 'disabled'}.")
+        elif cmd in ("/quit", "/exit"):
+            self.running = False
+            return self.butler.farewell()
+        else:
+            return self.butler.error(f"Unknown command: {cmd}\n\nType /help for available commands.")
+
+    async def handle_message_async(self, message: str) -> str:
+        """Handle a user message with routing and AI response."""
+        # Get routing decision
+        routing = self.router.route(message, self.forced_provider)
+        provider_name = routing["provider"]
+        task_type = routing["task_type"]
+
+        # Show thinking message
+        print(f"\n{self.butler.thinking()}")
+        print(f"  Task type: {task_type}")
+        print(f"  Routing to: {provider_name.title()}")
+
+        # Get provider
+        provider = self.providers.get(provider_name)
+        if not provider:
+            return self.butler.error(f"Provider {provider_name} not configured.")
+
+        # Check availability
+        if not provider.is_available():
+            # Try fallback
+            for fallback in ["ollama", "gemini", "claude"]:
+                if fallback != provider_name and fallback in self.providers:
+                    if self.providers[fallback].is_available():
+                        provider = self.providers[fallback]
+                        provider_name = fallback
+                        print(f"  Fallback to: {provider_name.title()}")
+                        break
+            else:
+                return self.butler.error(
+                    "No providers are currently available, sir.\n\n"
+                    "Please check your API keys or ensure Ollama is running."
+                )
+
+        # Get user context for personalization
+        user_context = self.preferences.get_context_prompt()
+
+        # Get recent conversation history for context
+        recent_exchanges = self.memory.get_recent_exchanges(limit=15)
+        conversation_history = ""
+        if recent_exchanges:
+            history_lines = []
+            for exchange in recent_exchanges:
+                user_msg = exchange.get("user", "")[:300]
+                assistant_msg = exchange.get("assistant", "")[:400]
+                history_lines.append(f"User: {user_msg}")
+                history_lines.append(f"ATLAS: {assistant_msg}")
+            conversation_history = "\n".join(history_lines)
+
+        # Get current system context (queue, reminders, etc.)
+        system_context = await self._get_system_context_async()
+
+        # Build custom system prompt with context
+        system_prompt = provider.get_system_prompt(user_context, conversation_history)
+        if system_context:
+            system_prompt += f"\n\nCURRENT SYSTEM STATUS:\n{system_context}"
+
+        # Generate response
+        try:
+            response = await provider.generate(message, system_prompt=system_prompt)
+
+            # Log usage
+            self.router.log_completion(provider_name, task_type)
+
+            # Log to session for end-of-day report
+            self.session.log_query(message, provider_name, task_type)
+
+            # Save to memory
+            self.memory.save_conversation(
+                user_message=message,
+                assistant_response=response,
+                model=provider_name,
+                task_type=task_type,
+            )
+
+            # Format with butler personality
+            return self.butler.complete(
+                response + f"\n\n[via {provider_name.title()}]",
+                include_closing=True
+            )
+
+        except ProviderError as e:
+            # Try fallback on error
+            if e.recoverable and provider_name != "ollama":
+                print(f"  Error with {provider_name}: {e.message}")
+                print(f"  Trying Ollama...")
+                try:
+                    provider = self.providers["ollama"]
+                    response = await provider.generate(message, system_prompt=system_prompt, task_type=task_type)
+
+                    self.router.log_completion("ollama", task_type)
+                    self.session.log_query(message, "ollama", task_type)
+                    self.memory.save_conversation(
+                        user_message=message,
+                        assistant_response=response,
+                        model="ollama",
+                        task_type=task_type,
+                    )
+
+                    return self.butler.complete(
+                        response + "\n\n[via Ollama - fallback]",
+                        include_closing=True
+                    )
+                except Exception as fallback_error:
+                    return self._format_error(fallback_error, f"fallback to Ollama (original error: {e})")
+
+            return self._format_error(e, f"calling {provider_name}")
+
+        except Exception as e:
+            return self._format_error(e, "processing your message")
+
+    def handle_message(self, message: str) -> str:
+        """Sync wrapper for async message handling."""
+        return self._run_async(self.handle_message_async(message))
+
+    def run(self) -> None:
+        """Run the interactive REPL."""
+        # Check if first session of the day
+        is_first_session = self.session.is_first_session_today()
+
+        if is_first_session:
+            # Show morning briefing
+            print(self.show_morning_briefing())
+        else:
+            # Show session start briefing
+            print(self.show_session_start())
+
+        print("\nType /help for available commands, or simply ask me anything.\n")
+
+        # Setup readline for history
+        histfile = self.config.data_dir / ".atlas_history"
+        self.config.data_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            readline.read_history_file(histfile)
+            readline.set_history_length(1000)
+        except FileNotFoundError:
+            pass
+
+        # Main loop
+        while self.running:
+            try:
+                user_input = input("You: ").strip()
+
+                if not user_input:
+                    continue
+
+                if user_input.startswith("/"):
+                    response = self.handle_command(user_input)
+                else:
+                    response = self.handle_message(user_input)
+
+                print(f"\n{response}\n")
+
+            except KeyboardInterrupt:
+                print("\n")
+                self.running = False
+                print(self.butler.farewell())
+            except EOFError:
+                print("\n")
+                self.running = False
+                print(self.butler.farewell())
+
+        # Cleanup providers
+        self._cleanup()
+
+        # Save history
+        try:
+            readline.write_history_file(histfile)
+        except Exception:
+            pass
+
+    def _cleanup(self):
+        """Clean up resources."""
+        # Close Ollama session
+        if "ollama" in self.providers:
+            try:
+                self._run_async(self.providers["ollama"].close())
+            except Exception:
+                pass
+
+        # Close the event loop
+        try:
+            if self._loop and not self._loop.is_closed():
+                self._loop.close()
+        except Exception:
+            pass
+
+
+def cmd_queue(args):
+    """Handle queue command from CLI."""
+    queue = TaskQueue()
+
+    if args.action == "add":
+        if not args.task:
+            print("Error: Please provide a task description")
+            return
+
+        router = Router()
+        task_type = router.classify_task(args.task)
+        task_id = asyncio.run(queue.add_task(args.task, task_type=task_type, priority=args.priority or 0))
+        print(f"Task {task_id} queued ({task_type})")
+
+    elif args.action == "status":
+        stats = asyncio.run(queue.get_queue_stats())
+        print(f"Pending: {stats.get('pending', 0)}")
+        print(f"Running: {stats.get('running', 0)}")
+        print(f"Completed: {stats.get('completed', 0)}")
+        print(f"Failed: {stats.get('failed', 0)}")
+
+    elif args.action == "completed":
+        tasks = asyncio.run(queue.get_recent_completed(hours=24))
+        for task in tasks:
+            print(f"[{task['id']}] {task['prompt'][:60]}...")
+
+
+def cmd_briefing(args):
+    """Generate and show briefing."""
+    config = Config()
+    queue = TaskQueue()
+    briefing_gen = BriefingGenerator(queue, config.memory_dir)
+
+    briefing = asyncio.run(briefing_gen.generate_briefing())
+    print(briefing_gen.format_briefing_text(briefing))
+
+    if args.save:
+        path = asyncio.run(briefing_gen.save_briefing(briefing))
+        print(f"\nSaved to: {path}")
+
+
+def main():
+    """Entry point with argument parsing."""
+    parser = argparse.ArgumentParser(
+        description="ATLAS - Automated Thinking, Learning & Advisory System"
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Queue subcommand
+    queue_parser = subparsers.add_parser("queue", help="Manage background task queue")
+    queue_parser.add_argument("action", choices=["add", "status", "completed"], help="Queue action")
+    queue_parser.add_argument("task", nargs="?", help="Task description (for add)")
+    queue_parser.add_argument("--priority", "-p", type=int, help="Task priority")
+    queue_parser.set_defaults(func=cmd_queue)
+
+    # Briefing subcommand
+    briefing_parser = subparsers.add_parser("briefing", help="Show session briefing")
+    briefing_parser.add_argument("--save", "-s", action="store_true", help="Save briefing to file")
+    briefing_parser.set_defaults(func=cmd_briefing)
+
+    args = parser.parse_args()
+
+    if args.command:
+        args.func(args)
+    else:
+        # No subcommand - run interactive mode
+        cli = AtlasCLI()
+        cli.run()
+
+
+if __name__ == "__main__":
+    main()
