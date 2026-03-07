@@ -103,11 +103,18 @@ async def project_detail(request: Request, project_id: int):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Extract preview from build metadata if available
+    preview = None
+    if project.metadata:
+        build_data = project.metadata.get("build", {})
+        preview = build_data.get("preview")
+
     return templates.TemplateResponse(
         "project_detail.html",
         {
             "request": request,
             "project": project,
+            "preview": preview,
         }
     )
 
