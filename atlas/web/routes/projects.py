@@ -3601,6 +3601,13 @@ async def start_team_chat(request: Request, project_id: int):
     if not project:
         return JSONResponse({"error": "Project not found"}, status_code=404)
 
+    # Check for mode parameter (default to round_table)
+    try:
+        body = await request.json()
+        mode = body.get("mode", "round_table")
+    except Exception:
+        mode = "round_table"
+
     # Build spec content
     metadata = project.metadata or {}
     spec = metadata.get("spec", {})
@@ -3642,11 +3649,12 @@ async def start_team_chat(request: Request, project_id: int):
     # Get previous agent reviews
     previous_reviews = sprint_meeting.get("reviews", [])
 
-    # Create team conversation
+    # Create team conversation with round-table mode
     openai_key = _get_openai_key()
     conversation = TeamConversation(
         openai_api_key=openai_key,
         openai_model="gpt-4o-mini",
+        mode=mode,  # Use round_table by default
     )
 
     try:
@@ -3659,7 +3667,7 @@ async def start_team_chat(request: Request, project_id: int):
 
         # Store conversation
         _team_conversations[project_id] = conversation
-        print(f"[Projects] Started team conversation for project {project_id}")
+        print(f"[Projects] Started team conversation for project {project_id} (mode: {mode})")
 
         return JSONResponse({
             "messages": messages,
