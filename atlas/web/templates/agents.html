@@ -54,6 +54,17 @@
                     <p class="team-card-desc">The all-seeing eye. Oracle examines every line, questions every decision, and ensures nothing ships until it meets the standard. Part critic, part guardian—your last line of defense against bugs and bad patterns.</p>
                 </div>
             </div>
+            <div class="team-card">
+                <div class="team-card-portrait">
+                    <img src="/static/images/agents/finisher.webp" alt="Finisher" class="agent-portrait" onerror="this.style.display='none'; this.nextElementSibling.classList.add('no-image');">
+                    <span class="agent-icon-badge">✨</span>
+                </div>
+                <div class="team-card-content">
+                    <h3>Finisher</h3>
+                    <span class="team-card-role">Polish & Completeness</span>
+                    <p class="team-card-desc">The perfectionist. Finisher takes Oracle-approved work and ensures it's truly ready to ship. Verifies all deliverables are present, polishes rough edges, and creates the final shipping checklist.</p>
+                </div>
+            </div>
         </div>
 
         <!-- Support Agents -->
@@ -187,9 +198,23 @@
                     </div>
                     <div class="form-group">
                         <select id="mode" name="mode">
-                            <option value="sequential">Full Pipeline</option>
-                            <option value="direct_build">Skip Planning</option>
-                            <option value="verify_only">Verify Only</option>
+                            <optgroup label="Create New">
+                                <option value="sequential">Standard Pipeline</option>
+                                <option value="full_polish">Full Polish (Ready to Sell)</option>
+                                <option value="full_campaign">Full Campaign (+ Deploy + Promote)</option>
+                                <option value="direct_build">Direct Build (Skip Planning)</option>
+                            </optgroup>
+                            <optgroup label="Update Existing">
+                                <option value="update_patch">Patch (Bug Fix)</option>
+                                <option value="update_minor">Minor (New Feature)</option>
+                                <option value="update_major">Major (Breaking Change)</option>
+                                <option value="hotfix">Hotfix (Urgent)</option>
+                            </optgroup>
+                            <optgroup label="Other">
+                                <option value="verify_only">Verify Only</option>
+                                <option value="deploy_only">Deploy Only</option>
+                                <option value="promote_only">Promote Only</option>
+                            </optgroup>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">
@@ -285,7 +310,7 @@
                 {% for event in activity[:8] %}
                 <div class="timeline-item">
                     <div class="timeline-avatar">
-                        <span class="avatar-emoji">{% if event.agent == 'sketch' %}💡{% elif event.agent == 'tinker' %}🛠️{% elif event.agent == 'oracle' %}🔮{% elif event.agent == 'launch' %}📤{% elif event.agent == 'buzz' %}📡{% elif event.agent == 'hype' %}🎉{% elif event.agent == 'sentry' %}🛡️{% elif event.agent == 'tally' %}💰{% else %}🤖{% endif %}</span>
+                        <span class="avatar-emoji">{% if event.agent == 'sketch' %}💡{% elif event.agent == 'tinker' %}🛠️{% elif event.agent == 'oracle' %}🔮{% elif event.agent == 'finisher' %}✨{% elif event.agent == 'launch' %}📤{% elif event.agent == 'buzz' %}📡{% elif event.agent == 'hype' %}🎉{% elif event.agent == 'sentry' %}🛡️{% elif event.agent == 'tally' %}💰{% else %}🤖{% endif %}</span>
                     </div>
                     <div class="timeline-content">
                         <div class="timeline-header">

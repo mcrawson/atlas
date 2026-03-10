@@ -8,6 +8,7 @@ from typing import Optional
 from .base import BaseAgent, AgentOutput, AgentStatus
 from atlas.specs import SpecGenerator, Spec
 from atlas.knowledge import get_knowledge_augmenter
+from atlas.research import get_research_augmenter
 from atlas.projects.project_types import (
     ProjectTypeDetector, ProjectType, ProjectCategory, PROJECT_CONFIGS
 )
@@ -356,6 +357,12 @@ GUIDELINES:
             knowledge_context = augmenter.augment_prompt(task, context, max_entries=2)
             if knowledge_context:
                 prompt += f"\n\n{knowledge_context}"
+
+            # Augment with live web research for current best practices
+            research_augmenter = get_research_augmenter()
+            research_context = await research_augmenter.augment_prompt(task, context)
+            if research_context:
+                prompt += f"\n\n{research_context}"
 
             self.status = AgentStatus.WORKING
 

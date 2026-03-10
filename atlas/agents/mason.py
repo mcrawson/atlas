@@ -8,6 +8,7 @@ won't stop tweaking until it works just right.
 from typing import Optional
 from .base import BaseAgent, AgentOutput, AgentStatus
 from atlas.knowledge import get_knowledge_augmenter
+from atlas.research import get_research_augmenter
 from atlas.projects.project_types import (
     ProjectTypeDetector, ProjectType, ProjectCategory, PROJECT_CONFIGS
 )
@@ -163,6 +164,86 @@ TYPE_DELIVERABLES = {
 - Usage instructions
 - Input/output format
 - Scheduling instructions (if applicable)
+""",
+
+    ProjectCategory.PHYSICAL: """
+## Required Deliverables for Physical Product (Planner/Journal/Printable)
+
+### CRITICAL: Generate ACTUAL Printable HTML/CSS Templates
+
+You MUST generate complete, print-ready HTML files that can be converted to PDF.
+Do NOT just describe layouts - CREATE the actual pages!
+
+### Print Specifications
+- Page size: Letter (8.5" x 11") or A4 (210mm x 297mm) or A5 (148mm x 210mm)
+- Margins: 0.5 inch minimum on all sides (0.75 inch on binding edge)
+- Bleed: None needed for home printing
+- Colors: Use CSS that prints well (avoid very light colors)
+
+### Required HTML Template Structure
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Planner Page</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.5in;
+        }
+        @media print {
+            .page { page-break-after: always; }
+            .no-print { display: none; }
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.4;
+            color: #333;
+        }
+        .page {
+            width: 7.5in;
+            min-height: 10in;
+            padding: 0.25in;
+            box-sizing: border-box;
+        }
+        /* Add specific styles for each section */
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Actual page content here -->
+    </div>
+</body>
+</html>
+```
+
+### Deliverables Checklist
+- [ ] Complete HTML file(s) for each page type
+- [ ] Print-optimized CSS with @page and @media print rules
+- [ ] All sections filled with actual content (not placeholders like [Date])
+- [ ] Lines, checkboxes, and writing areas properly styled
+- [ ] Cover page design (if applicable)
+- [ ] Instructions for printing (page range, duplex settings)
+
+### File Structure
+```
+planner/
+├── index.html          # Main file with all pages
+├── cover.html          # Cover page
+├── daily-page.html     # Daily planner template
+├── weekly-page.html    # Weekly overview template
+├── goals.html          # Goal tracking pages
+├── notes.html          # Notes pages
+├── styles.css          # Shared print styles
+└── README.md           # Printing instructions
+```
+
+### External Tool Tasks
+> After HTML generation:
+- **Browser**: Open HTML and use Print > Save as PDF
+- **Print Service**: Upload PDF to Amazon KDP, Lulu, or local print shop
 """,
 }
 
@@ -331,13 +412,13 @@ Brief description of what this project does.
 
 ### Installation
 
-\`\`\`bash
+```bash
 # Install dependencies
 npm install
 
 # Start development server
 npm run dev
-\`\`\`
+```
 
 ## Configuration
 
@@ -346,9 +427,9 @@ npm run dev
 ### Environment Variables
 
 Create a `.env` file with:
-\`\`\`
+```
 API_KEY=your_key_here
-\`\`\`
+```
 
 ## Customization
 
@@ -370,6 +451,28 @@ Edit `src/styles/variables.css` to change colors.
 - Edge cases to test
 - Expected behavior
 - Any known limitations]
+
+## Deliverables Checklist
+[IMPORTANT: Track which deliverables are complete. Mark each as done with ✓ or pending with ⬜]
+
+### Core Deliverables
+- [ ] Main code/content is complete (no stubs or placeholders)
+- [ ] Error handling is implemented
+- [ ] All imports/dependencies are specified
+
+### Documentation
+- [ ] README.md generated
+- [ ] Setup instructions included
+- [ ] Configuration documented
+
+### Production Readiness
+- [ ] No placeholder content (Lorem ipsum, TODO, etc.)
+- [ ] No hardcoded secrets or API keys
+- [ ] Environment variables documented
+- [ ] Deployment guide included
+
+### Type-Specific (based on project type)
+[List deliverables specific to this project type from the checklist above]
 
 ## Deployment / Publishing Guide
 [IMPORTANT: Always include deployment instructions appropriate to the project type:]
@@ -407,6 +510,15 @@ GUIDELINES:
 - Don't over-engineer - implement what's needed
 - If something in the plan is unclear, note your interpretation
 - ALWAYS include a Visual Preview section with ASCII art, HTML mockup, or terminal output
+
+UPDATE MODE GUIDELINES (when updating existing products):
+- Preserve existing functionality unless explicitly changing it
+- Clearly mark what changed vs what stayed the same
+- Include a "## Changes Made" section listing all modifications
+- For bug fixes: explain the root cause and the fix
+- For new features: explain how they integrate with existing code
+- Update version numbers in package files (package.json, pyproject.toml, etc.)
+- Add changelog entries for each significant change
 {deliverables_section}"""
 
     async def process(
@@ -487,8 +599,19 @@ Create clean, working code that solves this problem."""
                 prompt += f"\nBuild Approach: {project_config.build_approach}"
 
             if context:
+                # Check if this is an update workflow
+                if context.get("is_update") and context.get("update_prompt"):
+                    prompt += f"\n\n{context['update_prompt']}"
+                    print(f"[Tinker] UPDATE MODE - modifying existing product")
+
                 if "existing_code" in context:
                     prompt += f"\n\nExisting Code to Modify:\n{context['existing_code']}"
+                if "existing_files" in context and context["existing_files"]:
+                    prompt += "\n\n## Existing Files"
+                    for filename, content in context["existing_files"].items():
+                        # Truncate large files
+                        preview = content[:2000] + "..." if len(content) > 2000 else content
+                        prompt += f"\n\n### `{filename}`\n```\n{preview}\n```"
                 if "style_guide" in context:
                     prompt += f"\n\nCode Style Guide:\n{context['style_guide']}"
 
@@ -498,6 +621,12 @@ Create clean, working code that solves this problem."""
             knowledge_context = augmenter.augment_prompt(task, context, max_entries=2)
             if knowledge_context:
                 prompt += f"\n\n{knowledge_context}"
+
+            # Augment with live web research for current best practices
+            research_augmenter = get_research_augmenter()
+            research_context = await research_augmenter.augment_prompt(task, context)
+            if research_context:
+                prompt += f"\n\n{research_context}"
 
             self.status = AgentStatus.WORKING
 
@@ -546,6 +675,26 @@ Create clean, working code that solves this problem."""
                         file_path = line.split("`")[1]
                         files.append(file_path)
                 artifacts["files_modified"] = files
+
+            # Parse deliverables checklist if present
+            deliverables_completed = {}
+            if "## Deliverables Checklist" in response:
+                checklist_section = response.split("## Deliverables Checklist")[1].split("## ")[0]
+                for line in checklist_section.strip().split("\n"):
+                    line = line.strip()
+                    if line.startswith("- [x]") or line.startswith("- [X]") or "✓" in line:
+                        # Extract deliverable name
+                        item = line.replace("- [x]", "").replace("- [X]", "").replace("✓", "").strip()
+                        if item:
+                            deliverables_completed[item[:50]] = True
+                    elif line.startswith("- [ ]") or "⬜" in line:
+                        item = line.replace("- [ ]", "").replace("⬜", "").strip()
+                        if item:
+                            deliverables_completed[item[:50]] = False
+
+            artifacts["deliverables_completed"] = deliverables_completed
+            artifacts["deliverables_count"] = len(deliverables_completed)
+            artifacts["deliverables_done"] = sum(1 for v in deliverables_completed.values() if v)
 
             self.status = AgentStatus.COMPLETED
 

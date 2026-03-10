@@ -1,14 +1,17 @@
 {% set sketch_status = agents.architect.status if agents and agents.architect else 'idle' %}
 {% set tinker_status = agents.mason.status if agents and agents.mason else 'idle' %}
 {% set oracle_status = agents.oracle.status if agents and agents.oracle else 'idle' %}
+{% set finisher_status = agents.finisher.status if agents and agents.finisher else 'idle' %}
 
 {% set sketch_active = sketch_status in ['working', 'thinking', 'planning'] %}
 {% set tinker_active = tinker_status in ['working', 'thinking', 'building'] %}
 {% set oracle_active = oracle_status in ['working', 'thinking', 'verifying'] %}
+{% set finisher_active = finisher_status in ['working', 'thinking', 'polishing'] %}
 
 {% set sketch_task = agents.architect.current_task if agents and agents.architect else '' %}
 {% set tinker_task = agents.mason.current_task if agents and agents.mason else '' %}
 {% set oracle_task = agents.oracle.current_task if agents and agents.oracle else '' %}
+{% set finisher_task = agents.finisher.current_task if agents and agents.finisher else '' %}
 
 <!-- Pipeline Progress Bar -->
 <div class="pipeline-progress">
@@ -16,6 +19,7 @@
         <div class="progress-segment {% if sketch_active %}active{% elif sketch_status == 'completed' %}done{% endif %}"></div>
         <div class="progress-segment {% if tinker_active %}active{% elif tinker_status == 'completed' %}done{% endif %}"></div>
         <div class="progress-segment {% if oracle_active %}active{% elif oracle_status == 'completed' %}done{% endif %}"></div>
+        <div class="progress-segment {% if finisher_active %}active{% elif finisher_status == 'completed' %}done{% endif %}"></div>
     </div>
 </div>
 
@@ -106,6 +110,38 @@
         {% if oracle_task %}
         <div class="pipeline-agent-task">
             {{ oracle_task[:50] }}{% if oracle_task|length > 50 %}...{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Arrow -->
+    <div class="pipeline-connector {% if finisher_active %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+    </div>
+
+    <!-- Finisher -->
+    <div class="pipeline-agent-card {% if finisher_active %}active{% endif %}">
+        <div class="pipeline-agent-header">
+            <div class="pipeline-agent-icon {% if finisher_active %}active{% endif %}">
+                ✨
+                {% if finisher_active %}
+                <div class="icon-pulse"></div>
+                {% endif %}
+            </div>
+            <div class="pipeline-agent-info">
+                <h3>Finisher</h3>
+                <span class="pipeline-agent-role">Polishing</span>
+            </div>
+            <span class="pipeline-status-badge {{ finisher_status }}">
+                {% if finisher_active %}<span class="spinner-tiny"></span>{% endif %}
+                {{ finisher_status }}
+            </span>
+        </div>
+        {% if finisher_task %}
+        <div class="pipeline-agent-task">
+            {{ finisher_task[:50] }}{% if finisher_task|length > 50 %}...{% endif %}
         </div>
         {% endif %}
     </div>

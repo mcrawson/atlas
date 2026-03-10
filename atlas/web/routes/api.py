@@ -155,10 +155,22 @@ async def execute_task(request: Request, task_request: TaskRequest) -> TaskExecu
     from atlas.agents.manager import WorkflowMode
 
     mode_map = {
+        # Creation modes
         WorkflowModeEnum.SEQUENTIAL: WorkflowMode.SEQUENTIAL,
         WorkflowModeEnum.DIRECT_BUILD: WorkflowMode.DIRECT_BUILD,
         WorkflowModeEnum.VERIFY_ONLY: WorkflowMode.VERIFY_ONLY,
         WorkflowModeEnum.SPEC_DRIVEN: WorkflowMode.SPEC_DRIVEN,
+        WorkflowModeEnum.FULL_DEPLOY: WorkflowMode.FULL_DEPLOY,
+        WorkflowModeEnum.DEPLOY_ONLY: WorkflowMode.DEPLOY_ONLY,
+        WorkflowModeEnum.FULL_POLISH: WorkflowMode.FULL_POLISH,
+        WorkflowModeEnum.FULL_CAMPAIGN: WorkflowMode.FULL_CAMPAIGN,
+        WorkflowModeEnum.PROMOTE_ONLY: WorkflowMode.PROMOTE_ONLY,
+        # Update modes
+        WorkflowModeEnum.UPDATE: WorkflowMode.UPDATE,
+        WorkflowModeEnum.UPDATE_PATCH: WorkflowMode.UPDATE_PATCH,
+        WorkflowModeEnum.UPDATE_MINOR: WorkflowMode.UPDATE_MINOR,
+        WorkflowModeEnum.UPDATE_MAJOR: WorkflowMode.UPDATE_MAJOR,
+        WorkflowModeEnum.HOTFIX: WorkflowMode.HOTFIX,
     }
     workflow_mode = mode_map.get(task_request.mode, WorkflowMode.SEQUENTIAL)
 
@@ -338,4 +350,79 @@ async def execute_project_task(request: Request, project_id: int, task_id: int) 
     except Exception as e:
         logger.error(f"Task execution failed: {e}", exc_info=True)
         await project_manager.update_task_status(task_id, TaskStatus.FAILED)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/projects/{project_id}/preview", response_model=SuccessResponse)
+async def update_project_preview(request: Request, project_id: int) -> SuccessResponse:
+    """Update product preview data for a project.
+
+    Handles both JSON data and multipart form data (for file uploads).
+    """
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    content_type = request.headers.get("content-type", "")
+
+    try:
+        if "multipart/form-data" in content_type:
+            # Handle file uploads
+            from fastapi import UploadFile
+            import os
+            from pathlib import Path
+
+            form = await request.form()
+            preview_data_str = form.get("preview_data", "{}")
+
+            import json
+            preview_data = json.loads(preview_data_str) if preview_data_str else {}
+
+            # Handle icon upload
+            icon_file = form.get("icon")
+            if icon_file and hasattr(icon_file, 'file'):
+                uploads_dir = Path("uploads") / "previews" / str(project_id)
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+
+                icon_path = uploads_dir / f"icon_{icon_file.filename}"
+                with open(icon_path, "wb") as f:
+                    f.write(await icon_file.read())
+                preview_data["icon"] = f"/uploads/previews/{project_id}/icon_{icon_file.filename}"
+
+            # Handle screenshot upload
+            screenshot_file = form.get("screenshot")
+            if screenshot_file and hasattr(screenshot_file, 'file'):
+                uploads_dir = Path("uploads") / "previews" / str(project_id)
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+
+                ss_path = uploads_dir / f"screenshot_{screenshot_file.filename}"
+                with open(ss_path, "wb") as f:
+                    f.write(await screenshot_file.read())
+                preview_data["screenshot"] = f"/uploads/previews/{project_id}/screenshot_{screenshot_file.filename}"
+
+        else:
+            # Handle JSON
+            import json
+            body = await request.json()
+            preview_data = body.get("preview_data", {})
+
+        # Update project metadata
+        metadata = project.metadata or {}
+        metadata["product_preview"] = preview_data
+
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        return SuccessResponse(
+            success=True,
+            message="Preview data updated successfully",
+            data={"preview": preview_data}
+        )
+
+    except Exception as e:
+        logger.error(f"Error updating preview: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

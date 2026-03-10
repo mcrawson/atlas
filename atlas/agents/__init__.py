@@ -4,6 +4,7 @@ Specialized agents work together under ATLAS's coordination:
 - Sketch (Planning Agent): Planning, risk analysis, design
 - Tinker (Building Agent): Building, implementation, coding
 - Oracle (Verification Agent): Verification, QA, testing
+- Finisher (Polish Agent): Completeness verification, polish, shipping readiness
 - Launch (Deployment Agent): Publishing to app stores, registries, platforms
 - Buzz (Communications Agent): Notifications, status updates
 - Hype (Advertising Agent): Marketing, promotion, copywriting
@@ -14,6 +15,7 @@ from .base import BaseAgent, AgentStatus, AgentOutput
 from .architect import ArchitectAgent
 from .mason import MasonAgent
 from .oracle import OracleAgent
+from .finisher import FinisherAgent
 from .launch import LaunchAgent
 from .buzz import Buzz, get_buzz
 from .hype import HypeAgent, get_hype, init_hype
@@ -28,6 +30,7 @@ __all__ = [
     "ArchitectAgent",
     "MasonAgent",
     "OracleAgent",
+    "FinisherAgent",
     "LaunchAgent",
     "Buzz",
     "get_buzz",

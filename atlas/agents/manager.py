@@ -11,25 +11,42 @@ from typing import Any, AsyncIterator, Callable, Optional
 
 from .base import AgentOutput, AgentStatus
 from ..tools.file_writer import FileWriter, WriteResult
+from ..versioning import (
+    Version,
+    UpdateType,
+    UpdateContext,
+    ChangelogRelease,
+    get_changelog_generator,
+)
 
 logger = logging.getLogger("atlas.agents.manager")
 from .architect import ArchitectAgent
 from .mason import MasonAgent
 from .oracle import OracleAgent
+from .finisher import FinisherAgent
 from .launch import LaunchAgent
 from .hype import HypeAgent
 
 
 class WorkflowMode(Enum):
     """Workflow execution modes."""
+    # Creation modes
     SEQUENTIAL = "sequential"  # Sketch -> Tinker -> Oracle
     DIRECT_BUILD = "direct_build"  # Tinker only (simple tasks)
     VERIFY_ONLY = "verify_only"  # Oracle only (review existing code)
     SPEC_DRIVEN = "spec_driven"  # Generate spec, then execute tasks
     FULL_DEPLOY = "full_deploy"  # Sketch -> Tinker -> Oracle -> Launch
     DEPLOY_ONLY = "deploy_only"  # Launch only (for existing builds)
-    FULL_CAMPAIGN = "full_campaign"  # Sketch -> Tinker -> Oracle -> Launch -> Hype
+    FULL_POLISH = "full_polish"  # Sketch -> Tinker -> Oracle -> Finisher (ready to sell)
+    FULL_CAMPAIGN = "full_campaign"  # Sketch -> Tinker -> Oracle -> Finisher -> Launch -> Hype
     PROMOTE_ONLY = "promote_only"  # Hype only (for existing products)
+
+    # Update modes - for modifying existing products
+    UPDATE = "update"          # Update existing product (auto-detect update type)
+    UPDATE_PATCH = "update_patch"  # Bug fix update (1.0.0 -> 1.0.1)
+    UPDATE_MINOR = "update_minor"  # Feature update (1.0.0 -> 1.1.0)
+    UPDATE_MAJOR = "update_major"  # Major/breaking update (1.0.0 -> 2.0.0)
+    HOTFIX = "hotfix"          # Urgent fix (minimal review, fast track)
 
 
 @dataclass
@@ -84,6 +101,7 @@ class AgentManager:
         self.architect = ArchitectAgent(router, memory, **agent_kwargs)
         self.mason = MasonAgent(router, memory, **agent_kwargs)
         self.oracle = OracleAgent(router, memory, **agent_kwargs)
+        self.finisher = FinisherAgent(router, memory, **agent_kwargs)
         self.launch = LaunchAgent(router, memory, **agent_kwargs)
         self.hype = HypeAgent(router, memory, **agent_kwargs)
 
@@ -98,7 +116,7 @@ class AgentManager:
         self._completion_callbacks: list[Callable] = []
 
         # Register status callbacks from agents
-        for agent in [self.architect, self.mason, self.oracle, self.launch, self.hype]:
+        for agent in [self.architect, self.mason, self.oracle, self.finisher, self.launch, self.hype]:
             agent.register_callback(self._on_agent_status_change)
 
     def register_event_callback(self, callback: Callable[[WorkflowEvent], None]):
@@ -250,6 +268,9 @@ class AgentManager:
             "architect": self.architect.get_status_dict(),
             "mason": self.mason.get_status_dict(),
             "oracle": self.oracle.get_status_dict(),
+            "finisher": self.finisher.get_status_dict(),
+            "launch": self.launch.get_status_dict(),
+            "hype": self.hype.get_status_dict(),
         }
 
     async def execute_workflow(
@@ -292,24 +313,49 @@ class AgentManager:
                 outputs = await self._execute_full_deploy(task, context)
             elif mode == WorkflowMode.DEPLOY_ONLY:
                 outputs = await self._execute_deploy_only(task, context)
+            elif mode == WorkflowMode.FULL_POLISH:
+                outputs = await self._execute_full_polish(task, context)
+            elif mode == WorkflowMode.FULL_CAMPAIGN:
+                outputs = await self._execute_full_campaign(task, context)
+            elif mode == WorkflowMode.PROMOTE_ONLY:
+                outputs = await self._execute_promote_only(task, context)
 
-            # Write files to disk if Oracle approved
+            # Update modes
+            elif mode == WorkflowMode.UPDATE:
+                outputs = await self._execute_update(task, context, UpdateType.MINOR)
+            elif mode == WorkflowMode.UPDATE_PATCH:
+                outputs = await self._execute_update(task, context, UpdateType.PATCH)
+            elif mode == WorkflowMode.UPDATE_MINOR:
+                outputs = await self._execute_update(task, context, UpdateType.MINOR)
+            elif mode == WorkflowMode.UPDATE_MAJOR:
+                outputs = await self._execute_update(task, context, UpdateType.MAJOR)
+            elif mode == WorkflowMode.HOTFIX:
+                outputs = await self._execute_hotfix(task, context)
+
+            # Write files to disk if approved
+            # For polish modes, check Finisher verdict; otherwise check Oracle
             write_result = None
             final_verdict = "N/A"
-            if "oracle" in outputs:
+            needs_revision = False
+
+            # Determine final verdict based on workflow
+            if "finisher" in outputs:
+                final_verdict = outputs["finisher"].artifacts.get("verdict", "N/A")
+                needs_revision = final_verdict == "NEEDS_POLISH"
+            elif "oracle" in outputs:
                 final_verdict = outputs["oracle"].metadata.get("verdict", "N/A")
                 needs_revision = outputs["oracle"].metadata.get("needs_revision", False)
 
-                # Write files if approved (or if no verdict but we have mason output)
-                if self.auto_write_files and "mason" in outputs and not needs_revision:
-                    project_dir = Path(context.get("project_dir")) if context.get("project_dir") else None
-                    write_result = self._write_generated_files(
-                        task=task,
-                        mason_output=outputs["mason"],
-                        project_dir=project_dir,
-                    )
-                    if write_result:
-                        outputs["files"] = write_result
+            # Write files if approved
+            if self.auto_write_files and "mason" in outputs and not needs_revision:
+                project_dir = Path(context.get("project_dir")) if context.get("project_dir") else None
+                write_result = self._write_generated_files(
+                    task=task,
+                    mason_output=outputs["mason"],
+                    project_dir=project_dir,
+                )
+                if write_result:
+                    outputs["files"] = write_result
 
             self._emit_event(WorkflowEvent(
                 event_type="workflow_complete",
@@ -696,6 +742,455 @@ Files to modify: {', '.join(spec_task.files_to_modify) if spec_task.files_to_mod
                 "platforms": launch_output.artifacts.get("platforms", [])
             }
         ))
+
+        return outputs
+
+    async def _execute_full_polish(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute full polish workflow: Sketch -> Tinker -> Oracle -> Finisher.
+
+        Same as sequential but adds Finisher at the end to verify shipping readiness.
+        Products that pass Finisher are ready to sell.
+        """
+        # First run the standard sequential workflow
+        outputs = await self._execute_sequential(task, context)
+
+        # Only run Finisher if Oracle approved
+        if "oracle" in outputs:
+            needs_revision = outputs["oracle"].metadata.get("needs_revision", False)
+            if not needs_revision:
+                # Get the latest mason output
+                mason_output = outputs.get("mason") or outputs.get("mason_0")
+
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_start",
+                    agent_name="finisher",
+                    data={"task": task, "phase": "polish_verification"}
+                ))
+
+                # Build context for Finisher with Mason's output
+                finisher_context = {
+                    **context,
+                    "mason_output": mason_output.content if mason_output else None,
+                }
+
+                finisher_output = await self.finisher.process(
+                    task, finisher_context, outputs["oracle"]
+                )
+                outputs["finisher"] = finisher_output
+
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="finisher",
+                    data={
+                        "task": task,
+                        "phase": "polish_verification",
+                        "verdict": finisher_output.artifacts.get("verdict", "UNKNOWN"),
+                        "shipping_ready": finisher_output.artifacts.get("shipping_ready", False),
+                    }
+                ))
+
+        return outputs
+
+    async def _execute_full_campaign(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute full campaign workflow: Sketch -> Tinker -> Oracle -> Finisher -> Launch -> Hype.
+
+        The complete workflow for creating, polishing, deploying, and promoting a product.
+        Only proceeds to Launch and Hype if Finisher approves.
+        """
+        # First run the polish workflow
+        outputs = await self._execute_full_polish(task, context)
+
+        # Only run Launch + Hype if Finisher approved (ready to ship)
+        if "finisher" in outputs:
+            shipping_ready = outputs["finisher"].artifacts.get("shipping_ready", False)
+            if shipping_ready:
+                # Get the latest mason output
+                mason_output = outputs.get("mason") or outputs.get("mason_0")
+
+                # Launch: Generate deployment instructions
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_start",
+                    agent_name="launch",
+                    data={"task": task, "phase": "deployment"}
+                ))
+
+                launch_output = await self.launch.process(task, context, mason_output)
+                outputs["launch"] = launch_output
+
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="launch",
+                    data={
+                        "task": task,
+                        "phase": "deployment",
+                        "platforms": launch_output.artifacts.get("platforms", [])
+                    }
+                ))
+
+                # Hype: Generate marketing and promotion
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_start",
+                    agent_name="hype",
+                    data={"task": task, "phase": "promotion"}
+                ))
+
+                hype_output = await self.hype.process(task, context, launch_output)
+                outputs["hype"] = hype_output
+
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="hype",
+                    data={
+                        "task": task,
+                        "phase": "promotion",
+                    }
+                ))
+
+        return outputs
+
+    async def _execute_promote_only(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute promotion only: Hype generates marketing content.
+
+        Use this when you have an existing product and just need marketing materials.
+        Pass product info in context['product_info'] or as the task.
+        """
+        outputs = {}
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="hype",
+            data={"task": task, "phase": "promotion"}
+        ))
+
+        # Create a mock previous output if product_info provided in context
+        previous_output = None
+        if context.get("product_info"):
+            previous_output = AgentOutput(content=context["product_info"])
+
+        hype_output = await self.hype.process(task, context, previous_output)
+        outputs["hype"] = hype_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="hype",
+            data={
+                "task": task,
+                "phase": "promotion",
+            }
+        ))
+
+        return outputs
+
+    async def _execute_update(
+        self,
+        task: str,
+        context: dict,
+        update_type: UpdateType = UpdateType.MINOR,
+    ) -> dict[str, AgentOutput]:
+        """Execute an update workflow for an existing product.
+
+        This workflow:
+        1. Creates update context from existing product info
+        2. Runs Mason with update-aware prompting
+        3. Runs Oracle to verify the update
+        4. Generates changelog entry
+        5. Optionally runs Finisher for polish updates
+
+        Args:
+            task: Description of what to update
+            context: Must contain 'current_version' and optionally 'existing_code'
+            update_type: Type of update (PATCH, MINOR, MAJOR)
+
+        Returns:
+            Outputs including changelog
+        """
+        outputs = {}
+
+        # Build update context
+        current_version = Version.parse(context.get("current_version", "1.0.0"))
+        project_name = context.get("project_name", self._extract_project_name(task))
+
+        update_context = UpdateContext(
+            project_name=project_name,
+            current_version=current_version,
+            update_type=update_type,
+            change_description=task,
+            existing_code=context.get("existing_code"),
+            existing_files=context.get("existing_files"),
+            issues_to_fix=context.get("issues", []),
+            user_feedback=context.get("feedback"),
+        )
+
+        # Store update context for agents
+        context["update_context"] = update_context
+        context["is_update"] = True
+        context["update_prompt"] = update_context.to_prompt_context()
+
+        self._emit_event(WorkflowEvent(
+            event_type="workflow_start",
+            agent_name=None,
+            data={
+                "task": task,
+                "mode": f"update_{update_type.value}",
+                "current_version": str(current_version),
+                "target_version": str(update_context.target_version),
+            }
+        ))
+
+        # For MAJOR updates, run planning first
+        if update_type == UpdateType.MAJOR:
+            self._emit_event(WorkflowEvent(
+                event_type="agent_start",
+                agent_name="architect",
+                data={"task": task, "phase": "update_planning"}
+            ))
+
+            architect_output = await self.architect.process(task, context)
+            outputs["architect"] = architect_output
+
+            self._emit_event(WorkflowEvent(
+                event_type="agent_complete",
+                agent_name="architect",
+                data={"task": task, "phase": "update_planning"}
+            ))
+
+            if architect_output.status == AgentStatus.ERROR:
+                return outputs
+
+            previous_output = architect_output
+        else:
+            previous_output = None
+
+        # Mason implements the update
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="mason",
+            data={"task": task, "phase": "updating", "update_type": update_type.value}
+        ))
+
+        mason_output = await self.mason.process(task, context, previous_output)
+        outputs["mason"] = mason_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="mason",
+            data={"task": task, "phase": "updating"}
+        ))
+
+        if mason_output.status == AgentStatus.ERROR:
+            return outputs
+
+        # Oracle verifies the update
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="oracle",
+            data={"task": task, "phase": "verifying_update"}
+        ))
+
+        oracle_output = await self.oracle.process(task, context, mason_output)
+        outputs["oracle"] = oracle_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="oracle",
+            data={
+                "task": task,
+                "phase": "verifying_update",
+                "verdict": oracle_output.metadata.get("verdict", "UNKNOWN")
+            }
+        ))
+
+        # Run Finisher for MINOR and MAJOR updates (not PATCH - those are quick fixes)
+        if not oracle_output.metadata.get("needs_revision", False):
+            if update_type in (UpdateType.MINOR, UpdateType.MAJOR):
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_start",
+                    agent_name="finisher",
+                    data={"task": task, "phase": "update_polish"}
+                ))
+
+                # Build context for Finisher with Mason's output
+                finisher_context = {
+                    **context,
+                    "mason_output": mason_output.content if mason_output else None,
+                }
+
+                finisher_output = await self.finisher.process(
+                    task, finisher_context, oracle_output
+                )
+                outputs["finisher"] = finisher_output
+
+                self._emit_event(WorkflowEvent(
+                    event_type="agent_complete",
+                    agent_name="finisher",
+                    data={
+                        "task": task,
+                        "phase": "update_polish",
+                        "verdict": finisher_output.artifacts.get("verdict", "UNKNOWN"),
+                        "shipping_ready": finisher_output.artifacts.get("shipping_ready", False),
+                    }
+                ))
+
+                # If Finisher says needs polish, don't generate changelog yet
+                if finisher_output.artifacts.get("verdict") == "NEEDS_POLISH":
+                    return outputs
+
+        # Generate changelog if approved (by Oracle for PATCH, by Finisher for MINOR/MAJOR)
+        if not oracle_output.metadata.get("needs_revision", False):
+            changelog_gen = get_changelog_generator()
+            agent_outputs_content = {
+                name: output.content for name, output in outputs.items()
+                if hasattr(output, 'content')
+            }
+            changelog_release = changelog_gen.generate_release(
+                update_context, agent_outputs_content
+            )
+
+            outputs["changelog"] = AgentOutput(
+                content=changelog_release.to_markdown(),
+                artifacts={
+                    "version": str(update_context.target_version),
+                    "previous_version": str(current_version),
+                    "update_type": update_type.value,
+                    "entries_count": len(changelog_release.entries),
+                },
+                metadata={"type": "changelog"},
+            )
+
+            self._emit_event(WorkflowEvent(
+                event_type="changelog_generated",
+                agent_name="system",
+                data={
+                    "version": str(update_context.target_version),
+                    "entries": len(changelog_release.entries),
+                }
+            ))
+
+        return outputs
+
+    async def _execute_hotfix(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute a hotfix workflow - fast-tracked urgent fix.
+
+        Hotfixes skip planning and use minimal verification for speed.
+        Use for critical security fixes or breaking bugs in production.
+
+        Args:
+            task: Description of the urgent fix needed
+            context: Should contain 'current_version' and 'existing_code'
+
+        Returns:
+            Outputs including changelog
+        """
+        outputs = {}
+
+        # Build hotfix context
+        current_version = Version.parse(context.get("current_version", "1.0.0"))
+        project_name = context.get("project_name", self._extract_project_name(task))
+
+        update_context = UpdateContext(
+            project_name=project_name,
+            current_version=current_version,
+            update_type=UpdateType.HOTFIX,
+            change_description=f"[HOTFIX] {task}",
+            existing_code=context.get("existing_code"),
+            existing_files=context.get("existing_files"),
+            issues_to_fix=[task],
+        )
+
+        context["update_context"] = update_context
+        context["is_update"] = True
+        context["is_hotfix"] = True
+        context["update_prompt"] = update_context.to_prompt_context()
+
+        self._emit_event(WorkflowEvent(
+            event_type="workflow_start",
+            agent_name=None,
+            data={
+                "task": task,
+                "mode": "hotfix",
+                "current_version": str(current_version),
+                "target_version": str(update_context.target_version),
+                "urgent": True,
+            }
+        ))
+
+        # Direct to Mason - no planning for hotfixes
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="mason",
+            data={"task": task, "phase": "hotfix", "urgent": True}
+        ))
+
+        mason_output = await self.mason.process(task, context)
+        outputs["mason"] = mason_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="mason",
+            data={"task": task, "phase": "hotfix"}
+        ))
+
+        if mason_output.status == AgentStatus.ERROR:
+            return outputs
+
+        # Quick Oracle verification (still needed for safety)
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="oracle",
+            data={"task": task, "phase": "hotfix_verify"}
+        ))
+
+        oracle_output = await self.oracle.process(task, context, mason_output)
+        outputs["oracle"] = oracle_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="oracle",
+            data={
+                "task": task,
+                "phase": "hotfix_verify",
+                "verdict": oracle_output.metadata.get("verdict", "UNKNOWN")
+            }
+        ))
+
+        # Generate changelog for hotfix
+        if not oracle_output.metadata.get("needs_revision", False):
+            changelog_gen = get_changelog_generator()
+            agent_outputs_content = {
+                name: output.content for name, output in outputs.items()
+                if hasattr(output, 'content')
+            }
+            changelog_release = changelog_gen.generate_release(
+                update_context, agent_outputs_content
+            )
+
+            outputs["changelog"] = AgentOutput(
+                content=changelog_release.to_markdown(),
+                artifacts={
+                    "version": str(update_context.target_version),
+                    "previous_version": str(current_version),
+                    "update_type": "hotfix",
+                    "entries_count": len(changelog_release.entries),
+                    "urgent": True,
+                },
+                metadata={"type": "changelog"},
+            )
 
         return outputs
 

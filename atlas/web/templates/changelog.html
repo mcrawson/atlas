@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Changelog - ATLAS{% endblock %}
+
+{% block content %}
+<div class="page changelog-page">
+    <!-- Hero Section -->
+    <header class="changelog-hero">
+        <div class="hero-content">
+            <h1>Version History</h1>
+            <p class="hero-desc">Track changes, updates, and releases across your products</p>
+        </div>
+    </header>
+
+    <!-- Current Version Summary -->
+    {% if current_version %}
+    <section class="section current-version-section">
+        <div class="current-version-card">
+            <div class="version-badge">
+                <span class="version-number">v{{ current_version }}</span>
+                <span class="version-label">Current</span>
+            </div>
+            {% if last_updated %}
+            <div class="version-meta">
+                <span class="version-date">Last updated: {{ last_updated }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Changelog Entries -->
+    <section class="section changelog-section">
+        <div class="section-header">
+            <h2 class="section-title">Release History</h2>
+            {% if project_id %}
+            <a href="/projects/{{ project_id }}" class="section-link">Back to Project →</a>
+            {% endif %}
+        </div>
+
+        <div class="changelog-list">
+            {% if releases %}
+                {% for release in releases %}
+                <div class="changelog-release">
+                    <div class="release-header">
+                        <div class="release-version">
+                            <span class="version-tag {% if loop.first %}latest{% endif %}">
+                                v{{ release.version }}
+                            </span>
+                            {% if release.update_type %}
+                            <span class="update-type-badge {{ release.update_type }}">
+                                {{ release.update_type }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <span class="release-date">{{ release.date }}</span>
+                    </div>
+
+                    {% if release.summary %}
+                    <p class="release-summary">{{ release.summary }}</p>
+                    {% endif %}
+
+                    <div class="release-changes">
+                        {% if release.added %}
+                        <div class="change-group added">
+                            <h4>Added</h4>
+                            <ul>
+                                {% for item in release.added %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if release.changed %}
+                        <div class="change-group changed">
+                            <h4>Changed</h4>
+                            <ul>
+                                {% for item in release.changed %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if release.fixed %}
+                        <div class="change-group fixed">
+                            <h4>Fixed</h4>
+                            <ul>
+                                {% for item in release.fixed %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if release.removed %}
+                        <div class="change-group removed">
+                            <h4>Removed</h4>
+                            <ul>
+                                {% for item in release.removed %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if release.security %}
+                        <div class="change-group security">
+                            <h4>Security</h4>
+                            <ul>
+                                {% for item in release.security %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if release.deprecated %}
+                        <div class="change-group deprecated">
+                            <h4>Deprecated</h4>
+                            <ul>
+                                {% for item in release.deprecated %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if release.breaking_changes %}
+                    <div class="breaking-changes">
+                        <h4>⚠️ Breaking Changes</h4>
+                        <ul>
+                            {% for item in release.breaking_changes %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="changelog-empty">
+                    <span class="empty-icon">📋</span>
+                    <p>No changelog entries yet.</p>
+                    <p class="empty-hint">Run an UPDATE workflow to generate version history.</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Raw Changelog -->
+    {% if raw_changelog %}
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">CHANGELOG.md</h2>
+            <button class="btn btn-sm" onclick="copyChangelog()">
+                <span class="btn-icon">📋</span> Copy
+            </button>
+        </div>
+        <div class="raw-changelog">
+            <pre id="raw-changelog-content">{{ raw_changelog }}</pre>
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<style>
+.changelog-page {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.changelog-hero {
+    text-align: center;
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+}
+
+.current-version-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card-bg, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+}
+
+.version-badge {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.version-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary, #6366f1);
+}
+
+.version-label {
+    background: var(--success, #10b981);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.changelog-release {
+    background: var(--card-bg, #1a1a2e);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid var(--primary, #6366f1);
+}
+
+.release-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.release-version {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.version-tag {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text, #e0e0e0);
+}
+
+.version-tag.latest {
+    color: var(--primary, #6366f1);
+}
+
+.update-type-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.update-type-badge.patch { background: #3b82f6; color: white; }
+.update-type-badge.minor { background: #10b981; color: white; }
+.update-type-badge.major { background: #f59e0b; color: white; }
+.update-type-badge.hotfix { background: #ef4444; color: white; }
+
+.release-date {
+    color: var(--text-muted, #888);
+    font-size: 0.875rem;
+}
+
+.release-summary {
+    color: var(--text-muted, #aaa);
+    margin-bottom: 1rem;
+    font-style: italic;
+}
+
+.change-group {
+    margin-bottom: 1rem;
+}
+
+.change-group h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.change-group.added h4 { color: #10b981; }
+.change-group.added h4::before { content: '✅'; }
+
+.change-group.changed h4 { color: #f59e0b; }
+.change-group.changed h4::before { content: '🔄'; }
+
+.change-group.fixed h4 { color: #3b82f6; }
+.change-group.fixed h4::before { content: '🔧'; }
+
+.change-group.removed h4 { color: #ef4444; }
+.change-group.removed h4::before { content: '🗑️'; }
+
+.change-group.security h4 { color: #8b5cf6; }
+.change-group.security h4::before { content: '🔒'; }
+
+.change-group.deprecated h4 { color: #6b7280; }
+.change-group.deprecated h4::before { content: '⚠️'; }
+
+.change-group ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.change-group li {
+    padding: 0.25rem 0 0.25rem 1.5rem;
+    position: relative;
+    color: var(--text, #e0e0e0);
+}
+
+.change-group li::before {
+    content: '•';
+    position: absolute;
+    left: 0.5rem;
+    color: var(--text-muted, #888);
+}
+
+.breaking-changes {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.breaking-changes h4 {
+    color: #ef4444;
+    margin-bottom: 0.5rem;
+}
+
+.changelog-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted, #888);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.empty-hint {
+    font-size: 0.875rem;
+    color: var(--text-muted, #666);
+}
+
+.raw-changelog {
+    background: var(--code-bg, #0d0d1a);
+    border-radius: 8px;
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+.raw-changelog pre {
+    margin: 0;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text, #e0e0e0);
+}
+</style>
+
+<script>
+function copyChangelog() {
+    const content = document.getElementById('raw-changelog-content').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        // Show feedback
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="btn-icon">✓</span> Copied!';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

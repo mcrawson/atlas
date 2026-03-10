@@ -10,10 +10,22 @@ from pydantic import BaseModel, Field, field_validator
 
 class WorkflowModeEnum(str, Enum):
     """Workflow execution modes."""
+    # Creation modes
     SEQUENTIAL = "sequential"
     DIRECT_BUILD = "direct_build"
     VERIFY_ONLY = "verify_only"
     SPEC_DRIVEN = "spec_driven"
+    FULL_DEPLOY = "full_deploy"
+    DEPLOY_ONLY = "deploy_only"
+    FULL_POLISH = "full_polish"
+    FULL_CAMPAIGN = "full_campaign"
+    PROMOTE_ONLY = "promote_only"
+    # Update modes
+    UPDATE = "update"
+    UPDATE_PATCH = "update_patch"
+    UPDATE_MINOR = "update_minor"
+    UPDATE_MAJOR = "update_major"
+    HOTFIX = "hotfix"
 
 
 class AgentStatusEnum(str, Enum):

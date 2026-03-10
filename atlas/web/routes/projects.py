@@ -1374,6 +1374,124 @@ async def revise_plan(request: Request, project_id: int):
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
 
 
+@router.post("/{project_id}/respond-to-review", response_class=HTMLResponse)
+async def respond_to_review(
+    request: Request,
+    project_id: int,
+    agent: str = Form(...),
+    response: str = Form(...),
+):
+    """Respond to an agent's review in the sprint meeting."""
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_metadata = project.metadata.copy() if project.metadata else {}
+
+    # Store responses in the sprint meeting data
+    sprint_meeting = new_metadata.get("sprint_meeting", {})
+    if "user_responses" not in sprint_meeting:
+        sprint_meeting["user_responses"] = {}
+
+    sprint_meeting["user_responses"][agent] = {
+        "response": response,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    new_metadata["sprint_meeting"] = sprint_meeting
+    await project_manager.update_project(project_id, metadata=new_metadata)
+
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/address-team-feedback", response_class=HTMLResponse)
+async def address_team_feedback(
+    request: Request,
+    project_id: int,
+    feedback: str = Form(...),
+):
+    """Address all team feedback and update the plan accordingly."""
+    project_manager = request.app.state.project_manager
+    agent_manager = request.app.state.agent_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_metadata = project.metadata.copy() if project.metadata else {}
+    tokens = new_metadata.get("tokens", {"total": 0, "by_agent": {}})
+
+    # Store the feedback
+    sprint_meeting = new_metadata.get("sprint_meeting", {})
+    sprint_meeting["user_feedback"] = {
+        "feedback": feedback,
+        "timestamp": datetime.now().isoformat(),
+    }
+    new_metadata["sprint_meeting"] = sprint_meeting
+
+    # Re-generate the spec with the user feedback incorporated
+    if agent_manager:
+        try:
+            # Get the brief for context
+            smart_conv = new_metadata.get("smart_conversation", {})
+            brief = smart_conv.get("brief", {})
+            context = new_metadata.get("context", {})
+
+            # Include team feedback in the context
+            reviews = sprint_meeting.get("reviews", [])
+            team_concerns = []
+            for review in reviews:
+                if review.get("concerns"):
+                    team_concerns.extend([f"{review['agent_name']}: {c}" for c in review["concerns"]])
+                if review.get("questions"):
+                    team_concerns.extend([f"{review['agent_name']} asks: {q}" for q in review["questions"]])
+
+            # Create a revised spec with feedback
+            spec_generator = SpecGenerator(openai_api_key=_get_openai_key())
+            updated_spec = await spec_generator.generate(
+                brief=brief,
+                context={
+                    **context,
+                    "team_concerns": team_concerns,
+                    "user_response": feedback,
+                    "revision_note": "Revised based on team feedback and user clarifications",
+                }
+            )
+
+            new_metadata["spec"] = updated_spec.model_dump() if hasattr(updated_spec, 'model_dump') else updated_spec
+
+            # Update tokens
+            if hasattr(spec_generator, 'last_usage'):
+                agent_tokens = spec_generator.last_usage.get("total_tokens", 0)
+                tokens["total"] = tokens.get("total", 0) + agent_tokens
+                tokens["by_agent"]["architect_revision"] = tokens.get("by_agent", {}).get("architect_revision", 0) + agent_tokens
+
+            # Mark feedback as addressed and allow proceeding
+            sprint_meeting["feedback_addressed"] = True
+            sprint_meeting["can_proceed"] = True
+            new_metadata["sprint_meeting"] = sprint_meeting
+            new_metadata["tokens"] = tokens
+
+        except Exception as e:
+            logger.error(f"Error updating spec with feedback: {e}")
+            # Still store the feedback even if spec generation fails
+            sprint_meeting["feedback_addressed"] = True
+            sprint_meeting["can_proceed"] = True
+            new_metadata["sprint_meeting"] = sprint_meeting
+
+    await project_manager.update_project(project_id, metadata=new_metadata)
+
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
 @router.post("/{project_id}/verify", response_class=HTMLResponse)
 async def verify_build(request: Request, project_id: int):
     """Legacy route - redirects to approve-build for new flow."""
@@ -2114,6 +2232,58 @@ async def view_revisions(request: Request, project_id: int):
             "request": request,
             "project": project,
             "revisions": revisions,
+        }
+    )
+
+
+@router.get("/{project_id}/changelog", response_class=HTMLResponse)
+async def view_changelog(request: Request, project_id: int):
+    """View changelog/version history for a project."""
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Extract changelog data from project metadata
+    metadata = project.metadata or {}
+    changelog_data = metadata.get("changelog", {})
+    releases = changelog_data.get("releases", [])
+    current_version = changelog_data.get("current_version", "1.0.0")
+    raw_changelog = changelog_data.get("raw", "")
+
+    # Parse releases into template-friendly format
+    parsed_releases = []
+    for release in releases:
+        parsed = {
+            "version": release.get("version", ""),
+            "date": release.get("date", ""),
+            "update_type": release.get("update_type", ""),
+            "summary": release.get("summary", ""),
+            "added": release.get("added", []),
+            "changed": release.get("changed", []),
+            "fixed": release.get("fixed", []),
+            "removed": release.get("removed", []),
+            "security": release.get("security", []),
+            "deprecated": release.get("deprecated", []),
+            "breaking_changes": release.get("breaking_changes", []),
+        }
+        parsed_releases.append(parsed)
+
+    return templates.TemplateResponse(
+        "changelog.html",
+        {
+            "request": request,
+            "project": project,
+            "project_id": project_id,
+            "current_version": current_version,
+            "last_updated": changelog_data.get("last_updated"),
+            "releases": parsed_releases,
+            "raw_changelog": raw_changelog,
         }
     )
 
@@ -3184,4 +3354,550 @@ async def check_platform_status(
         return JSONResponse({
             "success": False,
             "error": str(e),
+        }, status_code=500)
+
+
+# ============================================
+# PROJECT AGENT CONVERSATIONS
+# ============================================
+
+# In-memory storage for active project conversations
+_project_conversations: dict = {}
+
+
+def _get_project_conversation_key(project_id: int, agent_type: str) -> str:
+    return f"project_{project_id}_{agent_type}"
+
+
+@router.post("/{project_id}/agent-chat/start")
+async def start_project_agent_chat(request: Request, project_id: int):
+    """Start a conversational review with an agent."""
+    from atlas.agents.spec_conversation import SpecRefinementConversation
+
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        return JSONResponse({"error": "Project manager not initialized"}, status_code=500)
+
+    # Parse request
+    try:
+        body = await request.json()
+        agent_type = body.get("agent", "sketch")
+    except Exception:
+        agent_type = "sketch"
+
+    # Get project
+    project = await project_manager.get_project(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    # Build spec/plan content for the agent to review
+    metadata = project.metadata or {}
+    spec = metadata.get("spec", {})
+    brief = metadata.get("smart_conversation", {}).get("brief", {})
+    sprint_meeting = metadata.get("sprint_meeting", {})
+
+    # Build content for review
+    spec_content = f"""# Project: {project.name}
+
+## Description
+{project.description or brief.get('description', 'No description')}
+
+## Problem
+{brief.get('problem_statement', 'Not specified')}
+
+## Target Users
+{brief.get('target_users', 'Not specified')}
+
+## Core Features
+{chr(10).join('- ' + f for f in brief.get('core_features', []))}
+
+"""
+
+    # Add requirements if available
+    requirements = spec.get("requirements", [])
+    if requirements:
+        spec_content += "## Requirements\n"
+        for req in requirements[:10]:  # Limit to first 10
+            spec_content += f"- **{req.get('id')}**: {req.get('title')} ({req.get('priority')})\n"
+            if req.get('description'):
+                spec_content += f"  {req.get('description')[:200]}\n"
+        spec_content += "\n"
+
+    # Add tasks if available
+    tasks = spec.get("tasks", [])
+    if tasks:
+        spec_content += "## Tasks\n"
+        for task in tasks[:10]:  # Limit to first 10
+            spec_content += f"- **{task.get('id')}**: {task.get('title')} ({task.get('status', 'pending')})\n"
+        spec_content += "\n"
+
+    # Add previous agent reviews if in sprint meeting
+    reviews = sprint_meeting.get("reviews", [])
+    if reviews:
+        spec_content += "## Previous Agent Reviews\n"
+        for review in reviews:
+            spec_content += f"### {review.get('agent_name', 'Unknown').title()} ({review.get('verdict', 'pending')})\n"
+            spec_content += f"{review.get('summary', '')}\n"
+            if review.get('concerns'):
+                spec_content += "**Concerns:** " + ", ".join(review.get('concerns', [])[:3]) + "\n"
+            spec_content += "\n"
+
+    spec_metadata = {
+        "status": metadata.get("phase", "unknown"),
+        "task_count": len(tasks),
+    }
+
+    # Get OpenAI key
+    openai_key = _get_openai_key()
+
+    # Create conversation
+    conversation = SpecRefinementConversation(
+        agent_type=agent_type,
+        openai_api_key=openai_key,
+        openai_model="gpt-4o-mini",
+    )
+
+    # Start the conversation
+    try:
+        response = await conversation.start(
+            spec_name=project.name,
+            spec_content=spec_content,
+            spec_metadata=spec_metadata,
+        )
+
+        # Store conversation
+        key = _get_project_conversation_key(project_id, agent_type)
+        _project_conversations[key] = conversation
+        print(f"[Projects] Started conversation with key: {key}")
+
+        return JSONResponse({
+            "response": response,
+            "state": conversation.get_state(),
+            "agent": conversation.agent,
+        })
+
+    except Exception as e:
+        logger.exception(f"Failed to start agent chat: {e}")
+        return JSONResponse({
+            "error": f"Failed to start conversation: {str(e)}"
+        }, status_code=500)
+
+
+@router.post("/{project_id}/agent-chat/respond")
+async def continue_project_agent_chat(request: Request, project_id: int):
+    """Continue a conversational review with an agent."""
+    from atlas.agents.spec_conversation import SpecRefinementConversation
+
+    # Parse request
+    try:
+        body = await request.json()
+        message = body.get("message", "")
+        agent_type = body.get("agent", "sketch")
+        conversation_state = body.get("conversation_state")
+    except Exception as e:
+        logger.error(f"Error parsing request: {e}")
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+
+    if not message.strip():
+        return JSONResponse({"error": "Message is required"}, status_code=400)
+
+    # Get or restore conversation
+    key = _get_project_conversation_key(project_id, agent_type)
+    print(f"[Projects] Looking for conversation: {key}")
+    print(f"[Projects] Active conversations: {list(_project_conversations.keys())}")
+
+    conversation = _project_conversations.get(key)
+
+    if not conversation and conversation_state:
+        # Restore from state
+        print(f"[Projects] Restoring conversation from state")
+        openai_key = _get_openai_key()
+        conversation = SpecRefinementConversation.from_dict(
+            conversation_state,
+            openai_api_key=openai_key,
+            openai_model="gpt-4o-mini",
+        )
+        _project_conversations[key] = conversation
+
+    if not conversation:
+        print(f"[Projects] No conversation found for key: {key}")
+        return JSONResponse({
+            "error": "No active conversation. Please start a new one."
+        }, status_code=400)
+
+    try:
+        response = await conversation.respond(message)
+
+        return JSONResponse({
+            "response": response,
+            "state": conversation.get_state(),
+            "messages": conversation.get_messages(),
+            "is_complete": conversation.is_complete,
+            "spec_updates": conversation.spec_updates,
+        })
+
+    except Exception as e:
+        logger.exception(f"Failed to process response: {e}")
+        return JSONResponse({
+            "error": f"Failed to process response: {str(e)}"
+        }, status_code=500)
+
+
+@router.get("/{project_id}/agent-chat/state")
+async def get_project_agent_chat_state(request: Request, project_id: int, agent: str = "sketch"):
+    """Get the current state of an agent conversation."""
+    key = _get_project_conversation_key(project_id, agent)
+    conversation = _project_conversations.get(key)
+
+    if not conversation:
+        return JSONResponse({
+            "active": False,
+            "message": "No active conversation"
+        })
+
+    return JSONResponse({
+        "active": True,
+        "state": conversation.get_state(),
+        "messages": conversation.get_messages(),
+        "conversation_data": conversation.to_dict(),
+    })
+
+
+@router.post("/{project_id}/agent-chat/reset")
+async def reset_project_agent_chat(request: Request, project_id: int):
+    """Reset an agent conversation."""
+    try:
+        body = await request.json()
+        agent_type = body.get("agent", "sketch")
+    except Exception:
+        agent_type = "sketch"
+
+    key = _get_project_conversation_key(project_id, agent_type)
+    if key in _project_conversations:
+        del _project_conversations[key]
+
+    return JSONResponse({"success": True, "message": "Conversation reset"})
+
+
+# ============================================
+# TEAM CONVERSATION (Talk to the whole team)
+# ============================================
+
+_team_conversations: dict = {}
+
+
+@router.post("/{project_id}/team-chat/start")
+async def start_team_chat(request: Request, project_id: int):
+    """Start a team conversation where all agents participate."""
+    from atlas.agents.team_conversation import TeamConversation
+
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        return JSONResponse({"error": "Project manager not initialized"}, status_code=500)
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    # Build spec content
+    metadata = project.metadata or {}
+    spec = metadata.get("spec", {})
+    brief = metadata.get("smart_conversation", {}).get("brief", {})
+    sprint_meeting = metadata.get("sprint_meeting", {})
+
+    spec_content = f"""# Project: {project.name}
+
+## Description
+{project.description or brief.get('description', 'No description')}
+
+## Problem
+{brief.get('problem_statement', 'Not specified')}
+
+## Target Users
+{brief.get('target_users', 'Not specified')}
+
+## Core Features
+{chr(10).join('- ' + f for f in brief.get('core_features', []))}
+
+"""
+
+    # Add requirements
+    requirements = spec.get("requirements", [])
+    if requirements:
+        spec_content += "## Requirements\n"
+        for req in requirements[:10]:
+            spec_content += f"- **{req.get('id')}**: {req.get('title')}\n"
+        spec_content += "\n"
+
+    # Add tasks
+    tasks = spec.get("tasks", [])
+    if tasks:
+        spec_content += "## Tasks\n"
+        for task in tasks[:10]:
+            spec_content += f"- **{task.get('id')}**: {task.get('title')}\n"
+        spec_content += "\n"
+
+    # Get previous agent reviews
+    previous_reviews = sprint_meeting.get("reviews", [])
+
+    # Create team conversation
+    openai_key = _get_openai_key()
+    conversation = TeamConversation(
+        openai_api_key=openai_key,
+        openai_model="gpt-4o-mini",
+    )
+
+    try:
+        # Start the conversation
+        messages = await conversation.start(
+            project_name=project.name,
+            spec_content=spec_content,
+            previous_reviews=previous_reviews,
+        )
+
+        # Store conversation
+        _team_conversations[project_id] = conversation
+        print(f"[Projects] Started team conversation for project {project_id}")
+
+        return JSONResponse({
+            "messages": messages,
+            "state": conversation.get_state(),
+        })
+
+    except Exception as e:
+        logger.exception(f"Failed to start team chat: {e}")
+        return JSONResponse({
+            "error": f"Failed to start conversation: {str(e)}"
+        }, status_code=500)
+
+
+@router.post("/{project_id}/team-chat/respond")
+async def continue_team_chat(request: Request, project_id: int):
+    """Continue the team conversation."""
+    from atlas.agents.team_conversation import TeamConversation
+
+    try:
+        body = await request.json()
+        message = body.get("message", "")
+        conversation_state = body.get("conversation_state")
+    except Exception as e:
+        logger.error(f"Error parsing request: {e}")
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+
+    if not message.strip():
+        return JSONResponse({"error": "Message is required"}, status_code=400)
+
+    # Get or restore conversation
+    conversation = _team_conversations.get(project_id)
+
+    if not conversation and conversation_state:
+        openai_key = _get_openai_key()
+        conversation = TeamConversation.from_dict(
+            conversation_state,
+            openai_api_key=openai_key,
+            openai_model="gpt-4o-mini",
+        )
+        _team_conversations[project_id] = conversation
+
+    if not conversation:
+        return JSONResponse({
+            "error": "No active team conversation. Please start a new one."
+        }, status_code=400)
+
+    try:
+        messages = await conversation.respond(message)
+
+        return JSONResponse({
+            "messages": messages,
+            "state": conversation.get_state(),
+            "is_complete": conversation.is_complete,
+            "conversation_data": conversation.to_dict(),
+        })
+
+    except Exception as e:
+        logger.exception(f"Failed to process response: {e}")
+        return JSONResponse({
+            "error": f"Failed to process response: {str(e)}"
+        }, status_code=500)
+
+
+@router.get("/{project_id}/team-chat/state")
+async def get_team_chat_state(request: Request, project_id: int):
+    """Get the current state of the team conversation."""
+    conversation = _team_conversations.get(project_id)
+
+    if not conversation:
+        return JSONResponse({
+            "active": False,
+            "message": "No active team conversation"
+        })
+
+    return JSONResponse({
+        "active": True,
+        "state": conversation.get_state(),
+        "messages": conversation.get_messages(),
+        "conversation_data": conversation.to_dict(),
+    })
+
+
+@router.post("/{project_id}/team-chat/reset")
+async def reset_team_chat(request: Request, project_id: int):
+    """Reset the team conversation."""
+    if project_id in _team_conversations:
+        del _team_conversations[project_id]
+
+    return JSONResponse({"success": True, "message": "Team conversation reset"})
+
+
+# ================================================
+# CANVA EXPORT ROUTES
+# ================================================
+
+@router.get("/{project_id}/canva/status")
+async def canva_status(request: Request, project_id: int):
+    """Check if Canva integration is configured."""
+    import os
+
+    project_manager = request.app.state.project_manager
+    if not project_manager:
+        return JSONResponse({
+            "configured": False,
+            "error": "Project manager not initialized"
+        }, status_code=500)
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        return JSONResponse({
+            "configured": False,
+            "error": "Project not found"
+        }, status_code=404)
+
+    # Check for Canva API key
+    canva_key = os.environ.get("CANVA_API_KEY")
+
+    return JSONResponse({
+        "configured": bool(canva_key),
+        "has_build_output": bool(project.metadata.get("build", {}).get("output")),
+    })
+
+
+@router.post("/{project_id}/canva/create-planner")
+async def create_canva_planner(request: Request, project_id: int):
+    """Export planner pages to Canva as a multi-page design.
+
+    This endpoint:
+    1. Extracts HTML from the build output
+    2. Renders each page to a PNG image
+    3. Uploads images to Canva as assets
+    4. Creates a multi-page design
+    5. Returns the edit URL
+    """
+    import os
+
+    project_manager = request.app.state.project_manager
+    if not project_manager:
+        return JSONResponse({
+            "success": False,
+            "error": "Project manager not initialized"
+        }, status_code=500)
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        return JSONResponse({
+            "success": False,
+            "error": "Project not found"
+        }, status_code=404)
+
+    # Check for Canva API key
+    canva_key = os.environ.get("CANVA_API_KEY")
+    if not canva_key:
+        return JSONResponse({
+            "success": False,
+            "error": "CANVA_API_KEY environment variable not set"
+        }, status_code=400)
+
+    # Get build output
+    build = project.metadata.get("build", {})
+    output = build.get("output", "")
+
+    if not output:
+        return JSONResponse({
+            "success": False,
+            "error": "No build output available. Build the project first."
+        }, status_code=400)
+
+    try:
+        # Extract HTML from build output
+        from atlas.utils.pdf_generator import PDFGenerator
+        pdf_gen = PDFGenerator()
+        html_files = pdf_gen.extract_html_from_build(output)
+
+        if not html_files:
+            return JSONResponse({
+                "success": False,
+                "error": "No HTML pages found in build output"
+            }, status_code=400)
+
+        # Create Canva integration and design
+        from atlas.integrations.platforms.canva import CanvaIntegration
+
+        canva = CanvaIntegration({"api_key": canva_key})
+
+        # Authenticate
+        if not await canva.authenticate():
+            return JSONResponse({
+                "success": False,
+                "error": "Failed to authenticate with Canva"
+            }, status_code=401)
+
+        # Create the planner design
+        design_title = f"{project.name} - Planner"
+        design = await canva.create_planner_from_html(
+            html_files,
+            title=design_title,
+        )
+
+        if not design:
+            return JSONResponse({
+                "success": False,
+                "error": "Failed to create Canva design"
+            }, status_code=500)
+
+        # Update project metadata with Canva info
+        new_metadata = project.metadata.copy() if project.metadata else {}
+        if "canva" not in new_metadata:
+            new_metadata["canva"] = {}
+        new_metadata["canva"]["planner"] = {
+            "design_id": design.get("id"),
+            "edit_url": design.get("edit_url"),
+            "view_url": design.get("view_url"),
+            "page_count": design.get("page_count"),
+            "created_at": datetime.now().isoformat(),
+        }
+
+        await project_manager.update_project(project_id, metadata=new_metadata)
+
+        return JSONResponse({
+            "success": True,
+            "design_id": design.get("id"),
+            "edit_url": design.get("edit_url"),
+            "view_url": design.get("view_url"),
+            "page_count": design.get("page_count"),
+            "message": f"Created Canva design with {design.get('page_count')} pages"
+        })
+
+    except ImportError as e:
+        logger.error(f"Missing dependency for Canva export: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Missing dependency: {e}. Install with: pip install playwright && playwright install chromium"
+        }, status_code=500)
+
+    except Exception as e:
+        logger.exception(f"Error creating Canva planner: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
         }, status_code=500)
