@@ -171,12 +171,12 @@ Respond with a JSON object:
 
 RESPOND ONLY WITH THE JSON OBJECT."""
 
-    ROUND_TABLE_FOLLOWUP_PROMPT = """Continue the round-table review. Focus ONLY on {current_agent}'s concerns.
+    ROUND_TABLE_FOLLOWUP_PROMPT = """You are {current_agent} in a round-table review. It is YOUR turn to speak.
 
 PROJECT CONTEXT:
 {spec_summary}
 
-{current_agent_upper}'S OPEN CONCERNS:
+YOUR OPEN CONCERNS:
 {agent_concerns}
 
 CONVERSATION SO FAR:
@@ -185,23 +185,20 @@ CONVERSATION SO FAR:
 USER'S LATEST MESSAGE:
 {user_message}
 
-You are {current_agent}. Review the user's response and:
+IMPORTANT: Only YOU ({current_agent}) respond. Other agents are listening but do NOT speak until their turn.
+
+Review the user's response and:
 1. Acknowledge what was addressed
-2. If your concerns are resolved, say so clearly
+2. If your concerns are resolved, say so clearly ("I'm satisfied" or "That addresses my concerns")
 3. If you need clarification, ask ONE follow-up question
 4. Be concise (2-3 sentences max)
 
 {other_agents_context}
 
-Respond with a JSON object:
+Respond with a JSON object (only ONE message from you):
 {{
-    "messages": [
-        {{
-            "agent": "{current_agent}",
-            "content": "Your response as {current_agent}"
-        }}
-    ],
-    "concerns_addressed": ["concern_id_1", "concern_id_2"],
+    "message": "Your response as {current_agent}",
+    "concerns_addressed": ["list concern IDs if any were addressed"],
     "all_my_concerns_resolved": true/false
 }}
 
@@ -536,20 +533,18 @@ RESPOND ONLY WITH THE JSON OBJECT."""
             other_context,
         )
 
-        # Process response messages
-        for msg in followup.get("messages", []):
-            agent = msg.get("agent", current)
-            msg_agent_info = self.AGENTS.get(agent, {"name": agent.title(), "icon": "💬"})
-
+        # Process response - only current agent speaks
+        message_content = followup.get("message", "")
+        if message_content:
             response_messages.append({
-                "agent": agent,
-                "icon": msg_agent_info.get("icon", "💬"),
-                "content": msg.get("content", "")
+                "agent": current,
+                "icon": agent_info.get("icon", "💬"),
+                "content": message_content
             })
 
             self.messages.append(TeamMessage(
-                role=agent,
-                content=msg.get("content", ""),
+                role=current,
+                content=message_content,
                 timestamp=datetime.now().isoformat(),
             ))
 
@@ -671,9 +666,9 @@ RESPOND ONLY WITH THE JSON OBJECT."""
                     return json.loads(match.group())
                 except json.JSONDecodeError:
                     pass
-            # Default response
+            # Default response - single message from current agent
             return {
-                "messages": [{"agent": current_agent, "content": "I understand. Let me consider that."}],
+                "message": "I understand. Let me consider that.",
                 "concerns_addressed": [],
                 "all_my_concerns_resolved": False,
             }
