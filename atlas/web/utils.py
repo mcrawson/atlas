@@ -1135,13 +1135,13 @@ def parse_code_blocks(content: str) -> dict[str, str]:
         content: Agent output with ```language code``` blocks
 
     Returns:
-        Dict of suggested filename -> code content
+        Dict of filename -> code content
     """
     import re
 
     files = {}
 
-    # Pattern to match code blocks with optional filename comment
+    # Pattern to match code blocks with optional language
     pattern = r'```(\w+)?\s*\n(.*?)```'
     matches = re.findall(pattern, content, re.DOTALL)
 
@@ -1162,26 +1162,114 @@ def parse_code_blocks(content: str) -> dict[str, str]:
         "sql": ".sql",
         "markdown": ".md",
         "md": ".md",
+        "go": ".go",
+        "rust": ".rs",
+        "rs": ".rs",
+        "java": ".java",
+        "kotlin": ".kt",
+        "kt": ".kt",
+        "swift": ".swift",
+        "c": ".c",
+        "cpp": ".cpp",
+        "csharp": ".cs",
+        "cs": ".cs",
+        "php": ".php",
+        "ruby": ".rb",
+        "rb": ".rb",
+        "xml": ".xml",
+        "toml": ".toml",
+        "ini": ".ini",
+        "env": ".env",
+        "dockerfile": "Dockerfile",
+        "makefile": "Makefile",
     }
 
-    for i, (lang, code) in enumerate(matches):
+    # Find file markers with their positions for position-aware matching
+    # Patterns:
+    # - "**filename.ext**" or "### filename.ext" or "File: filename.ext"
+    # - "### `filename.ext`" (with backticks - common in Mason output)
+    file_marker_pattern = r'(?:\*\*|###?\s*`?|##\s*`?|File:\s*|Filename:\s*)([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)`?'
+    file_markers_with_pos = [(m.group(1), m.start()) for m in re.finditer(file_marker_pattern, content)]
+
+    # Find code block positions
+    code_block_pattern = r'```(\w+)?\s*\n(.*?)```'
+    code_blocks_with_pos = [(m.group(1), m.group(2), m.start()) for m in re.finditer(code_block_pattern, content, re.DOTALL)]
+
+    for i, (lang, code, block_pos) in enumerate(code_blocks_with_pos):
         lang = lang.lower() if lang else "txt"
-        ext = lang_extensions.get(lang, ".txt")
+        ext = lang_extensions.get(lang, f".{lang}" if lang else ".txt")
 
-        # Try to extract filename from first comment line
-        lines = code.strip().split('\n')
+        # Try multiple methods to find filename
         filename = None
+        lines = code.strip().split('\n')
 
+        # Method 1: Check for filename in first comment line
         if lines:
             first_line = lines[0].strip()
-            # Check for filename patterns like # filename.py or // filename.js
-            if first_line.startswith('#') or first_line.startswith('//'):
-                potential_name = first_line.lstrip('#/').strip()
-                if '.' in potential_name and len(potential_name) < 50:
-                    filename = potential_name
+            # Patterns: # filename.py, // filename.js, <!-- filename.html -->, /* filename.css */
+            comment_patterns = [
+                r'^#\s*([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)',  # Python/bash
+                r'^//\s*([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)',  # JS/C++
+                r'^<!--\s*([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)',  # HTML
+                r'^/\*\s*([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)',  # CSS/C
+            ]
+            for cp in comment_patterns:
+                match = re.match(cp, first_line)
+                if match:
+                    filename = match.group(1)
+                    break
 
+        # Method 2: Find closest preceding file marker (position-aware)
         if not filename:
-            filename = f"file_{i+1}{ext}"
+            closest_marker = None
+            closest_distance = float('inf')
+            for marker_name, marker_pos in file_markers_with_pos:
+                # Marker must be before this code block
+                if marker_pos < block_pos:
+                    distance = block_pos - marker_pos
+                    # Only use if within reasonable distance (200 chars) and closer than current
+                    if distance < 200 and distance < closest_distance:
+                        closest_marker = marker_name
+                        closest_distance = distance
+            if closest_marker:
+                filename = closest_marker
+
+        # Method 3: Detect from content patterns
+        if not filename:
+            if lang == "html" and '<!DOCTYPE' in code.upper():
+                filename = "index.html"
+            elif lang == "css" and ('body' in code or 'html' in code):
+                filename = "styles.css"
+            elif lang == "json" and '"name"' in code and '"version"' in code:
+                filename = "package.json"
+            elif lang == "py" and ('def main' in code or 'if __name__' in code):
+                filename = "main.py"
+            elif lang == "js" and ('module.exports' in code or 'export ' in code):
+                filename = "index.js"
+
+        # Method 4: Generate filename based on order and language
+        if not filename:
+            if lang == "html":
+                filename = f"page_{i+1}.html" if i > 0 else "index.html"
+            elif lang == "css":
+                filename = f"style_{i+1}.css" if i > 0 else "styles.css"
+            elif lang == "js" or lang == "javascript":
+                filename = f"script_{i+1}.js" if i > 0 else "main.js"
+            elif lang == "py" or lang == "python":
+                filename = f"module_{i+1}.py" if i > 0 else "main.py"
+            else:
+                filename = f"file_{i+1}{ext}"
+
+        # Clean up the filename
+        filename = filename.strip().replace(' ', '_')
+
+        # Store the file (handle duplicates by appending number)
+        base_filename = filename
+        counter = 1
+        while filename in files:
+            name, extension = base_filename.rsplit('.', 1) if '.' in base_filename else (base_filename, '')
+            filename = f"{name}_{counter}.{extension}" if extension else f"{name}_{counter}"
+            counter += 1
 
         files[filename] = code.strip()
 

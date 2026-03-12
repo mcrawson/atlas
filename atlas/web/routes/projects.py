@@ -895,6 +895,10 @@ Build the solution step by step, working through each task."""
             tokens["total"] += mason_tokens
             tokens["by_agent"]["mason"] = tokens.get("by_agent", {}).get("mason", 0) + mason_tokens
 
+            # Extract files from Mason's code blocks
+            from ..utils import parse_code_blocks
+            extracted_files = parse_code_blocks(mason_output.content)
+
             # Generate build preview
             preview_generator = BuildPreviewGenerator()
             build_preview = preview_generator.generate_preview(
@@ -906,7 +910,8 @@ Build the solution step by step, working through each task."""
                 "status": "complete",
                 "progress": 100,
                 "output": mason_output.content,
-                "files": mason_output.artifacts.get("files_modified", []),
+                "files": list(extracted_files.keys()),
+                "extracted_files": extracted_files,  # Store actual file contents
                 "routing": routing_decision.to_dict(),
                 "preview": build_preview.to_dict(),
                 "agent_output": {
