@@ -144,6 +144,36 @@ TYPE_VERIFICATION = {
 - [ ] Destructive operations have safeguards
 - [ ] Credentials handled securely
 """,
+
+    ProjectCategory.PHYSICAL: """
+## Physical Product Verification
+
+### Print Quality
+- [ ] Page dimensions correct for target format (Letter, A4, A5, etc.)
+- [ ] Print margins adequate (minimum 0.5 inch / 12mm)
+- [ ] Bleed areas included if needed for full-bleed printing
+- [ ] Resolution sufficient for print (images, graphics)
+- [ ] Colors are print-safe (CMYK-friendly if applicable)
+
+### Content Completeness
+- [ ] All required pages/sections present
+- [ ] Cover design included (front, back, spine if applicable)
+- [ ] Page numbering present and correct
+- [ ] Table of contents matches actual pages
+- [ ] No placeholder or Lorem Ipsum content
+
+### Usability
+- [ ] Writing spaces are adequate size for handwriting
+- [ ] Instructions are clear and easy to follow
+- [ ] Layout is intuitive and user-friendly
+- [ ] Fonts are readable at print size (minimum 10pt for body text)
+
+### Production Ready
+- [ ] Files export cleanly to PDF
+- [ ] No cropped elements at page edges
+- [ ] Binding side margins account for binding method
+- [ ] Page order is correct for printing
+""",
 }
 
 
@@ -326,14 +356,32 @@ Issues found by automated analysis:"""
         self._current_task = task
 
         try:
-            # Extract project type from Tinker's output or context
+            # Extract project type from context, Tinker's output, or detect
             project_type = None
             project_category = None
             project_config = None
             detector = ProjectTypeDetector()
 
-            # First, try to get from Tinker's artifacts
-            if previous_output and previous_output.artifacts:
+            # First, try to get from context (passed from project metadata)
+            if context:
+                type_str = context.get("project_type")
+                cat_str = context.get("project_category")
+                type_config = context.get("project_type_config")
+                if type_str:
+                    try:
+                        project_type = ProjectType(type_str)
+                        project_config = detector.get_config(project_type)
+                        project_category = project_config.category if project_config else None
+                    except (ValueError, KeyError):
+                        pass
+                elif cat_str:
+                    try:
+                        project_category = ProjectCategory(cat_str)
+                    except (ValueError, KeyError):
+                        pass
+
+            # Second, try to get from Tinker's artifacts
+            if not project_type and previous_output and previous_output.artifacts:
                 type_str = previous_output.artifacts.get("project_type")
                 cat_str = previous_output.artifacts.get("project_category")
                 if type_str:

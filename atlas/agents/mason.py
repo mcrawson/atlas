@@ -541,14 +541,31 @@ UPDATE MODE GUIDELINES (when updating existing products):
         self._current_task = task
 
         try:
-            # Extract project type from Sketch's output or context
+            # Extract project type from context, Sketch's output, or detect
             project_type = None
             project_category = None
             project_config = None
             detector = ProjectTypeDetector()
 
-            # First, try to get from Sketch's artifacts
-            if previous_output and previous_output.artifacts:
+            # First, try to get from context (passed from project metadata)
+            if context:
+                type_str = context.get("project_type")
+                cat_str = context.get("project_category")
+                if type_str:
+                    try:
+                        project_type = ProjectType(type_str)
+                        project_config = detector.get_config(project_type)
+                        project_category = project_config.category if project_config else None
+                    except (ValueError, KeyError):
+                        pass
+                elif cat_str:
+                    try:
+                        project_category = ProjectCategory(cat_str)
+                    except (ValueError, KeyError):
+                        pass
+
+            # Second, try to get from Sketch's artifacts
+            if not project_type and previous_output and previous_output.artifacts:
                 type_str = previous_output.artifacts.get("project_type")
                 cat_str = previous_output.artifacts.get("project_category")
                 if type_str:
@@ -614,6 +631,27 @@ Create clean, working code that solves this problem."""
                         prompt += f"\n\n### `{filename}`\n```\n{preview}\n```"
                 if "style_guide" in context:
                     prompt += f"\n\nCode Style Guide:\n{context['style_guide']}"
+
+                # Include spec data if available (requirements, design)
+                if "spec" in context:
+                    spec = context["spec"]
+                    if spec.get("requirements"):
+                        prompt += "\n\n## Requirements from Spec"
+                        for req in spec["requirements"][:10]:  # Limit to top 10
+                            prompt += f"\n- {req.get('id', 'REQ')}: {req.get('title', '')} - {req.get('description', '')}"
+                    if spec.get("design", {}).get("overview"):
+                        prompt += f"\n\n## Design Overview\n{spec['design']['overview']}"
+
+                # Include team chat resolved concerns if available
+                if "team_chat_summary" in context:
+                    prompt += f"\n\n## Team Feedback (Already Addressed)\n{context['team_chat_summary']}"
+                    print(f"[Tinker] Including team chat context")
+
+                # Include any clarifications from user
+                if "user_clarifications" in context:
+                    prompt += "\n\n## User Clarifications"
+                    for clarification in context["user_clarifications"]:
+                        prompt += f"\n- {clarification}"
 
             # Augment with relevant knowledge from the knowledge base
             # This gives Tinker access to deployment guides and platform-specific info

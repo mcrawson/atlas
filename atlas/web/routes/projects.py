@@ -15,6 +15,7 @@ from atlas.agents.build_preview import BuildPreviewGenerator
 from atlas.agents.buzz import get_buzz
 from atlas.agents.sprint_meeting import get_sprint_meeting
 from atlas.specs import SpecGenerator
+from atlas.projects.project_types import ProjectTypeDetector, ProjectCategory
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +80,35 @@ async def create_from_idea(request: Request, idea: str = Form(...)):
     if not project_manager:
         raise HTTPException(status_code=500, detail="Project manager not initialized")
 
-    # Create project with the idea as name, phase set to 'idea'
+    # Detect project type from the idea
+    detector = ProjectTypeDetector()
+    project_type, project_category, confidence = detector.detect(idea)
+    type_config = detector.get_config(project_type)
+
+    # Build metadata with project type info
+    metadata = {
+        "phase": "idea",
+        "project_type": project_type.value,
+        "project_category": project_category.value,
+        "project_type_confidence": confidence,
+    }
+
+    # Add type-specific config if available
+    if type_config:
+        metadata["project_type_config"] = {
+            "name": type_config.name,
+            "description": type_config.description,
+            "suggested_stack": type_config.suggested_stack,
+            "build_approach": type_config.build_approach,
+            "verification_focus": type_config.verification_focus,
+            "key_questions": type_config.key_questions,
+        }
+
+    # Create project with the idea as name and detected type
     project = await project_manager.create_project(
         name=idea[:100],  # Truncate for name
         description=idea,
-        metadata={"phase": "idea"}
+        metadata=metadata
     )
 
     return RedirectResponse(url=f"/projects/{project.id}", status_code=303)
@@ -355,7 +380,31 @@ async def start_planning(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Build context for spec generation
+    # Get or detect project type
+    metadata = project.metadata or {}
+    project_type = metadata.get("project_type")
+    project_category = metadata.get("project_category")
+    project_type_config = metadata.get("project_type_config")
+
+    # Re-detect if not present (for older projects)
+    if not project_type:
+        detector = ProjectTypeDetector()
+        from atlas.projects.project_types import ProjectType
+        detected_type, detected_category, confidence = detector.detect(description or project.description)
+        project_type = detected_type.value
+        project_category = detected_category.value
+        type_config = detector.get_config(detected_type)
+        if type_config:
+            project_type_config = {
+                "name": type_config.name,
+                "description": type_config.description,
+                "suggested_stack": type_config.suggested_stack,
+                "build_approach": type_config.build_approach,
+                "verification_focus": type_config.verification_focus,
+                "key_questions": type_config.key_questions,
+            }
+
+    # Build context for spec generation with project type
     feature_list = [f.strip() for f in features.split('\n') if f.strip()]
 
     context = {
@@ -363,6 +412,9 @@ async def start_planning(
         "problem": problem,
         "features": feature_list,
         "technical": technical,
+        "project_type": project_type,
+        "project_category": project_category,
+        "project_type_config": project_type_config,
     }
 
     # Use guidance system for complexity estimation
@@ -749,6 +801,22 @@ async def approve_plan(request: Request, project_id: int):
     context = new_metadata.get("context", {})
     tasks = spec.get("tasks", [])
 
+    # Add project type info to context for agents
+    context["project_type"] = new_metadata.get("project_type")
+    context["project_category"] = new_metadata.get("project_category")
+    context["project_type_config"] = new_metadata.get("project_type_config")
+
+    # Add spec to context for Mason to reference
+    context["spec"] = spec
+
+    # Add team chat summary if available (resolved concerns)
+    if "team_chat" in new_metadata:
+        team_chat = new_metadata["team_chat"]
+        if "resolved_concerns" in team_chat:
+            context["team_chat_summary"] = "\n".join(team_chat["resolved_concerns"])
+        if "user_clarifications" in team_chat:
+            context["user_clarifications"] = team_chat["user_clarifications"]
+
     # Get Governor routing decision for Mason
     governor = get_governor(
         budget_limit=5.0,
@@ -1022,6 +1090,12 @@ async def approve_build(request: Request, project_id: int):
 
     # Get Governor routing decision for Oracle
     context = new_metadata.get("context", {})
+
+    # Add project type info to context for Oracle
+    context["project_type"] = new_metadata.get("project_type")
+    context["project_category"] = new_metadata.get("project_category")
+    context["project_type_config"] = new_metadata.get("project_type_config")
+
     governor = get_governor(
         budget_limit=5.0,
         budget_used=tokens.get("total", 0) * 0.00001,
@@ -1056,7 +1130,7 @@ Please verify:
 
 Provide your verdict: APPROVED or NEEDS_REVISION"""
 
-            oracle_output = await agent_manager.oracle.process(task_prompt)
+            oracle_output = await agent_manager.oracle.process(task_prompt, context)
 
             # Update token counts
             oracle_tokens = oracle_output.tokens_used
@@ -3716,6 +3790,26 @@ async def continue_team_chat(request: Request, project_id: int):
 
     try:
         messages = await conversation.respond(message)
+
+        # If conversation is complete, save clarifications to project metadata
+        if conversation.is_complete:
+            project_manager = request.app.state.project_manager
+            if project_manager:
+                project = await project_manager.get_project(project_id)
+                if project:
+                    new_metadata = project.metadata.copy() if project.metadata else {}
+                    spec_update_data = conversation.get_spec_update_data()
+
+                    # Store team chat data for agents to use
+                    new_metadata["team_chat"] = {
+                        "resolved_concerns": spec_update_data.get("resolved_concerns", []),
+                        "user_clarifications": spec_update_data.get("user_clarifications", []),
+                        "summary": spec_update_data.get("summary", ""),
+                        "is_complete": True,
+                    }
+
+                    await project_manager.update_project(project_id, metadata=new_metadata)
+                    logger.info(f"Saved team chat data to project {project_id}")
 
         return JSONResponse({
             "messages": messages,

@@ -228,6 +228,10 @@ RESPOND ONLY WITH THE JSON OBJECT."""
         self.is_complete: bool = False
         self.summary: str = ""
 
+        # User clarifications/answers (for spec updates)
+        self.user_clarifications: List[str] = []
+        self.resolved_concerns: List[Dict] = []  # List of {concern, resolution}
+
         # Round-table mode state
         self.current_agent_index: int = 0
         self.agents_with_concerns: List[str] = []  # Agents that have concerns, in order
@@ -462,16 +466,32 @@ RESPOND ONLY WITH THE JSON OBJECT."""
                 timestamp=datetime.now().isoformat(),
             ))
 
-        # Mark addressed concerns
+        # Mark addressed concerns and track clarifications
         for cid in followup.get("concerns_addressed", []):
             if cid in self.concerns:
                 self.concerns[cid].status = "addressed"
+                self.concerns[cid].resolution = user_message[:500]  # Store user's response
+                self.resolved_concerns.append({
+                    "concern": self.concerns[cid].question,
+                    "resolution": user_message[:500],
+                    "agent": self.concerns[cid].agent,
+                })
             else:
                 # Try to match by agent name
                 for concern_id, concern in self.concerns.items():
                     if concern.agent == cid and concern.status == "open":
                         concern.status = "addressed"
+                        concern.resolution = user_message[:500]
+                        self.resolved_concerns.append({
+                            "concern": concern.question,
+                            "resolution": user_message[:500],
+                            "agent": concern.agent,
+                        })
                         break
+
+        # Track substantive user messages as clarifications
+        if len(user_message.strip()) > 20:  # Only track meaningful responses
+            self.user_clarifications.append(user_message.strip()[:1000])
 
         # Check if complete
         if followup.get("is_complete"):
@@ -548,16 +568,32 @@ RESPOND ONLY WITH THE JSON OBJECT."""
                 timestamp=datetime.now().isoformat(),
             ))
 
-        # Mark addressed concerns
+        # Mark addressed concerns and track clarifications
         for cid in followup.get("concerns_addressed", []):
             if cid in self.concerns:
                 self.concerns[cid].status = "addressed"
+                self.concerns[cid].resolution = user_message[:500]
+                self.resolved_concerns.append({
+                    "concern": self.concerns[cid].question,
+                    "resolution": user_message[:500],
+                    "agent": self.concerns[cid].agent,
+                })
             else:
                 # Try to match by agent name prefix
                 for concern_id, concern in self.concerns.items():
                     if concern_id.startswith(current) and concern.status == "open":
                         concern.status = "addressed"
+                        concern.resolution = user_message[:500]
+                        self.resolved_concerns.append({
+                            "concern": concern.question,
+                            "resolution": user_message[:500],
+                            "agent": concern.agent,
+                        })
                         break
+
+        # Track substantive user messages as clarifications
+        if len(user_message.strip()) > 20:
+            self.user_clarifications.append(user_message.strip()[:1000])
 
         # Check if current agent's concerns are all resolved
         if followup.get("all_my_concerns_resolved", False):
@@ -565,6 +601,7 @@ RESPOND ONLY WITH THE JSON OBJECT."""
             for cid in self.agent_concerns_map.get(current, []):
                 if cid in self.concerns and self.concerns[cid].status == "open":
                     self.concerns[cid].status = "addressed"
+                    self.concerns[cid].resolution = user_message[:500]
 
             # Advance to next agent
             self.current_agent_index += 1
@@ -856,6 +893,23 @@ RESPOND ONLY WITH THE JSON OBJECT."""
         """Get all messages."""
         return [m.to_dict() for m in self.messages]
 
+    def get_resolved_concerns_summary(self) -> List[str]:
+        """Get a summary of resolved concerns for spec updates."""
+        resolved = []
+        for cid, concern in self.concerns.items():
+            if concern.status in ("addressed", "resolved"):
+                resolved.append(f"[{concern.agent}] {concern.question}: {concern.resolution or 'Addressed by user'}")
+        return resolved
+
+    def get_spec_update_data(self) -> Dict[str, Any]:
+        """Get data that can be used to update the spec based on conversation."""
+        return {
+            "user_clarifications": self.user_clarifications,
+            "resolved_concerns": self.get_resolved_concerns_summary(),
+            "summary": self.summary,
+            "is_complete": self.is_complete,
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize conversation state."""
         data = {
@@ -876,6 +930,8 @@ RESPOND ONLY WITH THE JSON OBJECT."""
             "summary": self.summary,
             "project_name": self.project_name,
             "mode": self.mode,
+            "user_clarifications": self.user_clarifications,
+            "resolved_concerns": self.resolved_concerns,
         }
 
         # Include round-table state
@@ -926,6 +982,8 @@ RESPOND ONLY WITH THE JSON OBJECT."""
         conv.is_complete = data.get("is_complete", False)
         conv.summary = data.get("summary", "")
         conv.project_name = data.get("project_name", "")
+        conv.user_clarifications = data.get("user_clarifications", [])
+        conv.resolved_concerns = data.get("resolved_concerns", [])
 
         # Restore round-table state
         if conv.mode == "round_table" and "round_table" in data:

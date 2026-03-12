@@ -95,8 +95,12 @@ class SpecGenerator:
 
             client = AsyncOpenAI(api_key=self.openai_api_key)
 
-            # Build the prompt
+            # Build the prompt based on project type
             context_str = ""
+            project_category = context.get("project_category", "other") if context else "other"
+            project_type = context.get("project_type", "other") if context else "other"
+            project_type_config = context.get("project_type_config", {}) if context else {}
+
             if context:
                 if context.get("features"):
                     context_str += f"\nFeatures requested:\n" + "\n".join(f"- {f}" for f in context["features"])
@@ -105,45 +109,27 @@ class SpecGenerator:
                 if context.get("constraints"):
                     context_str += f"\nConstraints: {context['constraints']}"
 
-            prompt = f"""Analyze this project idea and generate structured specifications:
+            # Get type-specific prompt template
+            prompt = self._get_type_specific_prompt(
+                idea=idea,
+                project_category=project_category,
+                project_type=project_type,
+                project_type_config=project_type_config,
+                context_str=context_str,
+            )
 
-PROJECT IDEA: {idea}
-{context_str}
-
-Generate a JSON response with:
-1. requirements: Array of requirements in EARS format, each with:
-   - id: REQ-001 format
-   - title: Short title
-   - description: EARS format requirement (e.g., "When user clicks login, the system shall authenticate credentials")
-   - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
-   - priority: one of [critical, high, medium, low]
-   - user_story: "As a <role>, I want <goal>, so that <benefit>"
-   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}}
-
-2. design:
-   - overview: High-level description
-   - architecture: Technical architecture description
-   - components: Array of {{name, description, responsibilities: [], interfaces: []}}
-   - data_model: Database/data structure description
-   - api_design: API endpoints if applicable
-   - error_handling: Error handling strategy
-   - testing_strategy: Testing approach
-
-3. tasks: Array of implementation tasks, each with:
-   - id: TASK-001 format
-   - title: Short title
-   - description: What needs to be done
-   - priority: one of [critical, high, medium, low]
-   - requirement_ids: Array of related requirement IDs
-   - files_to_modify: Array of file paths
-   - estimated_effort: Time estimate
-
-Return valid JSON only, no markdown."""
+            # Build system message based on project type
+            if project_category == "physical":
+                system_msg = "You are a product designer specializing in printable products like planners, journals, and workbooks. Generate structured specifications in JSON format. Focus on page layouts, content sections, and print requirements - NOT software."
+            elif project_category == "document":
+                system_msg = "You are a content strategist and writer. Generate structured specifications in JSON format. Focus on document structure, chapters, and content - NOT software."
+            else:
+                system_msg = "You are a requirements engineer. Generate structured specifications in JSON format."
 
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a requirements engineer. Generate structured specifications in JSON format."},
+                    {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
@@ -220,6 +206,140 @@ Return valid JSON only, no markdown."""
         except Exception as e:
             print(f"[SpecGenerator] AI generation failed: {e}")
             return self._generate_from_template(idea, context)
+
+    def _get_type_specific_prompt(
+        self,
+        idea: str,
+        project_category: str,
+        project_type: str,
+        project_type_config: dict,
+        context_str: str,
+    ) -> str:
+        """Generate a prompt tailored to the project type."""
+
+        # Physical products (planners, journals, printables)
+        if project_category == "physical":
+            return f"""Analyze this PHYSICAL PRODUCT idea and generate specifications:
+
+PROJECT IDEA: {idea}
+PRODUCT TYPE: {project_type_config.get('name', project_type)}
+{context_str}
+
+IMPORTANT: This is a PHYSICAL/PRINTABLE product, NOT software. Do NOT include:
+- User authentication, APIs, databases
+- Software deployment or hosting
+- Code architecture or error handling
+
+Generate a JSON response with:
+1. requirements: Array of content/design requirements, each with:
+   - id: REQ-001 format
+   - title: Short title (e.g., "Cover Design", "Monthly Spread", "Goal Tracking Page")
+   - description: What this section/page should include
+   - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
+   - priority: one of [critical, high, medium, low]
+   - user_story: "As a <user>, I want <page/section>, so that <benefit>"
+   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} (e.g., "Page includes 7 day columns", "Space for 5 goals")
+
+2. design:
+   - overview: Product description and purpose
+   - architecture: Page structure and organization (NOT software architecture)
+   - components: Array of sections/pages {{name, description, responsibilities: ["what content it holds"], interfaces: ["how user interacts"]}}
+   - data_model: Content outline and page layouts
+   - api_design: null (not applicable)
+   - error_handling: null (not applicable)
+   - testing_strategy: Quality checks (print margins, readability, completeness)
+
+3. tasks: Array of creation tasks, each with:
+   - id: TASK-001 format
+   - title: Short title (e.g., "Design cover page", "Create weekly spread template")
+   - description: What needs to be created
+   - priority: one of [critical, high, medium, low]
+   - requirement_ids: Array of related requirement IDs
+   - files_to_modify: Array of output files (e.g., ["cover.html", "weekly-spread.html"])
+   - estimated_effort: Time estimate
+
+Return valid JSON only, no markdown."""
+
+        # Documents (books, guides, ebooks)
+        elif project_category == "document":
+            return f"""Analyze this DOCUMENT/CONTENT idea and generate specifications:
+
+PROJECT IDEA: {idea}
+DOCUMENT TYPE: {project_type_config.get('name', project_type)}
+{context_str}
+
+IMPORTANT: This is a WRITTEN DOCUMENT, NOT software. Do NOT include:
+- User authentication, APIs, databases
+- Software deployment or hosting
+- Code architecture or error handling
+
+Generate a JSON response with:
+1. requirements: Array of content requirements, each with:
+   - id: REQ-001 format
+   - title: Chapter/section title
+   - description: What this section should cover
+   - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
+   - priority: one of [critical, high, medium, low]
+   - user_story: "As a reader, I want <section>, so that <benefit>"
+   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} (e.g., "Includes 3 examples", "Explains concept clearly")
+
+2. design:
+   - overview: Document purpose and target audience
+   - architecture: Document structure (chapters, sections, flow)
+   - components: Array of major sections {{name, description, responsibilities: ["topics covered"], interfaces: ["how sections connect"]}}
+   - data_model: Outline with key topics per section
+   - api_design: null (not applicable)
+   - error_handling: null (not applicable)
+   - testing_strategy: Editorial review, fact-checking, readability
+
+3. tasks: Array of writing tasks, each with:
+   - id: TASK-001 format
+   - title: Short title (e.g., "Write introduction", "Draft chapter 3")
+   - description: What content needs to be created
+   - priority: one of [critical, high, medium, low]
+   - requirement_ids: Array of related requirement IDs
+   - files_to_modify: Array of output files (e.g., ["chapter-1.md", "introduction.md"])
+   - estimated_effort: Time estimate
+
+Return valid JSON only, no markdown."""
+
+        # Software (default - apps, web, api, cli, etc.)
+        else:
+            return f"""Analyze this project idea and generate structured specifications:
+
+PROJECT IDEA: {idea}
+PROJECT TYPE: {project_type_config.get('name', project_type) if project_type_config else 'Software Project'}
+{context_str}
+
+Generate a JSON response with:
+1. requirements: Array of requirements in EARS format, each with:
+   - id: REQ-001 format
+   - title: Short title
+   - description: EARS format requirement (e.g., "When user clicks login, the system shall authenticate credentials")
+   - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
+   - priority: one of [critical, high, medium, low]
+   - user_story: "As a <role>, I want <goal>, so that <benefit>"
+   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}}
+
+2. design:
+   - overview: High-level description
+   - architecture: Technical architecture description
+   - components: Array of {{name, description, responsibilities: [], interfaces: []}}
+   - data_model: Database/data structure description
+   - api_design: API endpoints if applicable
+   - error_handling: Error handling strategy
+   - testing_strategy: Testing approach
+
+3. tasks: Array of implementation tasks, each with:
+   - id: TASK-001 format
+   - title: Short title
+   - description: What needs to be done
+   - priority: one of [critical, high, medium, low]
+   - requirement_ids: Array of related requirement IDs
+   - files_to_modify: Array of file paths
+   - estimated_effort: Time estimate
+
+Return valid JSON only, no markdown."""
 
     def _generate_from_template(
         self,
