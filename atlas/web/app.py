@@ -240,11 +240,12 @@ The web dashboard provides a visual interface for the same features.
     return app
 
 
-def create_default_app(use_ollama: bool = True) -> FastAPI:
+def create_default_app(use_ollama: bool = True, prefer_provider: str = "openai") -> FastAPI:
     """Create app with default managers for standalone use.
 
     Args:
-        use_ollama: If True, create AgentManager with Ollama provider
+        use_ollama: If True, create AgentManager (kept for backwards compat)
+        prefer_provider: Preferred AI provider ("openai", "claude", "gemini", "ollama")
     """
     from atlas.projects.manager import ProjectManager
 
@@ -254,15 +255,23 @@ def create_default_app(use_ollama: bool = True) -> FastAPI:
     # Create project manager
     project_manager = ProjectManager(data_dir)
 
-    # Create agent manager with Ollama if requested
+    # Create agent manager with multiple providers
     agent_manager = None
     if use_ollama:
         try:
-            from atlas.agents.ollama_provider import create_agent_manager_with_ollama
-            agent_manager = create_agent_manager_with_ollama()
-            logger.info("Agent Manager initialized with Ollama")
+            # Try multi-provider first (uses OpenAI/Claude when available)
+            from atlas.agents.ollama_provider import create_multi_provider_agent_manager
+            agent_manager = create_multi_provider_agent_manager(prefer_provider=prefer_provider)
+            logger.info("Agent Manager initialized with multiple providers")
         except Exception as e:
-            logger.warning(f"Could not initialize Ollama: {e}. Running in demo mode.")
+            logger.warning(f"Multi-provider init failed: {e}")
+            # Fall back to Ollama-only
+            try:
+                from atlas.agents.ollama_provider import create_agent_manager_with_ollama
+                agent_manager = create_agent_manager_with_ollama()
+                logger.info("Agent Manager initialized with Ollama (fallback)")
+            except Exception as e2:
+                logger.warning(f"Could not initialize Ollama: {e2}. Running in demo mode.")
 
     return create_app(
         project_manager=project_manager,

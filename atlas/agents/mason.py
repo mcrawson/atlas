@@ -323,10 +323,17 @@ Every code file MUST be:
    or equivalent for other languages
 
 DO NOT:
+- Use TODO, FIXME, or placeholder comments - implement EVERYTHING
+- Write "# TO DO: ..." or "pass" - write actual working code
+- Return dummy/hardcoded data - implement real logic
 - Split one file across multiple code blocks
 - Reference variables defined in other code blocks
 - Use @app.get() without defining 'app' in the same file
 - Leave out imports
+
+CRITICAL: Every function must have REAL implementation, not placeholders.
+If the spec says "use SQLite", write actual SQLite code with tables and queries.
+If the spec says "10 seed quotes", include 10 actual quotes in the code.
 
 ═══════════════════════════════════════════════════════════════════════
 

@@ -1,8 +1,11 @@
 """Ollama Provider for ATLAS agents."""
 
+import logging
 import aiohttp
 from dataclasses import dataclass
 from typing import Optional
+
+logger = logging.getLogger("atlas.agents.ollama_provider")
 
 
 @dataclass
@@ -178,5 +181,93 @@ def create_agent_manager_with_ollama(config: Optional[OllamaConfig] = None):
     memory = SimpleMemory()
 
     providers = {"ollama": provider}
+
+    return AgentManager(router, memory, providers)
+
+
+def create_multi_provider_agent_manager(
+    prefer_provider: str = "openai",
+    ollama_config: Optional[OllamaConfig] = None
+):
+    """Create an AgentManager with multiple providers (OpenAI, Claude, Gemini, Ollama).
+
+    Uses the best available provider based on API key availability.
+    Falls back through providers in order of quality.
+
+    Args:
+        prefer_provider: Preferred provider when available ("openai", "claude", "gemini", "ollama")
+        ollama_config: Optional Ollama configuration
+
+    Returns:
+        Configured AgentManager with all available providers
+    """
+    import os
+    from .manager import AgentManager
+    from atlas.routing.providers import OpenAIProvider, ClaudeProvider, GeminiProvider
+
+    providers = {}
+    available = []
+
+    # Try to initialize each provider
+    # OpenAI
+    if os.environ.get("OPENAI_API_KEY"):
+        try:
+            providers["openai"] = OpenAIProvider()
+            if providers["openai"].is_available():
+                available.append("openai")
+                logger.info("OpenAI provider initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize OpenAI: {e}")
+
+    # Claude/Anthropic
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            providers["claude"] = ClaudeProvider()
+            if providers["claude"].is_available():
+                available.append("claude")
+                logger.info("Claude provider initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize Claude: {e}")
+
+    # Gemini
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+        try:
+            providers["gemini"] = GeminiProvider()
+            if providers["gemini"].is_available():
+                available.append("gemini")
+                logger.info("Gemini provider initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize Gemini: {e}")
+
+    # Ollama (always try - it's local)
+    try:
+        config = ollama_config or OllamaConfig()
+        ollama_provider = OllamaProvider(config)
+        if ollama_provider.is_available():
+            providers["ollama"] = ollama_provider
+            available.append("ollama")
+            logger.info("Ollama provider initialized")
+    except Exception as e:
+        logger.warning(f"Could not initialize Ollama: {e}")
+
+    if not providers:
+        raise RuntimeError("No AI providers available. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or run Ollama.")
+
+    # Determine default provider (prefer cloud for better quality)
+    if prefer_provider in available:
+        default_provider = prefer_provider
+    elif "openai" in available:
+        default_provider = "openai"
+    elif "claude" in available:
+        default_provider = "claude"
+    elif "gemini" in available:
+        default_provider = "gemini"
+    else:
+        default_provider = "ollama"
+
+    logger.info(f"Multi-provider AgentManager: available={available}, default={default_provider}")
+
+    router = SimpleRouter(default_provider)
+    memory = SimpleMemory()
 
     return AgentManager(router, memory, providers)
