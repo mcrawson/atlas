@@ -438,7 +438,8 @@ async def start_planning(
     )
 
     # Build the idea string for spec generation
-    idea = description
+    # Use form description if provided, otherwise use project description
+    idea = description.strip() if description.strip() else (project.description or project.name or "")
     if problem:
         idea += f"\n\nProblem: {problem}"
 
