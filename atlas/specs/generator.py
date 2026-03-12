@@ -124,10 +124,16 @@ Answer these questions in JSON:
     "structure_type": "What structure fits best? One of: 'pages' (for printables/documents), 'features' (for software), 'chapters' (for books), 'endpoints' (for APIs), 'screens' (for apps), 'components' (for libraries)",
     "key_elements": ["List the specific elements mentioned in the idea that MUST be included"],
     "is_software": true/false,
+    "tech_stack": {{
+        "language": "The primary programming language (e.g., 'Python', 'JavaScript', 'TypeScript', 'Go', 'None')",
+        "framework": "The main framework (e.g., 'FastAPI', 'React', 'Flask', 'Express', 'Click', 'None')",
+        "reasoning": "Brief explanation of why this stack fits"
+    }},
     "suggested_sections": ["What sections should the spec have? Be specific to THIS project"]
 }}
 
-Be specific to THIS idea. Don't add generic elements that weren't requested."""
+Be specific to THIS idea. Don't add generic elements that weren't requested.
+For tech_stack: Choose based on the project type. CLI tools often use Python+Click. APIs use Python+FastAPI or Node+Express. Web apps use React/Vue."""
 
             analysis_response = await client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -150,6 +156,9 @@ Be specific to THIS idea. Don't add generic elements that weren't requested."""
             key_elements = analysis.get("key_elements", [])
             is_software = analysis.get("is_software", True)
             project_nature = analysis.get("project_nature", "project")
+            tech_stack = analysis.get("tech_stack", {})
+            tech_language = tech_stack.get("language", "Python") if tech_stack else "Python"
+            tech_framework = tech_stack.get("framework", "None") if tech_stack else "None"
 
             generation_prompt = f"""Generate a specification for this project based on the analysis.
 
@@ -161,6 +170,7 @@ ANALYSIS:
 - Key elements to include: {', '.join(key_elements)}
 - Deliverables: {', '.join(deliverables)}
 - Is software: {is_software}
+- Tech Stack: {tech_language} / {tech_framework}
 
 Generate a JSON spec with:
 
@@ -267,12 +277,21 @@ Return valid JSON only."""
 
             task_list = TaskList(title=f"Tasks: {idea[:50]}", tasks=tasks)
 
+            # Create TechStack object
+            from .models import TechStack
+            tech_stack_obj = TechStack(
+                language=tech_language,
+                framework=tech_framework,
+                reasoning=tech_stack.get("reasoning", "") if tech_stack else ""
+            )
+
             return Spec(
                 name=idea[:100],
                 description=idea,
                 requirements=requirements,
                 design=design,
                 tasks=task_list,
+                tech_stack=tech_stack_obj,
             )
 
         except Exception as e:

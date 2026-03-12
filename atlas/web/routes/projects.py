@@ -502,7 +502,12 @@ async def start_planning(
                 }
                 for task in (spec.tasks.tasks if spec.tasks else [])
             ],
+            "tech_stack": spec.tech_stack.to_dict() if spec.tech_stack else None,
         }
+
+        # Add tech stack to context for Mason
+        if spec.tech_stack:
+            context["tech_stack"] = spec.tech_stack.to_dict()
 
         # Estimate tokens used (rough estimate for spec generation)
         estimated_tokens = len(idea.split()) * 10  # Rough estimate
@@ -899,6 +904,32 @@ Build the solution step by step, working through each task."""
             from ..utils import parse_code_blocks
             extracted_files = parse_code_blocks(mason_output.content)
 
+            # Post-process: assemble code fragments into complete, runnable files
+            from atlas.assembly.code_assembler import assemble_code
+            from atlas.assembly.validator import validate_code
+
+            assembly_result = assemble_code(extracted_files)
+            assembled_files = assembly_result.files
+            assembly_info = {
+                "issues_fixed": assembly_result.issues_fixed,
+                "remaining_issues": assembly_result.remaining_issues,
+                "is_runnable": assembly_result.is_runnable,
+            }
+
+            # Validate the assembled code
+            validation_result = validate_code(assembled_files, mason_output.content)
+            validation_info = {
+                "passed": validation_result.passed,
+                "score": validation_result.score,
+                "summary": validation_result.summary,
+                "error_count": validation_result.error_count,
+                "warning_count": validation_result.warning_count,
+                "issues": [
+                    {"severity": i.severity, "file": i.file, "message": i.message, "code": i.code}
+                    for i in validation_result.issues
+                ]
+            }
+
             # Generate build preview
             preview_generator = BuildPreviewGenerator()
             build_preview = preview_generator.generate_preview(
@@ -910,8 +941,12 @@ Build the solution step by step, working through each task."""
                 "status": "complete",
                 "progress": 100,
                 "output": mason_output.content,
-                "files": list(extracted_files.keys()),
-                "extracted_files": extracted_files,  # Store actual file contents
+                "files": list(assembled_files.keys()),
+                "extracted_files": extracted_files,  # Original extraction
+                "assembled_files": assembled_files,  # Post-processed, runnable code
+                "assembly": assembly_info,  # What was fixed by assembler
+                "validation": validation_info,  # Code quality checks
+                "is_runnable": assembly_result.is_runnable and validation_result.passed,
                 "routing": routing_decision.to_dict(),
                 "preview": build_preview.to_dict(),
                 "agent_output": {

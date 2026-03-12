@@ -129,8 +129,8 @@ PROJECT_TYPE_PATTERNS = {
         "phrases": [r'simple (website|site|page)', r'static (site|website)', r'just (html|a website)'],
     },
     ProjectType.WEB_SPA: {
-        "keywords": [r'\b(spa|single.?page|react|vue|angular|svelte|next\.?js|nuxt)\b'],
-        "phrases": [r'react app', r'vue app', r'angular app', r'single.?page'],
+        "keywords": [r'\b(spa|single.?page|react|vue|angular|svelte|next\.?js|nuxt|widget|component|frontend|web app)\b'],
+        "phrases": [r'react app', r'vue app', r'angular app', r'single.?page', r'weather widget', r'(ui|web) component', r'frontend (app|project)', r'interactive widget'],
     },
     ProjectType.WEB_FULLSTACK: {
         "keywords": [r'\b(full.?stack|backend|database|node|django|rails|laravel|auth)\b'],
@@ -155,8 +155,8 @@ PROJECT_TYPE_PATTERNS = {
 
     # API
     ProjectType.API_REST: {
-        "keywords": [r'\b(api|rest|restful|endpoints?|backend only|json api)\b'],
-        "phrases": [r'rest api', r'api (server|backend|only)', r'(build|create) an api'],
+        "keywords": [r'\b(api|rest|restful|endpoints?|backend only|json api|weather api|data api|service)\b'],
+        "phrases": [r'rest api', r'api (server|backend|only)', r'(build|create) an api', r'uses? (a |an )?(public |external )?api', r'fetch(es)? data', r'weather (api|service|data)', r'(get|fetch) (weather|data|forecast)'],
     },
     ProjectType.API_GRAPHQL: {
         "keywords": [r'\b(graphql|apollo|hasura)\b'],

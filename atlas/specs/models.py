@@ -254,6 +254,17 @@ class TaskList:
 
 
 @dataclass
+class TechStack:
+    """Technology stack decision for a project."""
+    language: str = "Python"
+    framework: str = "None"
+    reasoning: str = ""
+
+    def to_dict(self) -> dict:
+        return {"language": self.language, "framework": self.framework, "reasoning": self.reasoning}
+
+
+@dataclass
 class Spec:
     """Complete specification for a feature/project."""
     name: str
@@ -261,6 +272,7 @@ class Spec:
     requirements: list[Requirement] = field(default_factory=list)
     design: Optional[DesignDoc] = None
     tasks: Optional[TaskList] = None
+    tech_stack: Optional[TechStack] = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     version: str = "1.0.0"
@@ -276,4 +288,5 @@ class Spec:
             "requirements_count": len(self.requirements),
             "tasks_count": len(self.tasks.tasks) if self.tasks else 0,
             "progress": self.tasks.progress_percentage if self.tasks else 0,
+            "tech_stack": self.tech_stack.to_dict() if self.tech_stack else None,
         }
