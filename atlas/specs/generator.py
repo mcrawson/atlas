@@ -225,37 +225,50 @@ PROJECT IDEA: {idea}
 PRODUCT TYPE: {project_type_config.get('name', project_type)}
 {context_str}
 
+CRITICAL: Extract ONLY the features explicitly mentioned in the PROJECT IDEA above.
+- Read the idea carefully and identify ONLY the sections/pages the user requested
+- Do NOT add extra features that weren't mentioned (no monthly calendars unless asked)
+- Do NOT use generic planner templates - create ONLY what was requested
+- ONLY include requirements for features explicitly stated in the idea
+- If user says "grocery list, meal sections, recipe notes" -> create exactly those 3 things
+
+Examples of what to extract:
+- "grocery list section" -> Grocery List Page requirement
+- "breakfast/lunch/dinner each day" -> Weekly Meal Grid requirement (with B/L/D rows)
+- "notes area for recipes" -> Recipe Notes Page requirement
+- "30-day tracker" -> 30-Day Tracking Grid requirement
+
 IMPORTANT: This is a PHYSICAL/PRINTABLE product, NOT software. Do NOT include:
 - User authentication, APIs, databases
 - Software deployment or hosting
 - Code architecture or error handling
 
 Generate a JSON response with:
-1. requirements: Array of content/design requirements, each with:
+1. requirements: Array of content/design requirements based on the SPECIFIC features in the idea:
    - id: REQ-001 format
-   - title: Short title (e.g., "Cover Design", "Monthly Spread", "Goal Tracking Page")
-   - description: What this section/page should include
+   - title: Short title matching the feature from the idea (NOT generic titles)
+   - description: What this specific section/page should include based on the idea
    - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
    - priority: one of [critical, high, medium, low]
-   - user_story: "As a <user>, I want <page/section>, so that <benefit>"
-   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} (e.g., "Page includes 7 day columns", "Space for 5 goals")
+   - user_story: "As a <user>, I want <specific feature from idea>, so that <benefit>"
+   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} with specific, measurable criteria
 
 2. design:
-   - overview: Product description and purpose
+   - overview: Product description matching the specific idea (not generic)
    - architecture: Page structure and organization (NOT software architecture)
-   - components: Array of sections/pages {{name, description, responsibilities: ["what content it holds"], interfaces: ["how user interacts"]}}
-   - data_model: Content outline and page layouts
+   - components: Array of sections/pages matching the features in the idea {{name, description, responsibilities: ["what content it holds"], interfaces: ["how user interacts"]}}
+   - data_model: Content outline and page layouts for the specific product
    - api_design: null (not applicable)
    - error_handling: null (not applicable)
    - testing_strategy: Quality checks (print margins, readability, completeness)
 
-3. tasks: Array of creation tasks, each with:
+3. tasks: Array of creation tasks for each requirement:
    - id: TASK-001 format
-   - title: Short title (e.g., "Design cover page", "Create weekly spread template")
-   - description: What needs to be created
+   - title: Short title for creating the specific feature
+   - description: What needs to be created for this specific product
    - priority: one of [critical, high, medium, low]
    - requirement_ids: Array of related requirement IDs
-   - files_to_modify: Array of output files (e.g., ["cover.html", "weekly-spread.html"])
+   - files_to_modify: Array of output files with descriptive names matching the feature
    - estimated_effort: Time estimate
 
 Return valid JSON only, no markdown."""
@@ -268,20 +281,27 @@ PROJECT IDEA: {idea}
 DOCUMENT TYPE: {project_type_config.get('name', project_type)}
 {context_str}
 
+CRITICAL: Extract the SPECIFIC topics and chapters mentioned in the PROJECT IDEA above.
+- Read the idea carefully and identify each topic/chapter/section the user wants
+- Do NOT use generic chapter names - base chapters on what the user actually described
+- If they mention "breathing techniques" -> create a Breathing Techniques chapter
+- If they mention "10 chapters covering X, Y, Z" -> create requirements for those specific topics
+- The document structure should match exactly what the user requested
+
 IMPORTANT: This is a WRITTEN DOCUMENT, NOT software. Do NOT include:
 - User authentication, APIs, databases
 - Software deployment or hosting
 - Code architecture or error handling
 
 Generate a JSON response with:
-1. requirements: Array of content requirements, each with:
+1. requirements: Array of content requirements based on SPECIFIC topics from the idea:
    - id: REQ-001 format
-   - title: Chapter/section title
-   - description: What this section should cover
+   - title: Chapter/section title matching topics from the idea (NOT generic)
+   - description: What this specific section should cover based on the idea
    - type: one of [ubiquitous, event_driven, state_driven, optional, complex]
    - priority: one of [critical, high, medium, low]
-   - user_story: "As a reader, I want <section>, so that <benefit>"
-   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} (e.g., "Includes 3 examples", "Explains concept clearly")
+   - user_story: "As a reader, I want <specific topic from idea>, so that <benefit>"
+   - acceptance_criteria: Array of {{id: "AC-001", description: "..."}} with specific criteria
 
 2. design:
    - overview: Document purpose and target audience
