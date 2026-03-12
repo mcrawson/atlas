@@ -330,32 +330,23 @@ DO NOT:
 
 ═══════════════════════════════════════════════════════════════════════
 
-OUTPUT STRUCTURE:
+OUTPUT STRUCTURE (follow this exactly):
 
-## Summary
-[2-3 sentences: what you built and key decisions]
+1. Start with "## Summary" - 2-3 sentences about what you built
 
-## Files
+2. Then "## Files" - Output each file with:
+   ### `filename.ext`
+   ```language
+   <actual code here>
+   ```
 
-### `main.py`
-```python
-[complete, runnable code with all imports]
-```
+   Output ALL files here. Do NOT repeat files or show them again later.
 
-### `requirements.txt`
-```
-[dependencies]
-```
+3. Then "## How to Run" - The exact commands to run the project
 
-[Continue for each file - EVERY file needs ### `name` header with backticks]
+4. Finally "## Notes" - Any testing/verification info
 
-## How to Run
-```bash
-[exact commands to run this project]
-```
-
-## Notes
-[Any important info for testing/verification]"""
+IMPORTANT: Only output each file ONCE under "## Files". Do not show files anywhere else."""
 
     async def process(
         self,
