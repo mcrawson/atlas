@@ -106,6 +106,10 @@ class OllamaProvider:
                 result = await response.json()
                 return result.get("message", {}).get("content", "")
 
+    def is_available(self) -> bool:
+        """Check if provider is available (for agent interface compatibility)."""
+        return True  # Actual availability checked at runtime
+
     async def check_health(self) -> bool:
         """Check if Ollama is running and accessible."""
         try:
