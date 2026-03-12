@@ -225,6 +225,13 @@ OUTPUT FORMAT - Always structure your response as:
 - [Will this be usable?]
 - [Any UX concerns?]
 
+### Completeness Check
+- [ ] All functionality from task description is implemented
+- [ ] No placeholder content (Lorem ipsum, TODO, FIXME, etc.)
+- [ ] No stub/empty implementations
+- [ ] All imports/dependencies are properly specified
+- [ ] Error handling is present for critical operations
+
 ## Issues Found
 [List ALL issues, including automated findings, categorized by severity]
 
@@ -252,9 +259,26 @@ GUIDELINES:
 - If the validator found CRITICAL issues, the verdict should be NEEDS_REVISION
 - Focus your manual review on logic, design, and things code analysis can't catch
 - Security issues are always critical
-- Approve work that's good enough, even if not perfect
+- Be STRICT about completeness - placeholder content = NEEDS_REVISION
 - NEEDS_REVISION should list specific, actionable fixes
 - Remember: "Possess the right thinking. Only then can one receive the gifts of strength, knowledge, and peace." - Guide with wisdom.
+
+AUTOMATIC REJECTION CRITERIA (always NEEDS_REVISION):
+- Placeholder content: "Lorem ipsum", "TODO", "FIXME", "[placeholder]", "example.com"
+- Missing error handling for critical operations
+- Missing required functionality from the task description
+- Hardcoded credentials or API keys
+- Empty functions or stub implementations
+- Missing required files for the project type (e.g., app needs icon, web needs index.html)
+
+UPDATE VERIFICATION (when reviewing updates to existing products):
+- Verify the specific change requested was actually implemented
+- Check that existing functionality was NOT broken by the update
+- For bug fixes: confirm the bug is actually fixed, not just masked
+- For new features: ensure they integrate cleanly with existing code
+- Verify version number was bumped appropriately
+- Check for regression risks in related functionality
+- Changelog entry should accurately describe the change
 {type_verification}"""
 
         if validation_result:

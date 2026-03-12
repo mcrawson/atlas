@@ -11,7 +11,7 @@ logger = logging.getLogger("atlas.routing.providers.gemini")
 
 
 class GeminiProvider(BaseProvider):
-    """Google Gemini API provider."""
+    """Google Gemini API provider using google-genai package."""
 
     name = "gemini"
 
@@ -25,12 +25,12 @@ class GeminiProvider(BaseProvider):
 
         Args:
             api_key: Google API key. Checks GEMINI_API_KEY env var and ~/.gemini/api_key
-            model: Model to use (default: gemini-1.5-flash)
+            model: Model to use (default: gemini-2.0-flash)
             **kwargs: Additional options
         """
         super().__init__(api_key, **kwargs)
         self.model = model
-        self._model_instance = None
+        self._client = None
 
     def _get_api_key(self) -> Optional[str]:
         """Get API key from various sources."""
@@ -49,16 +49,14 @@ class GeminiProvider(BaseProvider):
 
         return None
 
-    def _get_model(self):
-        """Lazy initialization of Gemini model."""
-        if self._model_instance is None:
+    def _get_client(self):
+        """Lazy initialization of Gemini client."""
+        if self._client is None:
             try:
-                import warnings
-                warnings.filterwarnings("ignore", category=FutureWarning, module="google")
-                import google.generativeai as genai
+                from google import genai
             except ImportError:
                 raise ProviderError(
-                    "google-generativeai package not installed. Run: pip install google-generativeai",
+                    "google-genai package not installed. Run: pip install google-genai",
                     self.name,
                     recoverable=False,
                 )
@@ -71,20 +69,14 @@ class GeminiProvider(BaseProvider):
                     recoverable=False,
                 )
 
-            genai.configure(api_key=api_key)
-            self._model_instance = genai.GenerativeModel(
-                self.model,
-                system_instruction=self.get_system_prompt(),
-            )
+            self._client = genai.Client(api_key=api_key)
 
-        return self._model_instance
+        return self._client
 
     def is_available(self) -> bool:
         """Check if Gemini is available."""
         try:
-            import warnings
-            warnings.filterwarnings("ignore", category=FutureWarning, module="google")
-            import google.generativeai
+            from google import genai
             return self._get_api_key() is not None
         except ImportError:
             return False
@@ -97,29 +89,24 @@ class GeminiProvider(BaseProvider):
         temperature: float = 0.7,
     ) -> str:
         """Generate a response using Gemini."""
-        model = self._get_model()
+        client = self._get_client()
 
-        # If custom system prompt, create new model instance
-        if system_prompt:
-            try:
-                import warnings
-                warnings.filterwarnings("ignore", category=FutureWarning, module="google")
-                import google.generativeai as genai
-                model = genai.GenerativeModel(
-                    self.model,
-                    system_instruction=system_prompt,
-                )
-            except Exception as e:
-                logger.error(f"Gemini model init error: {e}", exc_info=True)
-                raise ProviderError(str(e), self.name)
+        # Build the contents with optional system instruction
+        system_instruction = system_prompt or self.get_system_prompt()
 
         try:
-            response = model.generate_content(
-                prompt,
-                generation_config={
-                    "max_output_tokens": max_tokens,
-                    "temperature": temperature,
-                },
+            from google.genai import types
+
+            config = types.GenerateContentConfig(
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+                system_instruction=system_instruction,
+            )
+
+            response = client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=config,
             )
             return response.text
         except Exception as e:
@@ -134,31 +121,27 @@ class GeminiProvider(BaseProvider):
         temperature: float = 0.7,
     ) -> AsyncIterator[str]:
         """Stream a response from Gemini."""
-        model = self._get_model()
+        client = self._get_client()
 
-        # If custom system prompt, create new model instance
-        if system_prompt:
-            try:
-                import google.generativeai as genai
-                model = genai.GenerativeModel(
-                    self.model,
-                    system_instruction=system_prompt,
-                )
-            except Exception as e:
-                logger.error(f"Gemini stream model init error: {e}", exc_info=True)
-                raise ProviderError(str(e), self.name)
+        system_instruction = system_prompt or self.get_system_prompt()
 
         try:
-            response = await model.generate_content_async(
-                prompt,
-                generation_config={
-                    "max_output_tokens": max_tokens,
-                    "temperature": temperature,
-                },
-                stream=True,
+            from google.genai import types
+
+            config = types.GenerateContentConfig(
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+                system_instruction=system_instruction,
             )
 
-            async for chunk in response:
+            # Use streaming
+            response = client.models.generate_content_stream(
+                model=self.model,
+                contents=prompt,
+                config=config,
+            )
+
+            for chunk in response:
                 if chunk.text:
                     yield chunk.text
         except Exception as e:

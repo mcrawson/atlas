@@ -92,12 +92,14 @@ class ProjectTask:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
+        # Handle both enum and string status defensively
+        status_str = self.status.value if hasattr(self.status, 'value') else self.status
         return {
             "id": self.id,
             "project_id": self.project_id,
             "title": self.title,
             "description": self.description,
-            "status": self.status.value,
+            "status": status_str,
             "priority": self.priority,
             "agent_outputs": [o.to_dict() for o in self.agent_outputs],
             "artifacts": self.artifacts,
@@ -169,11 +171,13 @@ class Project:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
+        # Handle both enum and string status defensively
+        status_str = self.status.value if hasattr(self.status, 'value') else self.status
         return {
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "status": self.status.value,
+            "status": status_str,
             "tasks": [t.to_dict() for t in self.tasks],
             "tags": self.tags,
             "metadata": self.metadata,
@@ -209,7 +213,10 @@ class Project:
         """Get counts of tasks by status."""
         counts = {status.value: 0 for status in TaskStatus}
         for task in self.tasks:
-            counts[task.status.value] += 1
+            # Handle both enum and string status defensively
+            status_str = task.status.value if hasattr(task.status, 'value') else task.status
+            if status_str in counts:
+                counts[status_str] += 1
         return counts
 
     def add_task(self, task: ProjectTask) -> ProjectTask:

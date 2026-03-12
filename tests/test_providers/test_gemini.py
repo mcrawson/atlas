@@ -30,8 +30,9 @@ class TestGeminiProvider:
 
     def test_is_available_with_api_key(self):
         """Test is_available returns True when API key is set."""
-        provider = GeminiProvider(api_key="test-key")
-        assert provider.is_available() is True
+        with patch("atlas.routing.providers.gemini.genai", create=True):
+            provider = GeminiProvider(api_key="test-key")
+            assert provider.is_available() is True
 
     def test_is_available_without_api_key(self):
         """Test is_available returns False without API key."""
@@ -64,23 +65,6 @@ class TestGeminiProviderGetApiKey:
             provider = GeminiProvider()
             assert provider._get_api_key() == "google-key"
 
-    def test_get_api_key_from_file(self):
-        """Test getting API key from ~/.gemini/api_key file."""
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop("GEMINI_API_KEY", None)
-            os.environ.pop("GOOGLE_API_KEY", None)
-            provider = GeminiProvider()
-
-            mock_path = MagicMock()
-            mock_path.exists.return_value = True
-            mock_path.read_text.return_value = "file-key\n"
-
-            with patch.object(Path, "__truediv__", return_value=mock_path):
-                with patch.object(Path, "home", return_value=Path("/home/test")):
-                    # The actual implementation uses Path.home() / ".gemini" / "api_key"
-                    # We need to mock it properly
-                    pass
-
     def test_get_api_key_none_when_not_found(self):
         """Test None returned when no API key found."""
         with patch.dict(os.environ, {}, clear=True):
@@ -106,45 +90,38 @@ class TestGeminiProviderGenerate:
         mock_response = MagicMock()
         mock_response.text = "Hello, world!"
 
-        mock_model = MagicMock()
-        mock_model.generate_content = MagicMock(return_value=mock_response)
+        mock_client = MagicMock()
+        mock_client.models.generate_content = MagicMock(return_value=mock_response)
 
-        with patch("atlas.routing.providers.gemini.GeminiProvider._get_model") as mock_get_model:
-            mock_get_model.return_value = mock_model
-
+        with patch.object(provider, "_get_client", return_value=mock_client):
             result = await provider.generate("Say hello")
             assert result == "Hello, world!"
 
     @pytest.mark.asyncio
     async def test_generate_with_custom_system_prompt(self, provider):
-        """Test generation with custom system prompt creates new model."""
+        """Test generation with custom system prompt."""
         mock_response = MagicMock()
         mock_response.text = "Custom response"
 
-        with patch("atlas.routing.providers.gemini.GeminiProvider._get_model") as mock_get_model:
-            with patch("google.generativeai.GenerativeModel") as mock_model_class:
-                mock_model = MagicMock()
-                mock_model.generate_content = MagicMock(return_value=mock_response)
-                mock_model_class.return_value = mock_model
-                mock_get_model.return_value = mock_model
+        mock_client = MagicMock()
+        mock_client.models.generate_content = MagicMock(return_value=mock_response)
 
-                result = await provider.generate(
-                    "Test prompt",
-                    system_prompt="You are a test assistant"
-                )
-                assert result == "Custom response"
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.generate(
+                "Test prompt",
+                system_prompt="You are a test assistant"
+            )
+            assert result == "Custom response"
 
     @pytest.mark.asyncio
     async def test_generate_api_error(self, provider):
         """Test handling of API errors."""
-        mock_model = MagicMock()
-        mock_model.generate_content = MagicMock(
+        mock_client = MagicMock()
+        mock_client.models.generate_content = MagicMock(
             side_effect=Exception("API quota exceeded")
         )
 
-        with patch("atlas.routing.providers.gemini.GeminiProvider._get_model") as mock_get_model:
-            mock_get_model.return_value = mock_model
-
+        with patch.object(provider, "_get_client", return_value=mock_client):
             with pytest.raises(ProviderError) as exc_info:
                 await provider.generate("Test")
 
@@ -169,16 +146,10 @@ class TestGeminiProviderStream:
             mock_chunk.text = text
             chunks.append(mock_chunk)
 
-        async def mock_stream():
-            for chunk in chunks:
-                yield chunk
+        mock_client = MagicMock()
+        mock_client.models.generate_content_stream = MagicMock(return_value=iter(chunks))
 
-        mock_model = MagicMock()
-        mock_model.generate_content_async = AsyncMock(return_value=mock_stream())
-
-        with patch("atlas.routing.providers.gemini.GeminiProvider._get_model") as mock_get_model:
-            mock_get_model.return_value = mock_model
-
+        with patch.object(provider, "_get_client", return_value=mock_client):
             result = []
             async for text in provider.generate_stream("Say hello"):
                 result.append(text)
@@ -186,10 +157,10 @@ class TestGeminiProviderStream:
             assert "".join(result) == "Hello, world!"
 
 
-class TestGeminiProviderGetModel:
-    """Test GeminiProvider _get_model method."""
+class TestGeminiProviderGetClient:
+    """Test GeminiProvider _get_client method."""
 
-    def test_get_model_missing_api_key(self):
+    def test_get_client_missing_api_key(self):
         """Test error when API key not provided."""
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop("GEMINI_API_KEY", None)
@@ -198,5 +169,5 @@ class TestGeminiProviderGetModel:
 
             with patch.object(Path, "exists", return_value=False):
                 with pytest.raises(ProviderError) as exc_info:
-                    provider._get_model()
+                    provider._get_client()
                 assert "API key" in str(exc_info.value)

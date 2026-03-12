@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+ATLAS MCP Server Auto-Setup Script
+
+Configures Claude Code to use the ATLAS Oracle MCP server.
+This script:
+1. Verifies MCP dependencies are installed
+2. Locates or creates Claude Code settings
+3. Adds the ATLAS MCP server configuration
+4. Validates the setup
+
+Usage:
+    ./scripts/setup-mcp
+    python scripts/setup-mcp
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+# ANSI colors for output
+class Colors:
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BLUE = "\033[94m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+
+def print_status(message: str, status: str = "info"):
+    """Print a status message with color."""
+    colors = {
+        "info": Colors.BLUE,
+        "success": Colors.GREEN,
+        "warning": Colors.YELLOW,
+        "error": Colors.RED,
+    }
+    color = colors.get(status, Colors.RESET)
+    prefix = {"info": "→", "success": "✓", "warning": "!", "error": "✗"}.get(status, "→")
+    print(f"{color}{prefix}{Colors.RESET} {message}")
+
+
+def print_header(title: str):
+    """Print a header."""
+    print(f"\n{Colors.BOLD}{Colors.BLUE}{'='*50}{Colors.RESET}")
+    print(f"{Colors.BOLD}  {title}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.BLUE}{'='*50}{Colors.RESET}\n")
+
+
+def check_python_version() -> bool:
+    """Check Python version is 3.10+."""
+    version = sys.version_info
+    if version.major < 3 or (version.major == 3 and version.minor < 10):
+        print_status(f"Python 3.10+ required (found {version.major}.{version.minor})", "error")
+        return False
+    print_status(f"Python version: {version.major}.{version.minor}.{version.micro}", "success")
+    return True
+
+
+def check_mcp_installed() -> bool:
+    """Check if MCP library is installed."""
+    try:
+        import mcp
+        print_status(f"MCP library found: {mcp.__version__ if hasattr(mcp, '__version__') else 'installed'}", "success")
+        return True
+    except ImportError:
+        print_status("MCP library not found", "warning")
+        return False
+
+
+def install_mcp() -> bool:
+    """Install MCP library."""
+    print_status("Installing MCP library...", "info")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "mcp>=0.9.0"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print_status("MCP library installed successfully", "success")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_status(f"Failed to install MCP: {e.stderr}", "error")
+        return False
+
+
+def find_claude_code_config() -> Path | None:
+    """Find Claude Code settings path."""
+    # Common locations
+    locations = [
+        Path.home() / ".claude" / "settings.json",
+        Path.home() / ".config" / "claude" / "settings.json",
+        Path.home() / ".config" / "claude-code" / "settings.json",
+    ]
+
+    # On Windows/WSL, also check AppData
+    if "microsoft" in str(Path("/proc/version").read_text()).lower():
+        # WSL - check Windows paths
+        import pwd
+        username = pwd.getpwuid(os.getuid()).pw_name
+        win_home = Path(f"/mnt/c/Users/{username}")
+        if win_home.exists():
+            locations.extend([
+                win_home / ".claude" / "settings.json",
+                win_home / "AppData" / "Roaming" / "Claude" / "settings.json",
+            ])
+
+    for loc in locations:
+        if loc.exists():
+            print_status(f"Found Claude Code config: {loc}", "success")
+            return loc
+
+    # Default to creating in ~/.claude
+    default = Path.home() / ".claude" / "settings.json"
+    print_status(f"Will create config at: {default}", "info")
+    return default
+
+
+def get_atlas_root() -> Path:
+    """Get the ATLAS project root directory."""
+    # This script should be in atlas/scripts/
+    script_dir = Path(__file__).resolve().parent
+    atlas_root = script_dir.parent
+
+    # Verify it's the right directory
+    if not (atlas_root / "atlas").exists():
+        print_status(f"Warning: ATLAS not found at {atlas_root}", "warning")
+
+    return atlas_root
+
+
+def create_mcp_config(atlas_root: Path) -> dict:
+    """Create the MCP server configuration for ATLAS."""
+    # Find Python interpreter
+    python_path = sys.executable
+
+    # Create config
+    return {
+        "command": python_path,
+        "args": ["-m", "atlas.mcp.server"],
+        "cwd": str(atlas_root),
+        "env": {
+            "PYTHONPATH": str(atlas_root),
+        },
+    }
+
+
+def update_settings(settings_path: Path, atlas_root: Path) -> bool:
+    """Update Claude Code settings with ATLAS MCP server."""
+    # Load existing settings or create new
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+            print_status("Loaded existing settings", "info")
+        except json.JSONDecodeError:
+            print_status("Existing settings file is invalid, creating new", "warning")
+            settings = {}
+    else:
+        settings = {}
+        # Create parent directory
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Ensure mcpServers section exists
+    if "mcpServers" not in settings:
+        settings["mcpServers"] = {}
+
+    # Check if ATLAS is already configured
+    if "atlas" in settings["mcpServers"]:
+        print_status("ATLAS MCP server already configured", "warning")
+        response = input("  Do you want to update the configuration? [y/N]: ").strip().lower()
+        if response != "y":
+            print_status("Skipping configuration update", "info")
+            return True
+
+    # Add ATLAS configuration
+    settings["mcpServers"]["atlas"] = create_mcp_config(atlas_root)
+
+    # Backup existing file
+    if settings_path.exists():
+        backup_path = settings_path.with_suffix(".json.bak")
+        shutil.copy(settings_path, backup_path)
+        print_status(f"Backed up existing settings to {backup_path}", "info")
+
+    # Write new settings
+    try:
+        settings_path.write_text(json.dumps(settings, indent=2))
+        print_status("Updated Claude Code settings", "success")
+        return True
+    except Exception as e:
+        print_status(f"Failed to write settings: {e}", "error")
+        return False
+
+
+def validate_setup(atlas_root: Path) -> bool:
+    """Validate that the MCP server can start."""
+    print_status("Validating MCP server...", "info")
+
+    try:
+        # Try importing the server module
+        sys.path.insert(0, str(atlas_root))
+        from atlas.mcp.server import get_oracle_server, MCP_AVAILABLE
+
+        if not MCP_AVAILABLE:
+            print_status("MCP library not properly imported", "error")
+            return False
+
+        # Create server instance
+        server = get_oracle_server()
+
+        if server._server is None:
+            print_status("MCP server failed to initialize", "error")
+            return False
+
+        print_status("MCP server validated successfully", "success")
+        return True
+
+    except Exception as e:
+        print_status(f"Validation failed: {e}", "error")
+        return False
+
+
+def print_usage_instructions(settings_path: Path):
+    """Print usage instructions."""
+    print(f"""
+{Colors.BOLD}Setup Complete!{Colors.RESET}
+
+The ATLAS Oracle MCP server has been configured for Claude Code.
+
+{Colors.BOLD}Configuration:{Colors.RESET}
+  Settings file: {settings_path}
+
+{Colors.BOLD}Available Tools:{Colors.RESET}
+  • atlas_status       - Get ATLAS system status
+  • list_projects      - List all projects
+  • get_project        - Get project details
+  • create_task        - Create a new task
+  • execute_task       - Execute a task through agents
+  • search_knowledge   - Search the knowledge base
+  • get_memory_context - Get relevant memory context
+
+{Colors.BOLD}Usage in Claude Code:{Colors.RESET}
+  The ATLAS MCP server will start automatically when Claude Code launches.
+  You can use phrases like:
+    "Use ATLAS to create a new app project"
+    "Search ATLAS knowledge for React best practices"
+    "What's the status of my ATLAS projects?"
+
+{Colors.BOLD}Manual Testing:{Colors.RESET}
+  python -m atlas.mcp.server
+
+{Colors.BOLD}Configuration File Format:{Colors.RESET}
+  {{
+    "mcpServers": {{
+      "atlas": {{
+        "command": "python",
+        "args": ["-m", "atlas.mcp.server"],
+        ...
+      }}
+    }}
+  }}
+
+{Colors.YELLOW}Note:{Colors.RESET} Restart Claude Code for changes to take effect.
+""")
+
+
+def main():
+    """Main setup function."""
+    print_header("ATLAS MCP Server Setup")
+
+    # Step 1: Check Python version
+    print_status("Checking Python version...", "info")
+    if not check_python_version():
+        sys.exit(1)
+
+    # Step 2: Check/install MCP
+    print_status("Checking MCP library...", "info")
+    if not check_mcp_installed():
+        response = input("  Install MCP library now? [Y/n]: ").strip().lower()
+        if response != "n":
+            if not install_mcp():
+                sys.exit(1)
+        else:
+            print_status("MCP library is required", "error")
+            sys.exit(1)
+
+    # Step 3: Find ATLAS root
+    print_status("Locating ATLAS installation...", "info")
+    atlas_root = get_atlas_root()
+    print_status(f"ATLAS root: {atlas_root}", "success")
+
+    # Step 4: Find/create Claude Code config
+    print_status("Locating Claude Code configuration...", "info")
+    settings_path = find_claude_code_config()
+    if settings_path is None:
+        print_status("Could not determine Claude Code config location", "error")
+        sys.exit(1)
+
+    # Step 5: Update settings
+    print_status("Updating Claude Code settings...", "info")
+    if not update_settings(settings_path, atlas_root):
+        sys.exit(1)
+
+    # Step 6: Validate
+    print_status("Validating setup...", "info")
+    if not validate_setup(atlas_root):
+        print_status("Setup completed but validation failed", "warning")
+        print_status("The MCP server may still work - try restarting Claude Code", "info")
+
+    # Print instructions
+    print_usage_instructions(settings_path)
+
+
+if __name__ == "__main__":
+    main()

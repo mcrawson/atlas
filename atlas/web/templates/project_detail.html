@@ -541,8 +541,79 @@
                         </ul>
                     </div>
                     {% endif %}
+
                 </div>
                 {% endfor %}
+            </div>
+
+            <!-- Talk to Team Button -->
+            <div class="team-chat-cta">
+                <button class="btn btn-primary btn-wide" onclick="startTeamChat()">
+                    <span class="btn-icon">💬</span> Talk to the Team
+                </button>
+                <p class="team-chat-hint">Address all concerns in one conversation</p>
+            </div>
+
+            <!-- Team Conversation Modal -->
+            <div id="team-chat-modal" class="team-chat-modal" style="display: none;">
+                <div class="team-chat-container">
+                    <div class="team-chat-header">
+                        <span class="team-badge">
+                            <span class="team-icon">👥</span>
+                            <span>Team Review</span>
+                        </span>
+                        <div class="concerns-tracker" id="concerns-tracker">
+                            <span class="tracker-check">✓</span>
+                            <span class="tracker-resolved" id="tracker-resolved">0</span>
+                            <span class="tracker-sep">/</span>
+                            <span class="tracker-total" id="tracker-total">0</span>
+                            <span class="tracker-label">addressed</span>
+                        </div>
+                        <button class="btn-close" onclick="closeTeamChat()">×</button>
+                    </div>
+
+                    <div class="team-chat-messages" id="team-chat-messages">
+                        <div class="chat-loading">
+                            <div class="spinner"></div>
+                            <p>Gathering team feedback...</p>
+                        </div>
+                    </div>
+
+                    <form class="team-chat-form" id="team-chat-form" onsubmit="sendTeamMessage(event)">
+                        <div class="chat-input-wrapper">
+                            <textarea
+                                id="team-chat-input"
+                                placeholder="Respond to the team..."
+                                rows="2"
+                                onkeydown="handleTeamChatKeyDown(event)"></textarea>
+                            <button type="submit" class="send-btn team-send">
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- General Team Feedback -->
+            <div class="team-feedback-section">
+                <button class="btn btn-secondary btn-wide" onclick="toggleTeamFeedback()">
+                    📝 Address All Team Feedback
+                </button>
+                <div id="team-feedback-form" class="team-feedback-form" style="display: none;">
+                    <form action="/projects/{{ project.id }}/address-team-feedback" method="post">
+                        <div class="feedback-header">
+                            <h4>Address Team Feedback</h4>
+                            <p>Provide clarifications or decisions for the concerns raised by the team.</p>
+                        </div>
+                        <textarea name="feedback" rows="5" placeholder="Example: 'For authentication, use JWT tokens as Oracle suggested. The planner will be US Letter size, not A4. Add haptic feedback as Tinker requested.'"></textarea>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span class="btn-icon">💡</span> Update Plan with Feedback
+                            </button>
+                            <button type="button" class="btn btn-ghost" onclick="toggleTeamFeedback()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Actions -->
@@ -728,6 +799,39 @@
                         <span class="action-desc">App Store, npm, etc.</span>
                     </button>
                 </form>
+
+                <button type="button" class="action-card" onclick="sendToCanva()" id="canva-action-card">
+                    <span class="action-icon">🎨</span>
+                    <span class="action-title">Send to Canva</span>
+                    <span class="action-desc">Edit in Canva</span>
+                </button>
+            </div>
+
+            <!-- Canva Status -->
+            <div id="canva-status" class="canva-status" style="display: none;"></div>
+
+            <!-- Canva Success Modal -->
+            <div id="canva-modal" class="canva-modal" style="display: none;">
+                <div class="canva-modal-content">
+                    <div class="canva-modal-header">
+                        <span class="canva-icon">🎨</span>
+                        <h3>Design Created in Canva</h3>
+                        <button class="btn-close" onclick="closeCanvaModal()">×</button>
+                    </div>
+                    <div class="canva-modal-body">
+                        <p id="canva-message">Your planner has been exported to Canva!</p>
+                        <div class="canva-page-count">
+                            <span class="page-icon">📄</span>
+                            <span id="canva-page-count">0</span> pages
+                        </div>
+                    </div>
+                    <div class="canva-modal-actions">
+                        <a id="canva-edit-link" href="#" target="_blank" class="btn btn-primary">
+                            <span class="btn-icon">✏️</span> Open in Canva
+                        </a>
+                        <button class="btn btn-ghost" onclick="closeCanvaModal()">Close</button>
+                    </div>
+                </div>
             </div>
 
             {% set files_written = project.metadata.get('files_written', {}) %}
@@ -864,10 +968,77 @@ function toggleProjectTypeSelector() {
     selector.style.display = selector.style.display === 'none' ? 'block' : 'none';
 }
 
+function toggleAgentResponse(agentName) {
+    const form = document.getElementById('response-' + agentName);
+    if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function toggleTeamFeedback() {
+    const form = document.getElementById('team-feedback-form');
+    if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
 function setProjectType(projectType, category) {
     document.getElementById('project-type-input').value = projectType;
     document.getElementById('project-category-input').value = category;
     document.getElementById('project-type-form').submit();
+}
+
+// Canva integration functions
+async function sendToCanva() {
+    const statusEl = document.getElementById('canva-status');
+    const cardEl = document.getElementById('canva-action-card');
+
+    // Show loading state
+    cardEl.classList.add('loading');
+    cardEl.querySelector('.action-title').textContent = 'Sending...';
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = '<span class="loading">Rendering pages and uploading to Canva...</span>';
+    statusEl.className = 'canva-status loading';
+
+    try {
+        const response = await fetch('/projects/{{ project.id }}/canva/create-planner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusEl.style.display = 'none';
+            showCanvaModal(data);
+        } else {
+            statusEl.innerHTML = `<span class="error">Error: ${data.error}</span>`;
+            statusEl.className = 'canva-status error';
+        }
+    } catch (err) {
+        statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+        statusEl.className = 'canva-status error';
+    } finally {
+        // Reset button state
+        cardEl.classList.remove('loading');
+        cardEl.querySelector('.action-title').textContent = 'Send to Canva';
+    }
+}
+
+function showCanvaModal(data) {
+    const modal = document.getElementById('canva-modal');
+    const message = document.getElementById('canva-message');
+    const pageCount = document.getElementById('canva-page-count');
+    const editLink = document.getElementById('canva-edit-link');
+
+    message.textContent = data.message || 'Your planner has been exported to Canva!';
+    pageCount.textContent = data.page_count || '0';
+    editLink.href = data.edit_url || '#';
+
+    modal.style.display = 'flex';
+}
+
+function closeCanvaModal() {
+    document.getElementById('canva-modal').style.display = 'none';
 }
 
 // GitHub integration functions
@@ -927,7 +1098,739 @@ async function pushToGitHub() {
         statusEl.className = 'github-status error';
     }
 }
+
+// ============================================
+// TEAM CHAT FUNCTIONS
+// ============================================
+
+const projectId = "{{ project.id }}";
+let teamConversationData = null;
+
+const AGENT_ICONS = {
+    team: '👥',
+    sketch: '📐',
+    architect: '🏗️',
+    tinker: '🔧',
+    oracle: '🔮',
+    launch: '🚀'
+};
+
+const AGENT_COLORS = {
+    team: '#00ff41',
+    sketch: '#4A90D9',
+    architect: '#9B59B6',
+    tinker: '#E67E22',
+    oracle: '#1ABC9C',
+    launch: '#E74C3C'
+};
+
+async function startTeamChat() {
+    // Show modal
+    const modal = document.getElementById('team-chat-modal');
+    modal.style.display = 'flex';
+
+    // Show loading
+    const messagesDiv = document.getElementById('team-chat-messages');
+    messagesDiv.innerHTML = `
+        <div class="chat-loading">
+            <div class="spinner"></div>
+            <p>Gathering team feedback...</p>
+        </div>
+    `;
+
+    // Start conversation
+    try {
+        const response = await fetch(`/projects/${projectId}/team-chat/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+        console.log('Team start response:', data);
+
+        if (data.error) {
+            messagesDiv.innerHTML = `<div class="chat-error">Error: ${data.error}</div>`;
+            return;
+        }
+
+        // Clear loading and show messages
+        messagesDiv.innerHTML = '';
+
+        // Add each agent's message
+        for (const msg of data.messages || []) {
+            addTeamMessage(msg.agent, msg.icon, msg.content);
+        }
+
+        // Update tracker
+        if (data.state) {
+            updateConcernsTracker(data.state);
+        }
+
+        // Fetch conversation data for restoration
+        try {
+            const stateResponse = await fetch(`/projects/${projectId}/team-chat/state`);
+            const stateData = await stateResponse.json();
+            if (stateData.conversation_data) {
+                teamConversationData = stateData.conversation_data;
+            }
+        } catch (e) {
+            console.log('Could not fetch conversation data:', e);
+        }
+
+    } catch (error) {
+        console.error('Error starting team chat:', error);
+        messagesDiv.innerHTML = `<div class="chat-error">Failed to connect: ${error.message}</div>`;
+    }
+}
+
+function closeTeamChat() {
+    document.getElementById('team-chat-modal').style.display = 'none';
+    teamConversationData = null;
+}
+
+function handleTeamChatKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendTeamMessage(event);
+    }
+}
+
+function addTeamMessage(agent, icon, content) {
+    const messagesDiv = document.getElementById('team-chat-messages');
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `team-message agent-${agent}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'team-avatar';
+    avatar.style.background = AGENT_COLORS[agent] || '#444';
+    avatar.textContent = icon || AGENT_ICONS[agent] || '💬';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'team-message-wrapper';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'team-agent-name';
+    nameDiv.textContent = agent.charAt(0).toUpperCase() + agent.slice(1);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'team-content';
+
+    // Enhanced markdown rendering
+    let html = content
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/_([^_]+)_/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/🔴/g, '<span class="severity critical">🔴</span>')
+        .replace(/🟡/g, '<span class="severity important">🟡</span>')
+        .replace(/🟢/g, '<span class="severity minor">🟢</span>')
+        .replace(/\n/g, '<br>');
+    contentDiv.innerHTML = html;
+
+    wrapper.appendChild(nameDiv);
+    wrapper.appendChild(contentDiv);
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(wrapper);
+    messagesDiv.appendChild(messageDiv);
+
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addUserMessage(content) {
+    const messagesDiv = document.getElementById('team-chat-messages');
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'team-message user-message';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'team-avatar user';
+    avatar.textContent = 'You';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'team-content user';
+    contentDiv.textContent = content;
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(messageDiv);
+
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addTeamThinking() {
+    const messagesDiv = document.getElementById('team-chat-messages');
+
+    const thinkingDiv = document.createElement('div');
+    thinkingDiv.className = 'team-message thinking';
+    thinkingDiv.id = 'team-thinking';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'team-avatar';
+    avatar.style.background = AGENT_COLORS.team;
+    avatar.textContent = '👥';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'team-thinking-content';
+    contentDiv.innerHTML = `
+        <div class="thinking-dots">
+            <span></span><span></span><span></span>
+        </div>
+        <span>Team is discussing...</span>
+    `;
+
+    thinkingDiv.appendChild(avatar);
+    thinkingDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(thinkingDiv);
+
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function removeTeamThinking() {
+    const thinking = document.getElementById('team-thinking');
+    if (thinking) thinking.remove();
+}
+
+function updateConcernsTracker(state) {
+    const resolved = state.addressed_concerns || 0;
+    const total = state.total_concerns || 0;
+
+    document.getElementById('tracker-resolved').textContent = resolved;
+    document.getElementById('tracker-total').textContent = total;
+
+    // Update color based on progress
+    const tracker = document.getElementById('concerns-tracker');
+    if (state.is_complete || resolved === total) {
+        tracker.classList.add('complete');
+    }
+}
+
+async function sendTeamMessage(event) {
+    event.preventDefault();
+
+    const input = document.getElementById('team-chat-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Add user message
+    addUserMessage(message);
+    input.value = '';
+
+    // Show thinking
+    addTeamThinking();
+
+    try {
+        const requestBody = { message: message };
+
+        if (teamConversationData) {
+            requestBody.conversation_state = teamConversationData;
+        }
+
+        const response = await fetch(`/projects/${projectId}/team-chat/respond`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Team response data:', data);
+
+        removeTeamThinking();
+
+        if (data.error) {
+            addTeamMessage('team', '👥', `Sorry, I encountered an error: ${data.error}`);
+            return;
+        }
+
+        // Update conversation data
+        if (data.conversation_data) {
+            teamConversationData = data.conversation_data;
+        }
+
+        // Update tracker
+        if (data.state) {
+            updateConcernsTracker(data.state);
+        }
+
+        // Add each agent's response
+        for (const msg of data.messages || []) {
+            addTeamMessage(msg.agent, msg.icon, msg.content);
+        }
+
+        // Check if complete
+        if (data.is_complete) {
+            showTeamComplete();
+        }
+
+    } catch (error) {
+        console.error('Error sending message:', error);
+        removeTeamThinking();
+        addTeamMessage('team', '👥', `Sorry, I had trouble connecting: ${error.message}`);
+    }
+
+    input.focus();
+}
+
+function showTeamComplete() {
+    const form = document.getElementById('team-chat-form');
+    form.innerHTML = `
+        <div class="team-complete">
+            <span class="complete-icon">✅</span>
+            <p>All concerns addressed! Ready to proceed.</p>
+            <button class="btn btn-primary" onclick="closeTeamChat()">Done</button>
+        </div>
+    `;
+}
 </script>
+
+<style>
+/* Team Chat CTA */
+.team-chat-cta {
+    text-align: center;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    background: linear-gradient(135deg, rgba(0, 255, 65, 0.1), rgba(74, 144, 217, 0.1));
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    border-radius: 12px;
+}
+
+.team-chat-cta .btn {
+    font-size: 1.1rem;
+    padding: 0.75rem 2rem;
+}
+
+.team-chat-hint {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #888);
+}
+
+/* Team Chat Modal */
+.team-chat-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.team-chat-container {
+    background: var(--bg-primary, #0d1117);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 12px;
+    width: 95%;
+    max-width: 700px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.team-chat-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color, #2a2a4a);
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 12px 12px 0 0;
+}
+
+.team-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.team-icon {
+    font-size: 1.25rem;
+}
+
+.concerns-tracker {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    padding-right: 1rem;
+    font-size: 0.9rem;
+}
+
+.tracker-check {
+    color: var(--accent-color, #00ff41);
+    margin-right: 0.25rem;
+}
+
+.tracker-resolved {
+    color: var(--accent-color, #00ff41);
+    font-weight: 600;
+}
+
+.tracker-sep {
+    color: var(--text-secondary, #888);
+}
+
+.tracker-total {
+    color: var(--text-primary, #fff);
+}
+
+.tracker-label {
+    color: var(--text-secondary, #888);
+    margin-left: 0.25rem;
+}
+
+.concerns-tracker.complete {
+    color: var(--accent-color, #00ff41);
+}
+
+.team-chat-header .btn-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-tertiary, #252540);
+    color: var(--text-primary, #fff);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.team-chat-header .btn-close:hover {
+    background: var(--bg-primary, #0d1117);
+}
+
+.team-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 350px;
+    max-height: 450px;
+}
+
+.team-message {
+    display: flex;
+    gap: 0.75rem;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.team-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1rem;
+    color: white;
+}
+
+.team-avatar.user {
+    background: var(--bg-tertiary, #252540);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.team-message-wrapper {
+    flex: 1;
+}
+
+.team-agent-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    margin-bottom: 0.25rem;
+    text-transform: capitalize;
+}
+
+.team-content {
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    background: var(--bg-secondary, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.team-content.user {
+    background: rgba(0, 255, 65, 0.1);
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    max-width: 85%;
+}
+
+.user-message {
+    flex-direction: row-reverse;
+}
+
+.user-message .team-content {
+    margin-left: auto;
+}
+
+.severity {
+    font-size: 0.9em;
+}
+
+.chat-loading, .chat-error {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary, #888);
+}
+
+.team-thinking-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 12px;
+    color: var(--text-secondary, #888);
+    font-size: 0.85rem;
+}
+
+.thinking-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.thinking-dots span {
+    width: 8px;
+    height: 8px;
+    background: var(--accent-color, #00ff41);
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+}
+
+.team-chat-form {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color, #2a2a4a);
+}
+
+.chat-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.chat-input-wrapper textarea {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-tertiary, #252540);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    font-size: 0.9rem;
+    resize: none;
+}
+
+.chat-input-wrapper textarea:focus {
+    outline: none;
+    border-color: var(--accent-color, #00ff41);
+}
+
+.send-btn.team-send {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent-color, #00ff41);
+    color: #000;
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.send-btn.team-send:hover {
+    transform: scale(1.05);
+}
+
+.team-complete {
+    text-align: center;
+    padding: 1.5rem;
+    background: rgba(0, 255, 65, 0.1);
+    border-radius: 8px;
+}
+
+.team-complete .complete-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.team-complete p {
+    margin-bottom: 1rem;
+    color: var(--accent-color, #00ff41);
+}
+
+/* Canva Integration Styles */
+.canva-status {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.canva-status.loading {
+    background: rgba(74, 144, 217, 0.1);
+    border: 1px solid rgba(74, 144, 217, 0.3);
+    color: #4A90D9;
+}
+
+.canva-status.error {
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    color: #ff6b6b;
+}
+
+.canva-status.success {
+    background: rgba(0, 255, 65, 0.1);
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    color: var(--accent-color, #00ff41);
+}
+
+.action-card.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.action-card.loading .action-icon::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 0.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Canva Modal */
+.canva-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.canva-modal-content {
+    background: var(--bg-primary, #0d1117);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 12px;
+    width: 95%;
+    max-width: 450px;
+    overflow: hidden;
+}
+
+.canva-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border-color, #2a2a4a);
+    background: var(--bg-secondary, #1a1a2e);
+}
+
+.canva-icon {
+    font-size: 1.5rem;
+}
+
+.canva-modal-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.canva-modal-header .btn-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-tertiary, #252540);
+    color: var(--text-primary, #fff);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.canva-modal-header .btn-close:hover {
+    background: var(--bg-primary, #0d1117);
+}
+
+.canva-modal-body {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.canva-modal-body p {
+    margin-bottom: 1rem;
+    color: var(--text-secondary, #888);
+}
+
+.canva-page-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.canva-page-count .page-icon {
+    font-size: 1rem;
+}
+
+.canva-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem 1.5rem;
+    justify-content: center;
+}
+
+.canva-modal-actions .btn-primary {
+    background: #00c4cc;
+    border-color: #00c4cc;
+}
+
+.canva-modal-actions .btn-primary:hover {
+    background: #00a8b0;
+    border-color: #00a8b0;
+}
+</style>
 
 <!-- Hidden form for project type -->
 <form id="project-type-form" action="/projects/{{ project.id }}/set-project-type" method="post" style="display: none;">

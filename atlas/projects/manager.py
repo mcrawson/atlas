@@ -400,7 +400,11 @@ class ProjectManager:
         await self.init_db()
 
         now = datetime.now().isoformat()
-        completed_at = now if status in (TaskStatus.COMPLETED, TaskStatus.FAILED) else None
+        # Handle both enum and string status
+        status_str = status.value if hasattr(status, 'value') else status
+        completed_statuses = (TaskStatus.COMPLETED, TaskStatus.FAILED)
+        is_completed = status in completed_statuses or status_str in ('completed', 'failed')
+        completed_at = now if is_completed else None
 
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -409,7 +413,7 @@ class ProjectManager:
                 SET status = ?, updated_at = ?, completed_at = ?
                 WHERE id = ?
                 """,
-                (status.value, now, completed_at, task_id)
+                (status_str, now, completed_at, task_id)
             )
             await db.commit()
 
@@ -454,8 +458,13 @@ class ProjectManager:
             params.append(description)
         if status is not None:
             updates.append("status = ?")
-            params.append(status.value)
-            if status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
+            # Handle both enum and string status
+            status_str = status.value if hasattr(status, 'value') else status
+            params.append(status_str)
+            # Check for completion status
+            completed_statuses = (TaskStatus.COMPLETED, TaskStatus.FAILED)
+            is_completed = status in completed_statuses or status_str in ('completed', 'failed')
+            if is_completed:
                 updates.append("completed_at = ?")
                 params.append(datetime.now().isoformat())
         if priority is not None:

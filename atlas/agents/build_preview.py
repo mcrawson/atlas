@@ -19,6 +19,7 @@ class PreviewType(Enum):
     API = "api"             # API endpoints table
     DATABASE = "db"         # Database schema
     TERMINAL = "terminal"   # CLI output simulation
+    PRINTABLE = "printable" # Print-ready HTML (for physical products)
     NONE = "none"           # No preview available
 
 
@@ -40,6 +41,7 @@ class BuildPreview:
     files_list: List[str] = field(default_factory=list)
     component_tree: Optional[Dict] = None
     api_endpoints: List[Dict] = field(default_factory=list)
+    artifacts: List[str] = field(default_factory=list)  # Generated file paths (PDFs, etc.)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -53,6 +55,7 @@ class BuildPreview:
             "files_list": self.files_list,
             "component_tree": self.component_tree,
             "api_endpoints": self.api_endpoints,
+            "artifacts": self.artifacts,
         }
 
 
@@ -98,6 +101,8 @@ class BuildPreviewGenerator:
         # Generate appropriate preview
         if preview_type == PreviewType.HTML:
             return self._generate_html_preview(code_blocks, files_list)
+        elif preview_type == PreviewType.PRINTABLE:
+            return self._generate_printable_preview(code_blocks, files_list, project_context)
         elif preview_type == PreviewType.COMPONENT_TREE:
             return self._generate_component_tree(code_blocks, files_list)
         elif preview_type == PreviewType.ARCHITECTURE:
@@ -168,6 +173,19 @@ class BuildPreviewGenerator:
     ) -> PreviewType:
         """Determine the best preview type based on code content."""
         languages = {cb.language for cb in code_blocks}
+
+        # Check context for physical product category
+        if context:
+            project_category = context.get("project_category", "")
+            if project_category == "physical":
+                return PreviewType.PRINTABLE
+
+        # Check for printable content (HTML with @page rules or print-specific CSS)
+        for cb in code_blocks:
+            if cb.language in ['html', 'css']:
+                if any(pattern in cb.code.lower() for pattern in
+                       ['@page', '@media print', 'page-break', 'print-ready', 'printable']):
+                    return PreviewType.PRINTABLE
 
         # Check for web frontend (HTML/CSS)
         if 'html' in languages or 'css' in languages:
@@ -248,6 +266,157 @@ class BuildPreviewGenerator:
             content=preview_html,
             code_blocks=code_blocks,
             files_list=files_list,
+        )
+
+    def _generate_printable_preview(
+        self,
+        code_blocks: List[CodeBlock],
+        files_list: List[str],
+        context: Optional[Dict] = None
+    ) -> BuildPreview:
+        """Generate a printable preview for physical products (planners, journals, etc.)."""
+        html_blocks = [cb for cb in code_blocks if cb.language == 'html']
+        css_blocks = [cb for cb in code_blocks if cb.language == 'css']
+
+        # Combine all HTML content
+        all_html = "\n".join(cb.code for cb in html_blocks)
+        all_css = "\n".join(cb.code for cb in css_blocks)
+
+        # Generate PDF artifacts if possible
+        artifacts = []
+        try:
+            from atlas.utils.pdf_generator import get_pdf_generator
+
+            project_name = "planner"
+            if context and context.get("name"):
+                project_name = context["name"].lower().replace(" ", "-")
+
+            pdf_gen = get_pdf_generator()
+
+            # Save each HTML block as a separate file
+            for i, cb in enumerate(html_blocks):
+                filename = cb.filename or f"page_{i+1}"
+                if not filename.endswith('.html'):
+                    filename = filename.replace('.html', '') + '.html'
+
+                # Ensure complete HTML document
+                html_content = cb.code
+                if not html_content.strip().startswith("<!DOCTYPE"):
+                    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{filename}</title>
+    <style>
+        @page {{ size: letter; margin: 0.5in; }}
+        @media print {{ .page {{ page-break-after: always; }} }}
+        body {{ font-family: 'Segoe UI', Tahoma, sans-serif; }}
+        {all_css}
+    </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+
+                output_path = pdf_gen.html_to_pdf(html_content, f"{project_name}_{filename.replace('.html', '')}")
+                if output_path:
+                    artifacts.append(str(output_path))
+
+        except ImportError:
+            pass  # PDF generation not available
+        except Exception as e:
+            print(f"[BuildPreview] PDF generation failed: {e}")
+
+        # Build preview HTML with print styling
+        preview_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #e0e0e0;
+            padding: 20px;
+        }}
+        .print-preview-container {{
+            max-width: 850px;
+            margin: 0 auto;
+        }}
+        .print-header {{
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .print-header h3 {{ margin: 0; font-size: 14px; }}
+        .print-actions {{
+            display: flex;
+            gap: 10px;
+        }}
+        .print-btn {{
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }}
+        .print-btn:hover {{ background: #45a049; }}
+        .page-container {{
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }}
+        .page {{
+            width: 8.5in;
+            min-height: 11in;
+            padding: 0.5in;
+            background: white;
+            position: relative;
+        }}
+        @media print {{
+            body {{ background: white; padding: 0; }}
+            .print-header, .print-actions {{ display: none; }}
+            .page-container {{ box-shadow: none; margin: 0; }}
+            .page {{ page-break-after: always; }}
+        }}
+        {all_css}
+    </style>
+</head>
+<body>
+    <div class="print-preview-container">
+        <div class="print-header">
+            <h3>🖨️ Print Preview - Physical Product</h3>
+            <div class="print-actions">
+                <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+            </div>
+        </div>
+        <div class="page-container">
+{all_html if all_html else '<div class="page"><p style="text-align:center;color:#999;padding-top:4in;">Printable content will appear here</p></div>'}
+        </div>
+    </div>
+</body>
+</html>"""
+
+        # Add artifact info to preview
+        artifact_info = ""
+        if artifacts:
+            artifact_info = f"<p><strong>Generated files:</strong> {', '.join(artifacts)}</p>"
+
+        return BuildPreview(
+            preview_type=PreviewType.PRINTABLE,
+            title="Print Preview",
+            content=preview_html,
+            code_blocks=code_blocks,
+            files_list=files_list,
+            artifacts=artifacts,
         )
 
     def _generate_component_tree(

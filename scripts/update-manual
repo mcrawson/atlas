@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""
+ATLAS User Manual Generator
+
+This script:
+1. Captures fresh screenshots from running ATLAS
+2. Generates a professional Word document with those screenshots
+
+Usage:
+    ./scripts/update-manual
+
+Requirements:
+    - ATLAS must be running on localhost:8080
+    - python-docx and playwright must be installed
+"""
+
+import sys
+import os
+from pathlib import Path
+
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+def capture_screenshots():
+    """Capture screenshots from running ATLAS."""
+    from playwright.sync_api import sync_playwright
+
+    screenshot_dir = atlas_root / 'docs' / 'screenshots'
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+    pages = [
+        ('http://localhost:8080/', 'dashboard.png', 'Dashboard'),
+        ('http://localhost:8080/projects', 'projects-list.png', 'Projects List'),
+        ('http://localhost:8080/agents', 'agents.png', 'Agents Page'),
+        ('http://localhost:8080/knowledge/', 'knowledge-base.png', 'Knowledge Base'),
+        ('http://localhost:8080/github/status', 'github-status.png', 'GitHub Status'),
+        ('http://localhost:8080/setup', 'setup.png', 'Setup Page'),
+    ]
+
+    print("Capturing screenshots...")
+
+    with sync_playwright() as p:
+        browser = p.firefox.launch(headless=True)
+        page = browser.new_page(viewport={'width': 1280, 'height': 800})
+
+        for url, filename, desc in pages:
+            try:
+                page.goto(url, wait_until='networkidle', timeout=15000)
+                page.wait_for_timeout(1000)
+                filepath = screenshot_dir / filename
+                page.screenshot(path=str(filepath), full_page=False)
+                print(f"  ✓ {desc}")
+            except Exception as e:
+                print(f"  ✗ {desc}: {e}")
+
+        # Try to capture a project detail if one exists
+        try:
+            page.goto('http://localhost:8080/projects', wait_until='networkidle', timeout=15000)
+            # Click first project link
+            first_project = page.locator('a[href^="/projects/"]').first
+            if first_project:
+                first_project.click()
+                page.wait_for_timeout(1500)
+                filepath = screenshot_dir / 'project-detail.png'
+                page.screenshot(path=str(filepath), full_page=False)
+                print(f"  ✓ Project Detail")
+        except:
+            pass
+
+        browser.close()
+
+    return screenshot_dir
+
+def generate_manual(screenshot_dir):
+    """Generate the Word document."""
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    print("\nGenerating manual...")
+
+    doc = Document()
+    img_dir = screenshot_dir
+
+    # Styles
+    normal = doc.styles['Normal']
+    normal.font.name = 'Calibri'
+    normal.font.size = Pt(11)
+
+    def add_image(filename, caption, width=5.5):
+        filepath = img_dir / filename
+        if filepath.exists():
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run()
+            run.add_picture(str(filepath), width=Inches(width))
+            cap = doc.add_paragraph()
+            cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = cap.add_run(f'Figure: {caption}')
+            run.font.italic = True
+            run.font.size = Pt(10)
+            doc.add_paragraph()
+
+    # Cover
+    for _ in range(3):
+        doc.add_paragraph()
+
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run('ATLAS')
+    run.font.size = Pt(72)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(0, 51, 102)
+
+    subtitle = doc.add_paragraph()
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = subtitle.add_run('Automated Thinking, Learning & Advisory System')
+    run.font.size = Pt(18)
+    run.font.italic = True
+
+    doc.add_paragraph()
+    doc.add_paragraph()
+
+    version = doc.add_paragraph()
+    version.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = version.add_run('User Manual')
+    run.font.size = Pt(24)
+
+    doc.add_paragraph()
+
+    from datetime import datetime
+    version_num = doc.add_paragraph()
+    version_num.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    version_num.add_run(f'Version 2.0 | {datetime.now().strftime("%B %Y")}')
+
+    doc.add_page_break()
+
+    # Quick intro
+    doc.add_heading('Welcome to ATLAS', level=1)
+    doc.add_paragraph(
+        'ATLAS (Automated Thinking, Learning & Advisory System) is your AI-powered '
+        'development assistant that turns ideas into fully-built software projects '
+        'through natural conversation.'
+    )
+
+    add_image('dashboard.png', 'The ATLAS Dashboard')
+
+    doc.add_heading('Getting Started', level=1)
+    doc.add_paragraph('1. Start ATLAS: ./scripts/atlas-web')
+    doc.add_paragraph('2. Open http://localhost:8080')
+    doc.add_paragraph('3. Click "New Project" and describe what you want to build')
+
+    add_image('projects-list.png', 'Your Projects')
+
+    doc.add_heading('The AI Agents', level=1)
+    doc.add_paragraph(
+        'ATLAS uses specialized AI agents that work together: '
+        'Sketch (planning), Tinker (building), Oracle (reviewing), and Launch (deploying).'
+    )
+
+    add_image('agents.png', 'Available Agents')
+
+    doc.add_heading('Integrations', level=1)
+
+    add_image('github-status.png', 'GitHub Integration')
+    add_image('setup.png', 'Setup & Configuration')
+
+    # Save
+    output_path = Path('/mnt/c/Users/mikec/OneDrive/Desktop/ATLAS-USER-MANUAL.docx')
+    doc.save(output_path)
+    print(f"✓ Saved to: {output_path}")
+
+if __name__ == '__main__':
+    import requests
+
+    # Check if ATLAS is running
+    try:
+        r = requests.get('http://localhost:8080', timeout=5)
+        if r.status_code != 200:
+            print("Error: ATLAS doesn't seem to be running on localhost:8080")
+            sys.exit(1)
+    except:
+        print("Error: Cannot connect to ATLAS. Make sure it's running:")
+        print("  cd ~/ai-workspace/atlas")
+        print("  source .venv/bin/activate")
+        print("  ./scripts/atlas-web")
+        sys.exit(1)
+
+    screenshot_dir = capture_screenshots()
+    generate_manual(screenshot_dir)
+    print("\n✓ Manual updated!")

@@ -15,6 +15,7 @@ Use cases in ATLAS:
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -445,3 +446,254 @@ class CanvaIntegration(PlatformIntegration):
         except Exception as e:
             logger.exception(f"Error exporting design: {e}")
             return None
+
+    async def upload_asset(
+        self,
+        image_path: Path,
+        name: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Upload an image asset to Canva.
+
+        Uses the Canva Asset Upload API to upload an image that can be
+        used in designs.
+
+        Args:
+            image_path: Path to the image file
+            name: Optional name for the asset (defaults to filename)
+
+        Returns:
+            Asset metadata including ID, or None if failed
+        """
+        if not self._authenticated:
+            await self.authenticate()
+
+        if not self._authenticated:
+            logger.error("Cannot upload asset: not authenticated")
+            return None
+
+        image_path = Path(image_path)
+        if not image_path.exists():
+            logger.error(f"Image file not found: {image_path}")
+            return None
+
+        if name is None:
+            name = image_path.stem
+
+        try:
+            # Step 1: Create upload job
+            create_response = await self.client.post(
+                "/asset-uploads",
+                json={
+                    "name": name,
+                }
+            )
+
+            if create_response.status_code not in [200, 201]:
+                logger.error(f"Failed to create upload job: {create_response.status_code} - {create_response.text}")
+                return None
+
+            upload_job = create_response.json()
+            upload_url = upload_job.get("upload_url")
+            job_id = upload_job.get("id")
+
+            if not upload_url:
+                logger.error("No upload URL in response")
+                return None
+
+            # Step 2: Upload the actual file
+            with open(image_path, "rb") as f:
+                file_content = f.read()
+
+            # Determine content type
+            suffix = image_path.suffix.lower()
+            content_type = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }.get(suffix, "image/png")
+
+            async with httpx.AsyncClient() as upload_client:
+                upload_response = await upload_client.put(
+                    upload_url,
+                    content=file_content,
+                    headers={"Content-Type": content_type},
+                )
+
+            if upload_response.status_code not in [200, 201, 204]:
+                logger.error(f"Failed to upload file: {upload_response.status_code}")
+                return None
+
+            # Step 3: Poll for completion
+            import asyncio
+            for _ in range(30):  # Max 30 seconds
+                status_response = await self.client.get(f"/asset-uploads/{job_id}")
+                if status_response.status_code == 200:
+                    status = status_response.json()
+                    if status.get("status") == "completed":
+                        asset = status.get("asset", {})
+                        logger.info(f"Uploaded asset: {asset.get('id')}")
+                        return {
+                            "id": asset.get("id"),
+                            "name": name,
+                            "thumbnail_url": asset.get("thumbnail", {}).get("url"),
+                        }
+                    elif status.get("status") == "failed":
+                        logger.error(f"Upload failed: {status}")
+                        return None
+                await asyncio.sleep(1)
+
+            logger.error("Upload timed out")
+            return None
+
+        except Exception as e:
+            logger.exception(f"Error uploading asset: {e}")
+            return None
+
+    async def create_multi_page_design(
+        self,
+        asset_ids: list[str],
+        title: str = "ATLAS Planner",
+        width: int = 816,
+        height: int = 1056,
+    ) -> Optional[dict]:
+        """Create a multi-page design from uploaded assets.
+
+        Each asset becomes a page in the design, with the image as a
+        full-page background.
+
+        Args:
+            asset_ids: List of asset IDs from upload_asset()
+            title: Title for the design
+            width: Design width in pixels
+            height: Design height in pixels
+
+        Returns:
+            Design metadata including edit URL, or None if failed
+        """
+        if not self._authenticated:
+            await self.authenticate()
+
+        if not self._authenticated:
+            logger.error("Cannot create design: not authenticated")
+            return None
+
+        if not asset_ids:
+            logger.error("No asset IDs provided")
+            return None
+
+        try:
+            # Build pages array - each page has the asset as background
+            pages = []
+            for i, asset_id in enumerate(asset_ids):
+                pages.append({
+                    "elements": [
+                        {
+                            "type": "image",
+                            "asset_id": asset_id,
+                            "position": {
+                                "x": 0,
+                                "y": 0,
+                            },
+                            "size": {
+                                "width": width,
+                                "height": height,
+                            },
+                        }
+                    ]
+                })
+
+            # Create the design
+            payload = {
+                "design_type": {
+                    "width": width,
+                    "height": height,
+                },
+                "title": title,
+                "pages": pages,
+            }
+
+            response = await self.client.post("/designs", json=payload)
+
+            if response.status_code in [200, 201]:
+                design = response.json()
+                design_data = design.get("design", design)
+                logger.info(f"Created multi-page design: {design_data.get('id')}")
+                return {
+                    "id": design_data.get("id"),
+                    "title": title,
+                    "page_count": len(asset_ids),
+                    "edit_url": design_data.get("urls", {}).get("edit_url"),
+                    "view_url": design_data.get("urls", {}).get("view_url"),
+                }
+            else:
+                logger.error(f"Failed to create design: {response.status_code} - {response.text}")
+                return None
+
+        except Exception as e:
+            logger.exception(f"Error creating multi-page design: {e}")
+            return None
+
+    async def create_planner_from_html(
+        self,
+        html_files: list[dict],
+        title: str = "ATLAS Planner",
+    ) -> Optional[dict]:
+        """Create a Canva design from HTML planner pages.
+
+        This is a high-level method that:
+        1. Renders HTML to images using Playwright
+        2. Uploads images as assets to Canva
+        3. Creates a multi-page design
+
+        Args:
+            html_files: List of dicts with 'filename' and 'content' keys
+            title: Title for the Canva design
+
+        Returns:
+            Design metadata including edit URL, or None if failed
+        """
+        from atlas.utils.image_renderer import get_image_renderer
+
+        if not html_files:
+            logger.error("No HTML files provided")
+            return None
+
+        # Step 1: Render HTML to images
+        logger.info(f"Rendering {len(html_files)} HTML pages to images...")
+        renderer = get_image_renderer()
+        image_paths = await renderer.render_html_to_images(html_files)
+
+        if not image_paths:
+            logger.error("Failed to render any images")
+            return None
+
+        # Step 2: Upload images as assets
+        logger.info(f"Uploading {len(image_paths)} images to Canva...")
+        asset_ids = []
+        for i, image_path in enumerate(image_paths):
+            asset = await self.upload_asset(
+                image_path,
+                name=f"{title} - Page {i + 1}",
+            )
+            if asset:
+                asset_ids.append(asset["id"])
+            else:
+                logger.warning(f"Failed to upload {image_path}")
+
+        if not asset_ids:
+            logger.error("Failed to upload any assets")
+            return None
+
+        # Step 3: Create multi-page design
+        logger.info(f"Creating design with {len(asset_ids)} pages...")
+        design = await self.create_multi_page_design(
+            asset_ids,
+            title=title,
+        )
+
+        if design:
+            logger.info(f"Created Canva design: {design.get('edit_url')}")
+
+        return design

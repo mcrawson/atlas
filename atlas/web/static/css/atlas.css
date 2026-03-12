@@ -7322,3 +7322,118 @@ select {
     height: 14px;
     vertical-align: middle;
 }
+
+/* =====================================================
+   Sprint Meeting Review Response Forms
+   ===================================================== */
+
+.review-response-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-default);
+}
+
+.respond-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    transition: color var(--transition);
+}
+
+.respond-btn:hover {
+    color: var(--accent-green);
+}
+
+.agent-response-form {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-default);
+}
+
+.agent-response-form textarea {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.agent-response-form textarea:focus {
+    outline: none;
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 3px var(--accent-green-muted);
+}
+
+.agent-response-form .form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+/* Team Feedback Section */
+.team-feedback-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-default);
+}
+
+.btn-wide {
+    width: 100%;
+    justify-content: center;
+}
+
+.team-feedback-form {
+    margin-top: 1rem;
+    padding: 1.25rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-default);
+}
+
+.team-feedback-form .feedback-header {
+    margin-bottom: 1rem;
+}
+
+.team-feedback-form .feedback-header h4 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.team-feedback-form .feedback-header p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.team-feedback-form textarea {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.team-feedback-form textarea:focus {
+    outline: none;
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 3px var(--accent-green-muted);
+}
+
+.team-feedback-form .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}

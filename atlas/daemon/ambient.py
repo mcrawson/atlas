@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Callable, List
 
-from ..monitoring import MonitorManager, SystemMonitor, GitMonitor, WebMonitor, Alert, AlertSeverity
+from ..monitoring import MonitorManager, SystemMonitor, GitMonitor, WebMonitor, CostMonitor, Alert, AlertSeverity
 from ..notifications import Notifier
 from ..tasks import TaskQueue, TaskWorker
 
@@ -82,6 +82,15 @@ class AmbientDaemon:
             urls = web_config.get("urls", [])
             if urls:
                 self.monitor_manager.register(WebMonitor(urls=urls))
+
+        # Cost monitor
+        cost_config = monitoring_config.get("cost", {})
+        if cost_config.get("enabled", True):
+            self.monitor_manager.register(CostMonitor(
+                daily_budget=cost_config.get("daily_budget", 10.0),
+                monthly_budget=cost_config.get("monthly_budget", 200.0),
+                warn_at_percent=cost_config.get("warn_at_percent", 80.0),
+            ))
 
     async def _check_monitors(self) -> List[Alert]:
         """Run all monitors and handle alerts.

@@ -126,6 +126,26 @@ class CodeValidator:
         ],
     }
 
+    # Placeholder content patterns - NOT READY TO SHIP
+    PLACEHOLDER_PATTERNS = [
+        (r'lorem\s+ipsum', "Placeholder text (Lorem ipsum) - replace with real content", Severity.HIGH),
+        (r'\[placeholder\]', "Placeholder marker - replace with real content", Severity.HIGH),
+        (r'\[insert\s+.*\]', "Insert marker - needs real content", Severity.HIGH),
+        (r'example\.com', "Example domain - replace with real domain", Severity.MEDIUM),
+        (r'your-?api-?key', "Placeholder API key reference", Severity.HIGH),
+        (r'YOUR_.*_HERE', "Placeholder value marker", Severity.HIGH),
+        (r'TODO:\s*implement', "Unimplemented TODO", Severity.HIGH),
+        (r'FIXME:\s', "FIXME marker indicates unfinished code", Severity.HIGH),
+        (r'XXX:', "XXX marker indicates problem area", Severity.MEDIUM),
+        (r'NotImplementedError', "NotImplementedError - stub implementation", Severity.HIGH),
+        (r'raise\s+NotImplemented', "NotImplemented - stub implementation", Severity.HIGH),
+        (r'pass\s*#\s*TODO', "Empty implementation with TODO", Severity.HIGH),
+        (r'\.\.\.\s*#', "Ellipsis stub implementation", Severity.MEDIUM),
+        (r'sample_?data', "Sample data marker - may need real data", Severity.LOW),
+        (r'test@example', "Test email - replace with real email or proper placeholder", Severity.LOW),
+        (r'function\s+stub', "Stub function marker", Severity.HIGH),
+    ]
+
     # Common bug patterns
     BUG_PATTERNS = {
         "python": [
@@ -361,6 +381,13 @@ class CodeValidator:
         checks_run: List[str] = []
 
         checks_run.append("Structure validation")
+        checks_run.append("Placeholder content check")
+
+        # Check for placeholder content in entire output
+        placeholder_issues = self._check_patterns(
+            build_output, self.PLACEHOLDER_PATTERNS, "Completeness", None
+        )
+        issues.extend(placeholder_issues)
 
         # Check for required sections
         required_sections = ["Implementation", "Files Modified"]

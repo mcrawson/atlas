@@ -375,7 +375,13 @@ curl -X POST http://localhost:8080/api/projects \
 - Fixed live preview rendering (Tinker's code now shows in iframe)
 - Fixed GitHub reverse sync (issue → task)
 - Added auto-load .env to startup
-- Created user manual
+- Updated Gemini provider to use new `google-genai` package (fixes deprecation warning)
+- **Added Physical Products support** (planners, journals, workbooks)
+  - New PHYSICAL project category with types: planner, journal, workbook, cards, printable
+  - Tinker now generates actual print-ready HTML/CSS templates
+  - Added PDF generation from HTML templates (using weasyprint)
+  - Launch supports physical product "deployment" (Amazon KDP, Etsy, Gumroad)
+- Created user manual with auto-update on startup
 
 ### 2026-03-06
 - Set up GitHub integration

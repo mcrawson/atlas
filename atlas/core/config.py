@@ -27,6 +27,7 @@ class Config:
             "claude": {
                 "enabled": True,
                 "daily_limit": 45,
+                "api_key_env": "ANTHROPIC_API_KEY",
             },
             "openai": {
                 "enabled": True,

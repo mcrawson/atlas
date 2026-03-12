@@ -410,9 +410,219 @@ async def get_spec_progress_api(request: Request, spec_id: int):
     return progress
 
 
+# ============================================
+# SPEC REFINEMENT CONVERSATIONS
+# ============================================
+
+# In-memory storage for active conversations
+# Key: f"{spec_id}_{agent_type}", Value: SpecRefinementConversation
+_active_conversations: dict = {}
+
+
+def _get_conversation_key(spec_id: int, agent_type: str) -> str:
+    return f"{spec_id}_{agent_type}"
+
+
+def _get_llm_config(request: Request) -> dict:
+    """Get LLM configuration from app state."""
+    config = {}
+    if hasattr(request.app.state, 'config'):
+        app_config = request.app.state.config
+        config['openai_api_key'] = getattr(app_config, 'openai_api_key', None)
+        config['openai_model'] = getattr(app_config, 'openai_model', 'gpt-4o-mini')
+
+    # Try to get from environment if not in config
+    if not config.get('openai_api_key'):
+        import os
+        config['openai_api_key'] = os.environ.get('OPENAI_API_KEY')
+
+    return config
+
+
+@router.post("/{spec_id}/refine/start")
+async def start_spec_refinement(request: Request, spec_id: int):
+    """Start a refinement conversation with an agent."""
+    from fastapi.responses import JSONResponse
+    from atlas.agents.spec_conversation import SpecRefinementConversation
+
+    spec_manager = get_spec_manager(request)
+
+    # Parse request
+    try:
+        body = await request.json()
+        agent_type = body.get("agent", "sketch")
+    except Exception:
+        agent_type = "sketch"
+
+    # Get spec
+    spec = spec_manager.get_spec(spec_id)
+    if not spec:
+        return JSONResponse({"error": "Spec not found"}, status_code=404)
+
+    # Build spec content
+    spec_content = f"""# {spec.get('name', 'Unnamed Spec')}
+
+{spec.get('description', 'No description')}
+"""
+
+    # Add spec files if available
+    if spec.get("spec_dir"):
+        spec_files = spec_manager.read_spec_files(spec["spec_dir"])
+        if spec_files.get("requirements"):
+            spec_content += f"\n## Requirements\n{spec_files['requirements']}\n"
+        if spec_files.get("design"):
+            spec_content += f"\n## Design\n{spec_files['design'][:2000]}\n"
+
+    # Get task info
+    tasks = spec_manager.get_tasks_for_spec(spec_id)
+    progress = spec_manager.get_spec_progress(spec_id)
+
+    spec_metadata = {
+        "status": spec.get("status", "unknown"),
+        "task_count": len(tasks),
+        "progress": progress,
+    }
+
+    # Get LLM config
+    llm_config = _get_llm_config(request)
+
+    # Create conversation
+    conversation = SpecRefinementConversation(
+        agent_type=agent_type,
+        openai_api_key=llm_config.get('openai_api_key'),
+        openai_model=llm_config.get('openai_model', 'gpt-4o-mini'),
+    )
+
+    # Start the conversation
+    try:
+        response = await conversation.start(
+            spec_name=spec.get('name', 'Unnamed'),
+            spec_content=spec_content,
+            spec_metadata=spec_metadata,
+        )
+
+        # Store conversation
+        key = _get_conversation_key(spec_id, agent_type)
+        _active_conversations[key] = conversation
+        print(f"[Specs] Stored conversation with key: {key}")
+        print(f"[Specs] Active conversations now: {list(_active_conversations.keys())}")
+
+        return JSONResponse({
+            "response": response,
+            "state": conversation.get_state(),
+            "agent": conversation.agent,
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "error": f"Failed to start conversation: {str(e)}"
+        }, status_code=500)
+
+
+@router.post("/{spec_id}/refine/respond")
+async def continue_spec_refinement(request: Request, spec_id: int):
+    """Continue a refinement conversation."""
+    from fastapi.responses import JSONResponse
+    from atlas.agents.spec_conversation import SpecRefinementConversation
+
+    # Parse request
+    try:
+        body = await request.json()
+        message = body.get("message", "")
+        agent_type = body.get("agent", "sketch")
+        conversation_state = body.get("conversation_state")
+    except Exception as e:
+        print(f"[Specs] Error parsing request: {e}")
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+
+    if not message.strip():
+        return JSONResponse({"error": "Message is required"}, status_code=400)
+
+    # Get or restore conversation
+    key = _get_conversation_key(spec_id, agent_type)
+    print(f"[Specs] Looking for conversation: {key}")
+    print(f"[Specs] Active conversations: {list(_active_conversations.keys())}")
+
+    conversation = _active_conversations.get(key)
+
+    if not conversation and conversation_state:
+        # Restore from state
+        print(f"[Specs] Restoring conversation from state")
+        llm_config = _get_llm_config(request)
+        conversation = SpecRefinementConversation.from_dict(
+            conversation_state,
+            openai_api_key=llm_config.get('openai_api_key'),
+            openai_model=llm_config.get('openai_model', 'gpt-4o-mini'),
+        )
+        _active_conversations[key] = conversation
+
+    if not conversation:
+        print(f"[Specs] No conversation found for key: {key}")
+        return JSONResponse({
+            "error": "No active conversation. Please start a new one."
+        }, status_code=400)
+
+    try:
+        response = await conversation.respond(message)
+
+        return JSONResponse({
+            "response": response,
+            "state": conversation.get_state(),
+            "messages": conversation.get_messages(),
+            "is_complete": conversation.is_complete,
+            "spec_updates": conversation.spec_updates,
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "error": f"Failed to process response: {str(e)}"
+        }, status_code=500)
+
+
+@router.get("/{spec_id}/refine/state")
+async def get_refinement_state(request: Request, spec_id: int, agent: str = "sketch"):
+    """Get the current state of a refinement conversation."""
+    from fastapi.responses import JSONResponse
+
+    key = _get_conversation_key(spec_id, agent)
+    conversation = _active_conversations.get(key)
+
+    if not conversation:
+        return JSONResponse({
+            "active": False,
+            "message": "No active conversation"
+        })
+
+    return JSONResponse({
+        "active": True,
+        "state": conversation.get_state(),
+        "messages": conversation.get_messages(),
+        "conversation_data": conversation.to_dict(),
+    })
+
+
+@router.post("/{spec_id}/refine/reset")
+async def reset_refinement(request: Request, spec_id: int):
+    """Reset/clear a refinement conversation."""
+    from fastapi.responses import JSONResponse
+
+    try:
+        body = await request.json()
+        agent_type = body.get("agent", "sketch")
+    except Exception:
+        agent_type = "sketch"
+
+    key = _get_conversation_key(spec_id, agent_type)
+    if key in _active_conversations:
+        del _active_conversations[key]
+
+    return JSONResponse({"success": True, "message": "Conversation reset"})
+
+
+# Legacy chat endpoint (kept for backwards compatibility)
 @router.post("/{spec_id}/chat")
 async def spec_chat(request: Request, spec_id: int):
-    """Chat with Sketch about a spec."""
+    """Chat with Sketch about a spec (legacy - use /refine endpoints for conversations)."""
     from fastapi.responses import JSONResponse
 
     spec_manager = get_spec_manager(request)

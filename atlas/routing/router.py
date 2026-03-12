@@ -3,10 +3,17 @@
 import re
 from typing import Optional
 from .usage import UsageTracker
+from ..learning import get_routing_learner
 
 
 class Router:
-    """Route tasks to the most appropriate AI provider."""
+    """Route tasks to the most appropriate AI provider.
+
+    Uses a combination of:
+    1. Static routing table (default preferences)
+    2. Learned preferences (from RoutingLearner)
+    3. Usage limits (from UsageTracker)
+    """
 
     # Task type patterns for classification
     TASK_PATTERNS = {
@@ -48,13 +55,16 @@ class Router:
         "default": ["ollama", "gemini", "claude"],
     }
 
-    def __init__(self, usage_tracker: Optional[UsageTracker] = None):
+    def __init__(self, usage_tracker: Optional[UsageTracker] = None, enable_learning: bool = True):
         """Initialize router.
 
         Args:
             usage_tracker: UsageTracker instance. Creates one if not provided.
+            enable_learning: Whether to use learned routing preferences.
         """
         self.usage = usage_tracker or UsageTracker()
+        self.enable_learning = enable_learning
+        self._learner = get_routing_learner() if enable_learning else None
 
     def classify_task(self, prompt: str) -> str:
         """Classify the task type based on the prompt.
@@ -102,7 +112,13 @@ class Router:
             reason = f"Best for {task_type} tasks"
 
         # Get routing preferences for this task type
-        providers = self.ROUTING_TABLE.get(task_type, self.ROUTING_TABLE["default"])
+        providers = list(self.ROUTING_TABLE.get(task_type, self.ROUTING_TABLE["default"]))
+
+        # Apply learned preferences if enabled
+        if self.enable_learning and self._learner:
+            # Re-order based on learned scores
+            providers = self._learner.get_best_providers(task_type, providers)
+            reason = f"Learned best for {task_type} tasks"
 
         # Find first available provider
         for provider in providers:
@@ -143,17 +159,76 @@ class Router:
             "usage_before": usage_before,
         }
 
-    def log_completion(self, provider: str, task_type: str) -> int:
-        """Log successful completion and return new usage count.
+    def log_completion(
+        self,
+        provider: str,
+        task_type: str,
+        success: bool = True,
+        retried: bool = False,
+        user_rating: Optional[int] = None,
+        response_time_ms: Optional[int] = None,
+    ) -> int:
+        """Log completion and return new usage count.
 
         Args:
             provider: The provider that was used
             task_type: The task type that was performed
+            success: Whether the request succeeded
+            retried: Whether the user had to retry
+            user_rating: Optional 1-5 rating from user
+            response_time_ms: Optional response time in milliseconds
 
         Returns:
             New usage count for the provider
         """
-        return self.usage.log_usage(provider, task_type)
+        # Log usage
+        count = self.usage.log_usage(provider, task_type)
+
+        # Record outcome for learning
+        if self.enable_learning and self._learner:
+            self._learner.record_outcome(
+                provider=provider,
+                task_type=task_type,
+                success=success,
+                retried=retried,
+                user_rating=user_rating,
+                response_time_ms=response_time_ms,
+            )
+
+        return count
+
+    def record_feedback(
+        self,
+        provider: str,
+        task_type: str,
+        success: bool = True,
+        user_rating: Optional[int] = None,
+    ):
+        """Record explicit user feedback on a result.
+
+        Args:
+            provider: Provider that was used
+            task_type: Task type
+            success: Whether the result was acceptable
+            user_rating: Optional 1-5 rating
+        """
+        if self.enable_learning and self._learner:
+            self._learner.record_outcome(
+                provider=provider,
+                task_type=task_type,
+                success=success,
+                user_rating=user_rating,
+            )
+
+    def get_learning_stats(self) -> dict:
+        """Get statistics from the learning engine.
+
+        Returns:
+            Dictionary with learning statistics
+        """
+        if self.enable_learning and self._learner:
+            return self._learner.get_recent_stats()
+        return {}
 
     def get_recommendation(self, task_type: str) -> str:
         """Get a human-readable recommendation for a task type.

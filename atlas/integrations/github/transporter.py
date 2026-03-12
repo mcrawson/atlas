@@ -693,8 +693,9 @@ class Transporter:
             labels.append(self.config.priority_labels[task.priority])
         labels.extend(task.tags)
 
-        # Map task status to issue state
-        state = "closed" if task.status.value == "completed" else "open"
+        # Map task status to issue state (handle both enum and string)
+        status_str = task.status.value if hasattr(task.status, 'value') else task.status
+        state = "closed" if status_str == "completed" else "open"
 
         return await self.api.update_issue(
             repo=mapping.github_repo,
@@ -791,7 +792,9 @@ class Transporter:
         lines.append("---")
         lines.append("*Synced from ATLAS*")
         lines.append(f"- **Task ID**: {task.id}")
-        lines.append(f"- **Status**: {task.status.value}")
+        # Handle both enum and string status
+        status_str = task.status.value if hasattr(task.status, 'value') else task.status
+        lines.append(f"- **Status**: {status_str}")
         lines.append(f"- **Priority**: {task.priority}")
 
         if task.tags:

@@ -102,8 +102,10 @@ class TestSlackClient:
         """Test is_configured property."""
         assert client.is_configured is True
 
-        unconfigured = SlackClient()
-        assert unconfigured.is_configured is False
+        # Clear env vars to test truly unconfigured state
+        with patch.dict("os.environ", {}, clear=True):
+            unconfigured = SlackClient()
+            assert unconfigured.is_configured is False
 
     def test_verify_signature_valid(self, client):
         """Test valid signature verification."""

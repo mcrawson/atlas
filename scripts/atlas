@@ -4,11 +4,6 @@
 Main CLI entry point with interactive REPL and background task support.
 """
 
-# Suppress deprecation warnings from google.generativeai before it loads
-import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", message=".*google.generativeai.*")
-
 import argparse
 import asyncio
 import sys
@@ -204,7 +199,8 @@ class AtlasCLI:
         """Initialize available AI providers."""
         # Claude
         if self.config.get("providers", "claude", "enabled", default=True):
-            self.providers["claude"] = ClaudeProvider()
+            api_key = self.config.get_api_key("claude")
+            self.providers["claude"] = ClaudeProvider(api_key=api_key)
 
         # OpenAI
         if self.config.get("providers", "openai", "enabled", default=True):

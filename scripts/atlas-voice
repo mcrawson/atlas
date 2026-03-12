@@ -62,7 +62,8 @@ class AtlasVoice:
     def _init_providers(self):
         """Initialize AI providers."""
         if self.config.get("providers", "claude", "enabled", default=True):
-            self.providers["claude"] = ClaudeProvider()
+            api_key = self.config.get_api_key("claude")
+            self.providers["claude"] = ClaudeProvider(api_key=api_key)
 
         if self.config.get("providers", "openai", "enabled", default=True):
             api_key = self.config.get_api_key("openai")

@@ -26,6 +26,7 @@ class ProjectCategory(Enum):
     LIBRARY = "library"         # Reusable library or package
     SCRIPT = "script"           # Automation script or one-off tool
     DOCUMENT = "document"       # Book, documentation, or written content
+    PHYSICAL = "physical"       # Physical products (planners, printed materials)
     OTHER = "other"             # Doesn't fit other categories
 
 
@@ -73,6 +74,13 @@ class ProjectType(Enum):
     DOC_PROPOSAL = "doc_proposal"
     DOC_REPORT = "doc_report"
     DOC_GUIDE = "doc_guide"
+
+    # Physical products category
+    PHYSICAL_PLANNER = "physical_planner"
+    PHYSICAL_JOURNAL = "physical_journal"
+    PHYSICAL_WORKBOOK = "physical_workbook"
+    PHYSICAL_CARDS = "physical_cards"
+    PHYSICAL_PRINTABLE = "physical_printable"
 
     # Other
     OTHER = "other"
@@ -201,6 +209,28 @@ PROJECT_TYPE_PATTERNS = {
     ProjectType.DOC_GUIDE: {
         "keywords": [r'\b(guide|tutorial|how.?to|walkthrough|instructions)\b'],
         "phrases": [r'(write|create) a guide', r'how.?to (guide|document)', r'step.?by.?step'],
+    },
+
+    # Physical Products
+    ProjectType.PHYSICAL_PLANNER: {
+        "keywords": [r'\b(planner|daily planner|weekly planner|agenda|organizer)\b'],
+        "phrases": [r'physical planner', r'planner book', r'printable planner', r'paper planner'],
+    },
+    ProjectType.PHYSICAL_JOURNAL: {
+        "keywords": [r'\b(journal|diary|gratitude journal|bullet journal|bujo)\b'],
+        "phrases": [r'physical journal', r'journal book', r'printable journal'],
+    },
+    ProjectType.PHYSICAL_WORKBOOK: {
+        "keywords": [r'\b(workbook|worksheet|activity book|exercise book)\b'],
+        "phrases": [r'physical workbook', r'printable workbook', r'worksheet book'],
+    },
+    ProjectType.PHYSICAL_CARDS: {
+        "keywords": [r'\b(cards|flashcards|playing cards|game cards|greeting cards)\b'],
+        "phrases": [r'physical cards', r'printable cards', r'card deck'],
+    },
+    ProjectType.PHYSICAL_PRINTABLE: {
+        "keywords": [r'\b(printable|print.?ready|pdf template|downloadable)\b'],
+        "phrases": [r'printable (template|pdf)', r'print.?ready', r'downloadable (pdf|template)'],
     },
 }
 
@@ -417,6 +447,63 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         build_approach="Create step-by-step guide with clear instructions",
         verification_focus=["step accuracy", "completeness", "clarity", "prerequisites"],
         key_questions=["Beginner or advanced?", "Include screenshots?", "Code examples?"],
+    ),
+
+    # Physical Products
+    ProjectType.PHYSICAL_PLANNER: ProjectTypeConfig(
+        type=ProjectType.PHYSICAL_PLANNER,
+        category=ProjectCategory.PHYSICAL,
+        name="Physical Planner",
+        description="Printable planner book or pages",
+        icon="📅",
+        suggested_stack=["HTML", "CSS", "PDF"],
+        build_approach="Create print-ready HTML/CSS templates that can be exported to PDF. Include all page layouts with proper print margins (0.5 inch), page sizes (letter/A4/A5), and bleed areas.",
+        verification_focus=["print margins", "page dimensions", "readability", "completeness"],
+        key_questions=["Page size (letter, A4, A5)?", "Binding side (left, top)?", "Color or black & white?", "How many pages/sections?"],
+    ),
+    ProjectType.PHYSICAL_JOURNAL: ProjectTypeConfig(
+        type=ProjectType.PHYSICAL_JOURNAL,
+        category=ProjectCategory.PHYSICAL,
+        name="Physical Journal",
+        description="Printable journal or diary",
+        icon="📓",
+        suggested_stack=["HTML", "CSS", "PDF"],
+        build_approach="Create print-ready journal templates with prompts, lined areas, and decorative elements. Include cover design.",
+        verification_focus=["print margins", "line spacing", "prompt clarity", "aesthetic appeal"],
+        key_questions=["Guided prompts or blank?", "Daily, weekly, or undated?", "Include cover design?"],
+    ),
+    ProjectType.PHYSICAL_WORKBOOK: ProjectTypeConfig(
+        type=ProjectType.PHYSICAL_WORKBOOK,
+        category=ProjectCategory.PHYSICAL,
+        name="Physical Workbook",
+        description="Printable workbook with exercises",
+        icon="📝",
+        suggested_stack=["HTML", "CSS", "PDF"],
+        build_approach="Create print-ready workbook pages with exercises, fill-in areas, and answer sections.",
+        verification_focus=["exercise clarity", "answer space", "progression", "instructions"],
+        key_questions=["Subject/topic?", "Age group?", "Include answer key?"],
+    ),
+    ProjectType.PHYSICAL_CARDS: ProjectTypeConfig(
+        type=ProjectType.PHYSICAL_CARDS,
+        category=ProjectCategory.PHYSICAL,
+        name="Physical Cards",
+        description="Printable cards (flashcards, game cards, etc.)",
+        icon="🃏",
+        suggested_stack=["HTML", "CSS", "PDF"],
+        build_approach="Create print-ready card layouts with proper cut lines, front/back alignment, and card dimensions.",
+        verification_focus=["card dimensions", "cut lines", "front/back alignment", "readability"],
+        key_questions=["Card size?", "Number of cards?", "Double-sided?", "Cut lines needed?"],
+    ),
+    ProjectType.PHYSICAL_PRINTABLE: ProjectTypeConfig(
+        type=ProjectType.PHYSICAL_PRINTABLE,
+        category=ProjectCategory.PHYSICAL,
+        name="Printable Template",
+        description="General printable PDF template",
+        icon="🖨️",
+        suggested_stack=["HTML", "CSS", "PDF"],
+        build_approach="Create print-ready template with proper margins and dimensions for the target use case.",
+        verification_focus=["print quality", "margins", "usability", "completeness"],
+        key_questions=["What will it be used for?", "Page size?", "Single or multi-page?"],
     ),
 }
 

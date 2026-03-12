@@ -109,32 +109,73 @@
         </div>
     </section>
 
-    <!-- Refine with Sketch -->
+    <!-- Refine with Agents -->
     <section class="section refine-section">
         <div class="section-header-row">
-            <h2 class="section-title">Refine with Sketch</h2>
+            <h2 class="section-title">Refine with Agents</h2>
             <button class="btn btn-ghost btn-small" onclick="toggleRefineChat()">
                 <span id="refine-toggle-text">Expand</span>
             </button>
         </div>
-        <p class="section-desc">Have questions or want to adjust the spec? Chat with Sketch.</p>
+        <p class="section-desc">Have an agent review your spec and discuss concerns with you.</p>
 
         <div class="refine-chat-container" id="refine-chat" style="display: none;">
-            <div class="refine-chat-messages" id="refine-messages">
-                <div class="chat-welcome-mini">
-                    <span class="welcome-icon">💡</span>
-                    <p>I'm Sketch. Ask me about this spec or tell me what you'd like to change.</p>
+            <!-- Agent Selection -->
+            <div class="agent-selector" id="agent-selector">
+                <p class="selector-label">Choose an agent to review your spec:</p>
+                <div class="agent-options">
+                    <button class="agent-option" data-agent="sketch" onclick="selectAgent('sketch')">
+                        <span class="agent-icon">📐</span>
+                        <span class="agent-name">Sketch</span>
+                        <span class="agent-focus">Requirements & Scope</span>
+                    </button>
+                    <button class="agent-option" data-agent="architect" onclick="selectAgent('architect')">
+                        <span class="agent-icon">🏗️</span>
+                        <span class="agent-name">Architect</span>
+                        <span class="agent-focus">Technical Design</span>
+                    </button>
+                    <button class="agent-option" data-agent="tinker" onclick="selectAgent('tinker')">
+                        <span class="agent-icon">🔧</span>
+                        <span class="agent-name">Tinker</span>
+                        <span class="agent-focus">Implementation</span>
+                    </button>
+                    <button class="agent-option" data-agent="oracle" onclick="selectAgent('oracle')">
+                        <span class="agent-icon">🔮</span>
+                        <span class="agent-name">Oracle</span>
+                        <span class="agent-focus">Quality & Risks</span>
+                    </button>
                 </div>
             </div>
 
-            <form class="refine-chat-form" onsubmit="sendRefineMessage(event)">
+            <!-- Conversation Progress -->
+            <div class="conversation-progress" id="conversation-progress" style="display: none;">
+                <div class="progress-header">
+                    <span class="current-agent" id="current-agent-badge">
+                        <span class="agent-icon" id="current-agent-icon">📐</span>
+                        <span id="current-agent-name">Sketch</span>
+                    </span>
+                    <span class="concerns-status" id="concerns-status">0 of 0 items discussed</span>
+                    <button class="btn btn-ghost btn-tiny" onclick="resetConversation()">Reset</button>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="refine-chat-messages" id="refine-messages">
+                <div class="chat-welcome-mini" id="chat-welcome">
+                    <span class="welcome-icon">💬</span>
+                    <p>Select an agent above to start a review conversation.</p>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <form class="refine-chat-form" id="refine-form" onsubmit="sendRefineMessage(event)" style="display: none;">
                 <div class="refine-input-wrapper">
                     <textarea
                         id="refine-input"
-                        placeholder="Ask a question or suggest changes..."
+                        placeholder="Respond to the agent..."
                         rows="2"
                         onkeydown="handleRefineKeyDown(event)"></textarea>
-                    <button type="submit" class="send-btn sketch">
+                    <button type="submit" class="send-btn" id="send-btn">
                         <span>→</span>
                     </button>
                 </div>
@@ -597,11 +638,162 @@
 .refine-thinking-dots span:nth-child(1) { animation-delay: 0s; }
 .refine-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
 .refine-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Agent Selector */
+.agent-selector {
+    margin-bottom: 1rem;
+}
+
+.selector-label {
+    color: var(--text-secondary, #888);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.agent-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.5rem;
+}
+
+.agent-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--bg-tertiary, #252540);
+    border: 2px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.agent-option:hover {
+    border-color: var(--accent-color, #00ff41);
+    transform: translateY(-2px);
+}
+
+.agent-option.selected {
+    border-color: var(--accent-color, #00ff41);
+    background: rgba(0, 255, 65, 0.1);
+}
+
+.agent-option .agent-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.agent-option .agent-name {
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    font-size: 0.9rem;
+}
+
+.agent-option .agent-focus {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #888);
+    text-align: center;
+}
+
+/* Conversation Progress */
+.conversation-progress {
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary, #252540);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.current-agent {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+
+.current-agent .agent-icon {
+    font-size: 1.25rem;
+}
+
+.concerns-status {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #888);
+}
+
+.btn-tiny {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* Agent-specific colors */
+.agent-option[data-agent="sketch"]:hover,
+.agent-option[data-agent="sketch"].selected { border-color: #4A90D9; }
+.agent-option[data-agent="architect"]:hover,
+.agent-option[data-agent="architect"].selected { border-color: #9B59B6; }
+.agent-option[data-agent="tinker"]:hover,
+.agent-option[data-agent="tinker"].selected { border-color: #E67E22; }
+.agent-option[data-agent="oracle"]:hover,
+.agent-option[data-agent="oracle"].selected { border-color: #1ABC9C; }
+
+.send-btn.sketch { background: #4A90D9; }
+.send-btn.architect { background: #9B59B6; }
+.send-btn.tinker { background: #E67E22; }
+.send-btn.oracle { background: #1ABC9C; }
+
+.refine-message.assistant.sketch .refine-avatar { background: linear-gradient(135deg, #4A90D9, #357ABD); }
+.refine-message.assistant.architect .refine-avatar { background: linear-gradient(135deg, #9B59B6, #8E44AD); }
+.refine-message.assistant.tinker .refine-avatar { background: linear-gradient(135deg, #E67E22, #D35400); }
+.refine-message.assistant.oracle .refine-avatar { background: linear-gradient(135deg, #1ABC9C, #16A085); }
+
+/* Concern severity badges */
+.severity-badge {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.severity-critical { background: rgba(220, 53, 69, 0.3); color: #dc3545; }
+.severity-important { background: rgba(240, 173, 78, 0.3); color: #f0ad4e; }
+.severity-minor { background: rgba(136, 136, 136, 0.3); color: #888; }
+
+/* Complete state */
+.conversation-complete {
+    text-align: center;
+    padding: 1.5rem;
+    background: rgba(0, 255, 65, 0.1);
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.conversation-complete h4 {
+    color: var(--accent-color, #00ff41);
+    margin-bottom: 0.5rem;
+}
 </style>
 
 <script>
 const specId = "{{ spec.id }}";
-let refineHistory = [];
+let currentAgent = null;
+let conversationState = null;
+let conversationData = null;  // Full conversation data for restoration
+let isConversationActive = false;
+
+const AGENT_ICONS = {
+    sketch: '📐',
+    architect: '🏗️',
+    tinker: '🔧',
+    oracle: '🔮'
+};
 
 function toggleRefineChat() {
     const chat = document.getElementById('refine-chat');
@@ -623,29 +815,109 @@ function handleRefineKeyDown(event) {
     }
 }
 
-function addRefineMessage(role, content) {
+async function selectAgent(agentType) {
+    // Update UI
+    document.querySelectorAll('.agent-option').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    document.querySelector(`.agent-option[data-agent="${agentType}"]`).classList.add('selected');
+
+    currentAgent = agentType;
+
+    // Update send button color
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.className = `send-btn ${agentType}`;
+
+    // Show thinking state
+    const messages = document.getElementById('refine-messages');
+    const welcome = document.getElementById('chat-welcome');
+    if (welcome) welcome.style.display = 'none';
+
+    addRefineThinking(agentType);
+
+    // Start conversation
+    try {
+        const response = await fetch(`/specs/${specId}/refine/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent: agentType })
+        });
+
+        const data = await response.json();
+        removeRefineThinking();
+
+        if (data.error) {
+            addRefineMessage('assistant', agentType, `Sorry, I encountered an error: ${data.error}`);
+            return;
+        }
+
+        // Store state and full conversation data
+        conversationState = data.state;
+        isConversationActive = true;
+
+        // Fetch full conversation data for restoration
+        try {
+            const stateResponse = await fetch(`/specs/${specId}/refine/state?agent=${agentType}`);
+            const stateData = await stateResponse.json();
+            if (stateData.conversation_data) {
+                conversationData = stateData.conversation_data;
+            }
+        } catch (e) {
+            console.log('Could not fetch conversation data:', e);
+        }
+
+        // Update progress bar
+        updateProgressBar(data.state, data.agent);
+
+        // Show the message
+        addRefineMessage('assistant', agentType, data.response);
+
+        // Show input form
+        document.getElementById('refine-form').style.display = 'flex';
+        document.getElementById('refine-input').focus();
+
+    } catch (error) {
+        removeRefineThinking();
+        addRefineMessage('assistant', agentType, 'Sorry, I had trouble connecting. Please try again.');
+    }
+}
+
+function updateProgressBar(state, agent) {
+    const progressDiv = document.getElementById('conversation-progress');
+    progressDiv.style.display = 'block';
+
+    document.getElementById('current-agent-icon').textContent = agent?.icon || AGENT_ICONS[currentAgent];
+    document.getElementById('current-agent-name').textContent = agent?.name || currentAgent;
+
+    const resolved = state?.concerns_resolved || 0;
+    const total = state?.concerns_total || 0;
+    const statusText = state?.is_complete
+        ? 'Review complete!'
+        : `${resolved} of ${total} items discussed`;
+    document.getElementById('concerns-status').textContent = statusText;
+}
+
+function addRefineMessage(role, agentType, content) {
     const messages = document.getElementById('refine-messages');
 
-    // Remove welcome message on first real message
-    const welcome = messages.querySelector('.chat-welcome-mini');
-    if (welcome && role === 'user') {
-        welcome.style.display = 'none';
-    }
-
     const messageDiv = document.createElement('div');
-    messageDiv.className = `refine-message ${role}`;
+    messageDiv.className = `refine-message ${role} ${agentType || ''}`;
 
     const avatar = document.createElement('div');
     avatar.className = 'refine-avatar';
-    avatar.textContent = role === 'user' ? 'You' : '💡';
+    avatar.textContent = role === 'user' ? 'You' : (AGENT_ICONS[agentType] || '💬');
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'refine-content';
 
-    // Basic markdown rendering
+    // Enhanced markdown rendering
     let html = content
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/_([^_]+)_/g, '<em>$1</em>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+        .replace(/\n---\n/g, '<hr>')
         .replace(/\n/g, '<br>');
     contentDiv.innerHTML = html;
 
@@ -656,16 +928,16 @@ function addRefineMessage(role, content) {
     messages.scrollTop = messages.scrollHeight;
 }
 
-function addRefineThinking() {
+function addRefineThinking(agentType) {
     const messages = document.getElementById('refine-messages');
 
     const thinkingDiv = document.createElement('div');
-    thinkingDiv.className = 'refine-message assistant';
+    thinkingDiv.className = `refine-message assistant ${agentType || ''}`;
     thinkingDiv.id = 'refine-thinking';
 
     const avatar = document.createElement('div');
     avatar.className = 'refine-avatar';
-    avatar.textContent = '💡';
+    avatar.textContent = AGENT_ICONS[agentType] || '💬';
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'refine-thinking';
@@ -673,7 +945,7 @@ function addRefineThinking() {
         <div class="refine-thinking-dots">
             <span></span><span></span><span></span>
         </div>
-        <span>Sketch is thinking...</span>
+        <span>Analyzing spec...</span>
     `;
 
     thinkingDiv.appendChild(avatar);
@@ -693,43 +965,142 @@ async function sendRefineMessage(event) {
 
     const input = document.getElementById('refine-input');
     const message = input.value.trim();
-    if (!message) return;
+
+    if (!message) {
+        console.log('No message to send');
+        return;
+    }
+
+    if (!currentAgent) {
+        console.log('No agent selected');
+        addRefineMessage('assistant', 'sketch', 'Please select an agent first.');
+        return;
+    }
 
     // Add user message
-    addRefineMessage('user', message);
-    refineHistory.push({ role: 'user', content: message });
+    addRefineMessage('user', null, message);
 
     // Clear input
     input.value = '';
 
     // Show thinking
-    addRefineThinking();
+    addRefineThinking(currentAgent);
 
     try {
-        const response = await fetch(`/specs/${specId}/chat`, {
+        console.log('Sending message to agent:', currentAgent, 'message:', message);
+
+        const requestBody = {
+            message: message,
+            agent: currentAgent
+        };
+
+        // Include conversation state for restoration if server lost it
+        if (conversationData) {
+            requestBody.conversation_state = conversationData;
+        }
+
+        const response = await fetch(`/specs/${specId}/refine/respond`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: message,
-                history: refineHistory.slice(-10)
-            })
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('Response status:', response.status);
         const data = await response.json();
+        console.log('Response data:', data);
+
         removeRefineThinking();
 
         if (data.error) {
-            addRefineMessage('assistant', `Sorry, I encountered an error: ${data.error}`);
-        } else {
-            addRefineMessage('assistant', data.response);
-            refineHistory.push({ role: 'assistant', content: data.response });
+            addRefineMessage('assistant', currentAgent, `Sorry, I encountered an error: ${data.error}`);
+            return;
         }
+
+        // Update state
+        conversationState = data.state;
+
+        // Update conversation data for future requests
+        if (data.messages) {
+            if (!conversationData) conversationData = {};
+            conversationData.messages = data.messages;
+        }
+
+        // Update progress
+        updateProgressBar(data.state, null);
+
+        // Show response
+        addRefineMessage('assistant', currentAgent, data.response);
+
+        // Check if complete
+        if (data.is_complete) {
+            showConversationComplete(data.spec_updates);
+        }
+
     } catch (error) {
+        console.error('Error sending message:', error);
         removeRefineThinking();
-        addRefineMessage('assistant', 'Sorry, I had trouble connecting. Please try again.');
+        addRefineMessage('assistant', currentAgent, `Sorry, I had trouble connecting: ${error.message}`);
     }
 
     input.focus();
+}
+
+function showConversationComplete(specUpdates) {
+    const form = document.getElementById('refine-form');
+
+    // Replace input with completion message
+    const completeDiv = document.createElement('div');
+    completeDiv.className = 'conversation-complete';
+    completeDiv.innerHTML = `
+        <h4>Review Complete</h4>
+        <p>This agent has finished reviewing the spec.</p>
+        ${specUpdates && specUpdates.length > 0 ? `
+            <p><strong>Suggested updates:</strong></p>
+            <ul>${specUpdates.map(u => `<li>${u}</li>`).join('')}</ul>
+        ` : ''}
+        <button class="btn btn-primary" onclick="resetConversation()">Start Another Review</button>
+    `;
+
+    form.parentNode.insertBefore(completeDiv, form);
+    form.style.display = 'none';
+}
+
+async function resetConversation() {
+    if (currentAgent) {
+        try {
+            await fetch(`/specs/${specId}/refine/reset`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent: currentAgent })
+            });
+        } catch (e) {
+            console.error('Reset failed:', e);
+        }
+    }
+
+    // Reset UI
+    currentAgent = null;
+    conversationState = null;
+    isConversationActive = false;
+
+    document.querySelectorAll('.agent-option').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+
+    document.getElementById('conversation-progress').style.display = 'none';
+    document.getElementById('refine-form').style.display = 'none';
+
+    const messages = document.getElementById('refine-messages');
+    messages.innerHTML = `
+        <div class="chat-welcome-mini" id="chat-welcome">
+            <span class="welcome-icon">💬</span>
+            <p>Select an agent above to start a review conversation.</p>
+        </div>
+    `;
+
+    // Remove completion message if exists
+    const complete = document.querySelector('.conversation-complete');
+    if (complete) complete.remove();
 }
 </script>
 {% endblock %}

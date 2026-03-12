@@ -208,7 +208,7 @@ class TestCostTracker:
 
         report = tracker.format_daily_report()
 
-        assert "Pennsworth" in report
+        assert "Tally" in report
         assert "Total Cost" in report
         assert "Budget Status" in report
 

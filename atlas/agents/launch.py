@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 from .base import BaseAgent, AgentOutput, AgentStatus
 from atlas.knowledge import get_knowledge_augmenter, KnowledgeManager
+from atlas.research import get_research_augmenter
 
 logger = logging.getLogger("atlas.agents.launch")
 
@@ -116,6 +117,37 @@ DEPLOYMENT_TARGETS = {
         "icon": "🖼️",
         "knowledge_id": "canva-deployment",
         "requires": ["Canva Developer account"],
+    },
+    # Physical product targets
+    "pdf": {
+        "name": "PDF Download",
+        "icon": "📄",
+        "knowledge_id": "pdf-export",
+        "requires": ["Browser with Print to PDF"],
+    },
+    "amazon-kdp": {
+        "name": "Amazon KDP (Print on Demand)",
+        "icon": "📚",
+        "knowledge_id": "amazon-kdp-deployment",
+        "requires": ["Amazon KDP account", "PDF files", "Cover PDF"],
+    },
+    "lulu": {
+        "name": "Lulu (Print on Demand)",
+        "icon": "📖",
+        "knowledge_id": "lulu-deployment",
+        "requires": ["Lulu account", "PDF files"],
+    },
+    "etsy": {
+        "name": "Etsy (Digital Downloads)",
+        "icon": "🛍️",
+        "knowledge_id": "etsy-deployment",
+        "requires": ["Etsy seller account", "PDF files"],
+    },
+    "gumroad": {
+        "name": "Gumroad (Digital Products)",
+        "icon": "💰",
+        "knowledge_id": "gumroad-deployment",
+        "requires": ["Gumroad account", "PDF files"],
     },
 }
 
@@ -321,6 +353,14 @@ GUIDELINES:
 
             # Build the prompt with knowledge context
             prompt = self._build_prompt(task, build_output, platforms, guides, context)
+
+            # Augment with live web research for current deployment best practices
+            research_augmenter = get_research_augmenter()
+            research_context = await research_augmenter.augment_prompt(
+                task, {"platforms": platforms, **(context or {})}
+            )
+            if research_context:
+                prompt += f"\n\n{research_context}"
 
             self.status = AgentStatus.WORKING
 

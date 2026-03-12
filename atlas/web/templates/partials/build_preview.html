@@ -79,6 +79,38 @@
                 {{ preview.content|safe }}
             </div>
 
+            {% elif preview.preview_type == 'printable' %}
+            <!-- Printable Preview (Physical Products) -->
+            <div class="printable-preview-wrapper">
+                <div class="preview-toolbar">
+                    <span class="preview-type-badge">🖨️ Print Preview</span>
+                    <div class="printable-actions">
+                        <button class="btn btn-small btn-success" onclick="printPreview()">
+                            🖨️ Print / Save PDF
+                        </button>
+                        {% if preview.artifacts %}
+                        <span class="artifact-count">{{ preview.artifacts|length }} PDF(s) generated</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="printable-frame-container">
+                    <iframe id="printable-preview-frame"
+                            class="printable-preview-frame"
+                            sandbox="allow-scripts allow-same-origin"
+                            srcdoc="{{ preview.content|e }}"></iframe>
+                </div>
+                {% if preview.artifacts %}
+                <div class="artifacts-list">
+                    <div class="artifacts-header">📁 Generated Files</div>
+                    <ul>
+                        {% for artifact in preview.artifacts %}
+                        <li>{{ artifact }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+
             {% else %}
             <!-- Code Summary -->
             <div class="code-summary-preview">
@@ -680,6 +712,92 @@
     font-size: 0.85rem;
     opacity: 0.7;
 }
+
+/* Printable Preview (Physical Products) */
+.printable-preview-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.printable-preview-wrapper .preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.printable-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.artifact-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.printable-frame-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: #555;
+    padding: 1.5rem;
+    overflow: auto;
+}
+
+.printable-preview-frame {
+    width: 8.5in;
+    min-height: 11in;
+    background: #fff;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.artifacts-list {
+    background: var(--bg-input);
+    border-top: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+}
+
+.artifacts-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--matrix-green);
+    margin-bottom: 0.5rem;
+}
+
+.artifacts-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.artifacts-list li {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--bg-dark);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+/* Code Summary Preview */
+.code-summary-preview {
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    background: var(--bg-card);
+}
 </style>
 
 <script>
@@ -783,6 +901,15 @@ function downloadAllCode() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+}
+
+// Print preview for physical products
+function printPreview() {
+    const frame = document.getElementById('printable-preview-frame');
+    if (frame && frame.contentWindow) {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
     }
 }
 

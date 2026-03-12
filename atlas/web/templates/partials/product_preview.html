@@ -1150,7 +1150,284 @@
 
 <script>
 function togglePreviewEdit() {
-    // TODO: Open modal to customize preview data (icon, screenshot, etc.)
-    alert('Preview customization coming soon! For now, the preview is generated from your project details.');
+    const modal = document.getElementById('previewEditModal');
+    if (modal) {
+        modal.classList.toggle('show');
+        if (modal.classList.contains('show')) {
+            loadPreviewData();
+        }
+    }
 }
+
+function closePreviewModal() {
+    const modal = document.getElementById('previewEditModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+function loadPreviewData() {
+    // Load current preview data into form fields
+    const projectId = document.getElementById('previewEditModal')?.dataset.projectId;
+    if (!projectId) return;
+
+    fetch(`/api/projects/${projectId}`)
+        .then(r => r.json())
+        .then(data => {
+            const preview = data.metadata?.product_preview || {};
+            document.getElementById('preview-tagline').value = preview.tagline || data.metadata?.smart_conversation?.brief?.tagline || '';
+            document.getElementById('preview-subtitle').value = preview.subtitle || '';
+            document.getElementById('preview-description').value = preview.description || data.description || '';
+        })
+        .catch(e => console.error('Error loading preview data:', e));
+}
+
+async function savePreviewData() {
+    const projectId = document.getElementById('previewEditModal')?.dataset.projectId;
+    if (!projectId) return;
+
+    const previewData = {
+        tagline: document.getElementById('preview-tagline')?.value || '',
+        subtitle: document.getElementById('preview-subtitle')?.value || '',
+        description: document.getElementById('preview-description')?.value || '',
+    };
+
+    // Handle file uploads if present
+    const iconInput = document.getElementById('preview-icon');
+    const screenshotInput = document.getElementById('preview-screenshot');
+
+    if (iconInput?.files?.length > 0 || screenshotInput?.files?.length > 0) {
+        const formData = new FormData();
+        formData.append('preview_data', JSON.stringify(previewData));
+        if (iconInput?.files?.length > 0) {
+            formData.append('icon', iconInput.files[0]);
+        }
+        if (screenshotInput?.files?.length > 0) {
+            formData.append('screenshot', screenshotInput.files[0]);
+        }
+
+        try {
+            const response = await fetch(`/api/projects/${projectId}/preview`, {
+                method: 'POST',
+                body: formData
+            });
+            if (response.ok) {
+                closePreviewModal();
+                location.reload();
+            } else {
+                alert('Failed to save preview data');
+            }
+        } catch (e) {
+            console.error('Error saving preview:', e);
+            alert('Error saving preview data');
+        }
+    } else {
+        // No files, just save the text data
+        try {
+            const response = await fetch(`/api/projects/${projectId}/preview`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preview_data: previewData })
+            });
+            if (response.ok) {
+                closePreviewModal();
+                location.reload();
+            } else {
+                alert('Failed to save preview data');
+            }
+        } catch (e) {
+            console.error('Error saving preview:', e);
+            alert('Error saving preview data');
+        }
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePreviewModal();
+});
 </script>
+
+<!-- Preview Edit Modal -->
+<div id="previewEditModal" class="preview-modal" data-project-id="{{ project.id }}">
+    <div class="preview-modal-backdrop" onclick="closePreviewModal()"></div>
+    <div class="preview-modal-content">
+        <div class="preview-modal-header">
+            <h3>Customize Preview</h3>
+            <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+        </div>
+        <div class="preview-modal-body">
+            <div class="form-group">
+                <label for="preview-tagline">Tagline / Subtitle</label>
+                <input type="text" id="preview-tagline" placeholder="Your app's catchy tagline" maxlength="30">
+                <small>Max 30 characters (App Store limit)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="preview-subtitle">Subtitle / Author</label>
+                <input type="text" id="preview-subtitle" placeholder="Author name or secondary text">
+            </div>
+
+            <div class="form-group">
+                <label for="preview-description">Description</label>
+                <textarea id="preview-description" rows="4" placeholder="Describe your product..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="preview-icon">Icon / Cover Image</label>
+                <input type="file" id="preview-icon" accept="image/*">
+                <small>1024x1024 PNG recommended for app icons</small>
+            </div>
+
+            <div class="form-group">
+                <label for="preview-screenshot">Screenshot / Preview Image</label>
+                <input type="file" id="preview-screenshot" accept="image/*">
+                <small>High-resolution screenshot of your product</small>
+            </div>
+        </div>
+        <div class="preview-modal-footer">
+            <button class="btn btn-secondary" onclick="closePreviewModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="savePreviewData()">Save Preview</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Preview Modal Styles */
+.preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-modal.show {
+    display: flex;
+}
+
+.preview-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.preview-modal-content {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.preview-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.preview-modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.preview-modal-body {
+    padding: 1.5rem;
+}
+
+.preview-modal-body .form-group {
+    margin-bottom: 1.25rem;
+}
+
+.preview-modal-body label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.preview-modal-body input[type="text"],
+.preview-modal-body textarea {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.preview-modal-body input[type="file"] {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.preview-modal-body small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.preview-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.preview-modal-footer .btn {
+    padding: 0.6rem 1.25rem;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preview-modal-footer .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.preview-modal-footer .btn-primary {
+    background: var(--accent-blue);
+    border: none;
+    color: white;
+}
+
+.preview-modal-footer .btn-primary:hover {
+    background: var(--accent-blue-hover);
+}
+</style>
