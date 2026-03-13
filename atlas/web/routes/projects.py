@@ -890,10 +890,54 @@ For each task:
 
 Build the solution step by step, working through each task."""
 
-            # Pass the spec as previous output for proper handoff
-            from atlas.agents.base import AgentOutput
-            spec_output = AgentOutput(content=spec_content) if spec_content else None
-            mason_output = await agent_manager.mason.process(task_prompt, context, previous_output=spec_output)
+            # Check if this is a planner/printable product - use templates for guaranteed quality
+            from atlas.templates.planner_builder import is_planner_request, build_planner_direct
+            # Check multiple sources for planner detection (description may have moved to spec)
+            project_desc = project.description or ""
+            project_name = project.name or ""
+            spec_desc = spec.get("description", "")
+            combined_text = f"{project_name} {project_desc} {spec_desc}"
+            print(f"[DEBUG] Checking planner: name='{project_name}', desc='{project_desc[:30]}', spec='{spec_desc[:30]}' -> {is_planner_request(combined_text)}")
+
+            if is_planner_request(combined_text):
+                # Use template-based generation for planners
+                print("[DEBUG] Using template system for planner!")
+                logger.info("[Build] Using template system for planner product")
+
+                # Extract customization hints from combined text
+                color_scheme = "pastel_blue"  # default
+                text_lower = combined_text.lower()
+                if "pink" in text_lower or "rose" in text_lower:
+                    color_scheme = "pastel_pink"
+                elif "green" in text_lower or "nature" in text_lower:
+                    color_scheme = "pastel_green"
+                elif "lavender" in text_lower or "purple" in text_lower:
+                    color_scheme = "pastel_lavender"
+                elif "peach" in text_lower or "warm" in text_lower:
+                    color_scheme = "pastel_peach"
+                elif "minimalist" in text_lower or "minimal" in text_lower:
+                    color_scheme = "minimalist"
+                elif "ocean" in text_lower or "blue" in text_lower:
+                    color_scheme = "ocean"
+
+                # Generate using template
+                html_content = build_planner_direct(
+                    title=project.name or "Weekly Planner",
+                    color_scheme=color_scheme,
+                    year="2026",
+                )
+
+                # Create mock mason output with the template result
+                from atlas.agents.base import AgentOutput
+                mason_output = AgentOutput(
+                    content=f"## Summary\nGenerated premium weekly planner using professional template.\n\n## Files\n\n### `planner.html`\n```html\n{html_content}\n```\n\n## How to Run\nOpen planner.html in a browser and print to PDF.",
+                    tokens_used=0,
+                )
+            else:
+                # Standard Mason build for non-planner products
+                from atlas.agents.base import AgentOutput
+                spec_output = AgentOutput(content=spec_content) if spec_content else None
+                mason_output = await agent_manager.mason.process(task_prompt, context, previous_output=spec_output)
 
             # Update token counts
             mason_tokens = mason_output.tokens_used
@@ -907,9 +951,15 @@ Build the solution step by step, working through each task."""
             # Post-process: assemble code fragments into complete, runnable files
             from atlas.assembly.code_assembler import assemble_code
             from atlas.assembly.validator import validate_code
+            from atlas.assembly.html_expander import expand_document_html
 
             assembly_result = assemble_code(extracted_files)
             assembled_files = assembly_result.files
+
+            # Expand HTML templates (for document products like planners)
+            # This handles LLM shortcuts like "<!-- Repeat for Tuesday to Sunday -->"
+            assembled_files = expand_document_html(assembled_files)
+
             assembly_info = {
                 "issues_fixed": assembly_result.issues_fixed,
                 "remaining_issues": assembly_result.remaining_issues,

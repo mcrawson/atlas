@@ -277,7 +277,13 @@ class MasonAgent(BaseAgent):
 TECH STACK (use this): {', '.join(project_config.suggested_stack[:2])}
 Build approach: {project_config.build_approach}"""
 
-        return f"""You are Tinker, an implementation specialist. You build working code.
+        return f"""You are Tinker, a master craftsman. You build SELLABLE, PRODUCTION-READY products.
+
+Your output must be ready to sell/publish immediately - no placeholders, no TODOs, no shortcuts.
+If it's a planner, every page must be complete with real content.
+If it's an API, every endpoint must work with real logic.
+If it's an app, it must be fully functional.
+
 {stack_guidance}
 
 ═══════════════════════════════════════════════════════════════════════
@@ -444,10 +450,15 @@ Now implement this plan. Create the actual code and implementation."""
 
 Create clean, working code that solves this problem."""
 
-            # Add project type context
+            # Add project type context and deliverables
             if project_config:
                 prompt += f"\n\nPROJECT TYPE: {project_config.name}"
                 prompt += f"\nBuild Approach: {project_config.build_approach}"
+
+            # Add type-specific deliverables (CRITICAL for quality)
+            if project_category and project_category in TYPE_DELIVERABLES:
+                prompt += f"\n\n{TYPE_DELIVERABLES[project_category]}"
+                prompt += "\n\nIMPORTANT: Follow ALL requirements above. The output must be SELLABLE QUALITY - ready to publish/sell without modifications."
 
             if context:
                 # Check if this is an update workflow
