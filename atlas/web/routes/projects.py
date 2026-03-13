@@ -46,6 +46,76 @@ def _create_conversation() -> SmartIdeaConversation:
     )
 
 
+async def _maybe_create_canva_design(
+    project,
+    routing_decision,
+    mason_output: str,
+    project_manager,
+) -> dict | None:
+    """Auto-trigger Canva design creation for visual products.
+
+    Returns Canva metadata dict if design was created, None otherwise.
+    """
+    from atlas.standards import get_integrations_for_product
+
+    # Get project type from metadata
+    project_type = project.metadata.get("project_type", "unknown") if project.metadata else "unknown"
+    integrations = get_integrations_for_product(project_type)
+
+    if "canva" not in integrations.get("design", []):
+        logger.debug(f"[Canva] Product type '{project_type}' doesn't need Canva")
+        return None
+
+    # Check for Canva API key
+    canva_key = os.environ.get("CANVA_API_KEY")
+    if not canva_key:
+        logger.info("[Canva] CANVA_API_KEY not set - skipping auto-design")
+        return {"status": "skipped", "reason": "CANVA_API_KEY not configured"}
+
+    try:
+        # Extract HTML from build output
+        from atlas.utils.pdf_generator import PDFGenerator
+        from atlas.integrations.platforms.canva import CanvaIntegration
+
+        pdf_gen = PDFGenerator()
+        html_files = pdf_gen.extract_html_from_build(mason_output)
+
+        if not html_files:
+            logger.info("[Canva] No HTML pages found in build output")
+            return {"status": "skipped", "reason": "No HTML content to convert"}
+
+        # Create Canva integration
+        canva = CanvaIntegration({"api_key": canva_key})
+
+        if not await canva.authenticate():
+            logger.warning("[Canva] Failed to authenticate")
+            return {"status": "error", "reason": "Authentication failed"}
+
+        # Create the design
+        design_title = f"{project.name} - Design"
+        design = await canva.create_planner_from_html(
+            html_files,
+            title=design_title,
+        )
+
+        if design:
+            logger.info(f"[Canva] Created design: {design.get('id')}")
+            return {
+                "status": "created",
+                "design_id": design.get("id"),
+                "edit_url": design.get("edit_url"),
+                "view_url": design.get("view_url"),
+                "page_count": design.get("page_count"),
+                "created_at": datetime.now().isoformat(),
+            }
+        else:
+            return {"status": "error", "reason": "Design creation failed"}
+
+    except Exception as e:
+        logger.error(f"[Canva] Error creating design: {e}")
+        return {"status": "error", "reason": str(e)}
+
+
 @router.get("", response_class=HTMLResponse)
 async def list_projects(request: Request):
     """List all projects."""
@@ -1100,6 +1170,16 @@ Try again with COMPLETE, SELLABLE content:
                 project_id=str(project_id)
             )
             new_metadata["build"]["training_example_id"] = example_id
+
+            # Auto-trigger Canva for visual products
+            canva_result = await _maybe_create_canva_design(
+                project=project,
+                routing_decision=routing_decision,
+                mason_output=mason_output.content,
+                project_manager=project_manager,
+            )
+            if canva_result:
+                new_metadata["canva"] = canva_result
 
             new_metadata["tokens"] = tokens
             new_metadata["phase"] = "build_review"  # Move to review phase

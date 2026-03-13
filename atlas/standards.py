@@ -43,7 +43,35 @@ SELLABILITY_CHECKLIST = {
 }
 
 # Product type to integration mapping
+# Keys match ProjectType enum values from atlas.projects.project_types
 PRODUCT_INTEGRATIONS = {
+    # Document types - all visual products use Canva
+    "doc_book": {
+        "design": ["canva"],
+        "publish": ["amazon_kdp"],
+        "needs_cover": True,
+    },
+    "doc_guide": {
+        "design": ["canva"],
+        "publish": ["etsy", "gumroad"],
+        "needs_cover": True,
+    },
+    "doc_technical": {
+        "design": ["canva"],
+        "publish": ["github"],
+        "needs_cover": False,
+    },
+    "doc_proposal": {
+        "design": ["canva"],
+        "publish": [],
+        "needs_cover": True,
+    },
+    "doc_report": {
+        "design": ["canva"],
+        "publish": [],
+        "needs_cover": True,
+    },
+    # Printables (planners, cards, worksheets, etc.)
     "printable": {
         "design": ["canva"],
         "publish": ["etsy", "gumroad"],
@@ -54,37 +82,60 @@ PRODUCT_INTEGRATIONS = {
         "publish": ["etsy", "gumroad"],
         "needs_cover": True,
     },
-    "book": {
-        "design": ["canva"],
-        "publish": ["amazon_kdp"],
-        "needs_cover": True,
-    },
-    "app_ios": {
+    # Mobile apps
+    "mobile_ios": {
         "design": ["canva", "figma"],
         "publish": ["app_store"],
         "needs_icon": True,
     },
-    "app_android": {
+    "mobile_android": {
         "design": ["canva", "figma"],
         "publish": ["play_store"],
         "needs_icon": True,
     },
-    "web_app": {
+    "mobile_cross_platform": {
+        "design": ["canva", "figma"],
+        "publish": ["app_store", "play_store"],
+        "needs_icon": True,
+    },
+    # Web
+    "web_spa": {
         "design": ["figma"],
         "publish": ["vercel", "netlify"],
         "needs_icon": True,
     },
-    "api": {
+    "web_fullstack": {
+        "design": ["figma"],
+        "publish": ["vercel", "netlify"],
+        "needs_icon": True,
+    },
+    "web_static": {
+        "design": ["canva"],
+        "publish": ["vercel", "netlify"],
+        "needs_icon": True,
+    },
+    "web_landing": {
+        "design": ["canva", "figma"],
+        "publish": ["vercel", "netlify"],
+        "needs_icon": True,
+    },
+    # APIs and libraries
+    "api_rest": {
         "design": [],
         "publish": ["github", "vercel"],
         "needs_docs": True,
     },
-    "library_python": {
+    "api_graphql": {
+        "design": [],
+        "publish": ["github", "vercel"],
+        "needs_docs": True,
+    },
+    "library_pypi": {
         "design": [],
         "publish": ["pypi", "github"],
         "needs_docs": True,
     },
-    "library_javascript": {
+    "library_npm": {
         "design": [],
         "publish": ["npm", "github"],
         "needs_docs": True,
