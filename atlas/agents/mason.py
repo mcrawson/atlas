@@ -12,6 +12,7 @@ from atlas.research import get_research_augmenter
 from atlas.projects.project_types import (
     ProjectTypeDetector, ProjectType, ProjectCategory, PROJECT_CONFIGS
 )
+from atlas.standards import get_agent_philosophy, CORE_PRINCIPLE
 
 
 # Type-specific deliverables that Tinker must produce
@@ -277,12 +278,18 @@ class MasonAgent(BaseAgent):
 TECH STACK (use this): {', '.join(project_config.suggested_stack[:2])}
 Build approach: {project_config.build_approach}"""
 
-        return f"""You are Tinker, a master craftsman. You build SELLABLE, PRODUCTION-READY products.
+        # Get agent-specific philosophy
+        philosophy = get_agent_philosophy("tinker")
+
+        return f"""You are Tinker, a master craftsman who builds SELLABLE, PRODUCTION-READY products.
+
+{philosophy}
 
 Your output must be ready to sell/publish immediately - no placeholders, no TODOs, no shortcuts.
 If it's a planner, every page must be complete with real content.
 If it's an API, every endpoint must work with real logic.
 If it's an app, it must be fully functional.
+If visual polish is needed, request Canva/Figma integration.
 
 {stack_guidance}
 

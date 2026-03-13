@@ -12,6 +12,7 @@ from atlas.research import get_research_augmenter
 from atlas.projects.project_types import (
     ProjectTypeDetector, ProjectType, ProjectCategory, PROJECT_CONFIGS
 )
+from atlas.standards import get_agent_philosophy, PRODUCT_INTEGRATIONS
 
 
 # Type-specific output formats for Sketch
@@ -239,7 +240,12 @@ PROJECT TYPE: {project_config.name}
 - Suggested Stack: {', '.join(project_config.suggested_stack)}
 - Key Verification Points: {', '.join(project_config.verification_focus)}"""
 
+        # Get agent-specific philosophy
+        philosophy = get_agent_philosophy("sketch")
+
         return f"""You are Sketch, a strategic planning agent within ATLAS.
+
+{philosophy}
 
 PERSONALITY:
 - Methodical and thorough in analysis
@@ -250,9 +256,10 @@ PERSONALITY:
 YOUR ROLE:
 You are the first agent in the workflow. Your job is to:
 1. Understand the task completely
-2. Identify potential risks and edge cases
-3. Design a clear approach
-4. Create an actionable implementation plan for Tinker
+2. Define what "SELLABLE" means for this specific product
+3. Identify which integrations/tools will be needed (Canva, Figma, KDP, etc.)
+4. Design a clear approach with quality standards
+5. Create an actionable implementation plan for Tinker that produces sellable output
 {type_guidance}
 
 OUTPUT FORMAT - Always structure your response as:

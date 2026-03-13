@@ -1,9 +1,15 @@
-"""The Governor - Intelligent LLM routing powered by Ollama."""
+"""The Governor - Intelligent LLM and integration routing powered by Ollama.
 
-from dataclasses import dataclass
+The Governor routes tasks to the optimal LLM provider AND recommends
+integrations (Canva, Figma, KDP, etc.) based on product needs.
+"""
+
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 import json
+
+from atlas.standards import PRODUCT_INTEGRATIONS, get_agent_philosophy
 
 
 class TaskComplexity(Enum):
@@ -23,6 +29,29 @@ class TaskType(Enum):
 
 
 @dataclass
+class IntegrationRecommendation:
+    """Recommended integrations for a product."""
+    product_type: str
+    design_tools: list[str] = field(default_factory=list)  # canva, figma
+    publish_platforms: list[str] = field(default_factory=list)  # etsy, kdp, app_store
+    needs_cover: bool = False
+    needs_icon: bool = False
+    needs_docs: bool = False
+    reasoning: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "product_type": self.product_type,
+            "design_tools": self.design_tools,
+            "publish_platforms": self.publish_platforms,
+            "needs_cover": self.needs_cover,
+            "needs_icon": self.needs_icon,
+            "needs_docs": self.needs_docs,
+            "reasoning": self.reasoning,
+        }
+
+
+@dataclass
 class RoutingDecision:
     """A routing decision from the Governor."""
     provider: str                   # e.g., "ollama", "openai", "anthropic"
@@ -35,9 +64,10 @@ class RoutingDecision:
     confidence: float               # 0.0 to 1.0
     fallback_provider: Optional[str] = None  # If primary fails
     fallback_model: Optional[str] = None
+    integrations: Optional[IntegrationRecommendation] = None  # Recommended integrations
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "provider": self.provider,
             "model": self.model,
             "complexity": self.complexity.value,
@@ -49,6 +79,9 @@ class RoutingDecision:
             "fallback_provider": self.fallback_provider,
             "fallback_model": self.fallback_model,
         }
+        if self.integrations:
+            result["integrations"] = self.integrations.to_dict()
+        return result
 
 
 # Model capabilities and costs
@@ -423,6 +456,12 @@ class Governor:
         if self.budget_remaining <= 0.01:
             confidence *= 0.8  # Lower confidence when forced to use fallback
 
+        # Get integration recommendations if product type is known
+        integrations = None
+        product_type = context.get("project_type") or context.get("product_type")
+        if product_type:
+            integrations = self.recommend_integrations(product_type, task)
+
         return RoutingDecision(
             provider=provider,
             model=model,
@@ -434,6 +473,7 @@ class Governor:
             confidence=confidence,
             fallback_provider=fallback_provider,
             fallback_model=fallback_model,
+            integrations=integrations,
         )
 
     async def route_with_ollama(
@@ -555,6 +595,58 @@ Respond with this exact JSON format:
 
         # Fallback to rule-based routing
         return self.route(task, agent_name, context)
+
+
+    def recommend_integrations(
+        self,
+        product_type: str,
+        description: str = "",
+    ) -> IntegrationRecommendation:
+        """Recommend integrations for a product type.
+
+        Args:
+            product_type: Type of product (planner, app_ios, book, etc.)
+            description: Product description for additional context
+
+        Returns:
+            IntegrationRecommendation with suggested tools and platforms
+        """
+        # Get base recommendations from standards
+        config = PRODUCT_INTEGRATIONS.get(product_type, {})
+
+        design_tools = config.get("design", [])
+        publish_platforms = config.get("publish", [])
+        needs_cover = config.get("needs_cover", False)
+        needs_icon = config.get("needs_icon", False)
+        needs_docs = config.get("needs_docs", False)
+
+        # Build reasoning
+        reasoning_parts = []
+
+        if needs_cover:
+            reasoning_parts.append("Product needs a professional cover - recommend Canva")
+        if needs_icon:
+            reasoning_parts.append("Product needs app icons/graphics - recommend Canva/Figma")
+        if needs_docs:
+            reasoning_parts.append("Product needs documentation - ensure README is complete")
+
+        if design_tools:
+            reasoning_parts.append(f"Design with: {', '.join(design_tools)}")
+        if publish_platforms:
+            reasoning_parts.append(f"Publish to: {', '.join(publish_platforms)}")
+
+        if not reasoning_parts:
+            reasoning_parts.append("Standard code product - focus on quality and completeness")
+
+        return IntegrationRecommendation(
+            product_type=product_type,
+            design_tools=design_tools,
+            publish_platforms=publish_platforms,
+            needs_cover=needs_cover,
+            needs_icon=needs_icon,
+            needs_docs=needs_docs,
+            reasoning=" | ".join(reasoning_parts),
+        )
 
 
 # Singleton instance for easy access
