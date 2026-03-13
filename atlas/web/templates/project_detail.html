@@ -702,6 +702,41 @@
             {% include "partials/build_preview.html" %}
             {% endif %}
 
+            <!-- Canva Auto-Design Status -->
+            {% set canva_status = project.metadata.get('canva', {}) %}
+            {% if canva_status %}
+            <div class="canva-auto-status">
+                {% if canva_status.status == 'created' %}
+                <div class="status-badge status-success">
+                    <span class="status-icon">🎨</span>
+                    <div class="status-content">
+                        <span class="status-title">Canva Design Created</span>
+                        <span class="status-desc">{{ canva_status.page_count or 0 }} pages</span>
+                    </div>
+                    <a href="{{ canva_status.edit_url }}" target="_blank" class="btn btn-sm btn-primary">Open in Canva</a>
+                </div>
+                {% elif canva_status.status == 'skipped' %}
+                <div class="status-badge status-info">
+                    <span class="status-icon">ℹ️</span>
+                    <div class="status-content">
+                        <span class="status-title">Canva Skipped</span>
+                        <span class="status-desc">{{ canva_status.reason }}</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="sendToCanva()">Create Now</button>
+                </div>
+                {% elif canva_status.status == 'error' %}
+                <div class="status-badge status-error">
+                    <span class="status-icon">⚠️</span>
+                    <div class="status-content">
+                        <span class="status-title">Canva Error</span>
+                        <span class="status-desc">{{ canva_status.reason }}</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="sendToCanva()">Retry</button>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <details class="output-details">
                 <summary>View Full Output</summary>
                 <pre class="output-content">{{ build.get('output', agent_output.get('content', 'No build output')) }}</pre>
@@ -1730,6 +1765,61 @@ function showTeamComplete() {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Canva Auto-Design Status */
+.canva-auto-status {
+    margin: 1rem 0;
+}
+
+.canva-auto-status .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.canva-auto-status .status-icon {
+    font-size: 1.5rem;
+}
+
+.canva-auto-status .status-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.canva-auto-status .status-title {
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+}
+
+.canva-auto-status .status-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #8b949e);
+}
+
+.canva-auto-status .status-success {
+    background: rgba(0, 255, 65, 0.1);
+    border-color: rgba(0, 255, 65, 0.3);
+}
+
+.canva-auto-status .status-info {
+    background: rgba(74, 144, 217, 0.1);
+    border-color: rgba(74, 144, 217, 0.3);
+}
+
+.canva-auto-status .status-error {
+    background: rgba(255, 107, 107, 0.1);
+    border-color: rgba(255, 107, 107, 0.3);
+}
+
+.canva-auto-status .btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
 }
 
 /* Canva Modal */
