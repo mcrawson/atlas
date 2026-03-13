@@ -737,6 +737,65 @@
             </div>
             {% endif %}
 
+            <!-- Publishing Recommendations -->
+            {% if publish_platforms %}
+            <div class="publish-recommendations">
+                <h4>Ready to Publish</h4>
+                <p class="publish-desc">Based on your product type, consider these platforms:</p>
+                <div class="platform-cards">
+                    {% for platform in publish_platforms %}
+                    <div class="platform-card">
+                        {% if platform == 'etsy' %}
+                        <span class="platform-icon">🛍️</span>
+                        <span class="platform-name">Etsy</span>
+                        <span class="platform-type">Marketplace</span>
+                        {% elif platform == 'gumroad' %}
+                        <span class="platform-icon">💰</span>
+                        <span class="platform-name">Gumroad</span>
+                        <span class="platform-type">Digital Sales</span>
+                        {% elif platform == 'amazon_kdp' %}
+                        <span class="platform-icon">📚</span>
+                        <span class="platform-name">Amazon KDP</span>
+                        <span class="platform-type">Book Publishing</span>
+                        {% elif platform == 'app_store' %}
+                        <span class="platform-icon">🍎</span>
+                        <span class="platform-name">App Store</span>
+                        <span class="platform-type">iOS Apps</span>
+                        {% elif platform == 'play_store' %}
+                        <span class="platform-icon">🤖</span>
+                        <span class="platform-name">Play Store</span>
+                        <span class="platform-type">Android Apps</span>
+                        {% elif platform == 'vercel' %}
+                        <span class="platform-icon">▲</span>
+                        <span class="platform-name">Vercel</span>
+                        <span class="platform-type">Web Hosting</span>
+                        {% elif platform == 'netlify' %}
+                        <span class="platform-icon">◆</span>
+                        <span class="platform-name">Netlify</span>
+                        <span class="platform-type">Web Hosting</span>
+                        {% elif platform == 'pypi' %}
+                        <span class="platform-icon">🐍</span>
+                        <span class="platform-name">PyPI</span>
+                        <span class="platform-type">Python Packages</span>
+                        {% elif platform == 'npm' %}
+                        <span class="platform-icon">📦</span>
+                        <span class="platform-name">npm</span>
+                        <span class="platform-type">JS Packages</span>
+                        {% elif platform == 'github' %}
+                        <span class="platform-icon">🐙</span>
+                        <span class="platform-name">GitHub</span>
+                        <span class="platform-type">Code Repository</span>
+                        {% else %}
+                        <span class="platform-icon">📤</span>
+                        <span class="platform-name">{{ platform }}</span>
+                        <span class="platform-type">Platform</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <details class="output-details">
                 <summary>View Full Output</summary>
                 <pre class="output-content">{{ build.get('output', agent_output.get('content', 'No build output')) }}</pre>
@@ -1820,6 +1879,69 @@ function showTeamComplete() {
 .canva-auto-status .btn-sm {
     padding: 0.5rem 1rem;
     font-size: 0.85rem;
+}
+
+/* Publishing Recommendations */
+.publish-recommendations {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: var(--bg-secondary, #1a1a2e);
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.publish-recommendations h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary, #fff);
+    font-size: 1rem;
+}
+
+.publish-recommendations .publish-desc {
+    color: var(--text-secondary, #8b949e);
+    font-size: 0.85rem;
+    margin: 0 0 1rem 0;
+}
+
+.platform-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.platform-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: var(--bg-primary, #0d1117);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    min-width: 100px;
+    text-align: center;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+}
+
+.platform-card:hover {
+    border-color: var(--accent-color, #4A90D9);
+    transform: translateY(-2px);
+}
+
+.platform-card .platform-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.platform-card .platform-name {
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    font-size: 0.9rem;
+}
+
+.platform-card .platform-type {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8b949e);
+    margin-top: 0.25rem;
 }
 
 /* Canva Modal */

@@ -187,6 +187,8 @@ async def create_from_idea(request: Request, idea: str = Form(...)):
 @router.get("/{project_id}", response_class=HTMLResponse)
 async def project_detail(request: Request, project_id: int):
     """Show project details with pipeline view."""
+    from atlas.standards import get_integrations_for_product
+
     templates = request.app.state.templates
     project_manager = request.app.state.project_manager
 
@@ -200,9 +202,16 @@ async def project_detail(request: Request, project_id: int):
 
     # Extract preview from build metadata if available
     preview = None
+    publish_platforms = []
     if project.metadata:
         build_data = project.metadata.get("build", {})
         preview = build_data.get("preview")
+
+        # Get publishing recommendations based on project type
+        project_type = project.metadata.get("project_type", "")
+        if project_type:
+            integrations = get_integrations_for_product(project_type)
+            publish_platforms = integrations.get("publish", [])
 
     return templates.TemplateResponse(
         "project_detail.html",
@@ -210,6 +219,7 @@ async def project_detail(request: Request, project_id: int):
             "request": request,
             "project": project,
             "preview": preview,
+            "publish_platforms": publish_platforms,
         }
     )
 
