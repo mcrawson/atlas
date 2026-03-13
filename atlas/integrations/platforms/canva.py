@@ -93,18 +93,25 @@ class CanvaIntegration(PlatformIntegration):
 
     BASE_URL = "https://api.canva.com/rest/v1"
 
+    TOKEN_URL = "https://api.canva.com/rest/v1/oauth/token"
+
     def __init__(self, config: Optional[dict] = None):
         super().__init__(config)
+        # Support both direct API key and OAuth client credentials
         self.api_key = config.get("api_key") if config else os.getenv("CANVA_API_KEY")
+        self.client_id = config.get("client_id") if config else os.getenv("CANVA_CLIENT_ID")
+        self.client_secret = config.get("client_secret") if config else os.getenv("CANVA_CLIENT_SECRET")
         self.brand_id = config.get("brand_id") if config else os.getenv("CANVA_BRAND_ID")
+        self._access_token: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
 
     @property
     def client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
+        token = self._access_token or self.api_key
         if self._client is None or self._client.is_closed:
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             }
             self._client = httpx.AsyncClient(
@@ -114,6 +121,12 @@ class CanvaIntegration(PlatformIntegration):
             )
         return self._client
 
+    def _reset_client(self):
+        """Reset client to pick up new token."""
+        if self._client and not self._client.is_closed:
+            # Don't await here, just mark for recreation
+            self._client = None
+
     async def close(self):
         """Close HTTP client."""
         if self._client and not self._client.is_closed:
@@ -121,12 +134,63 @@ class CanvaIntegration(PlatformIntegration):
             self._client = None
 
     def get_env_vars(self) -> list[str]:
-        return ["CANVA_API_KEY", "CANVA_BRAND_ID"]
+        return ["CANVA_CLIENT_ID", "CANVA_CLIENT_SECRET", "CANVA_API_KEY", "CANVA_BRAND_ID"]
+
+    async def _get_oauth_token(self) -> Optional[str]:
+        """Exchange client credentials for access token."""
+        if not self.client_id or not self.client_secret:
+            return None
+
+        try:
+            import base64
+            # Create Basic auth header
+            credentials = f"{self.client_id}:{self.client_secret}"
+            encoded = base64.b64encode(credentials.encode()).decode()
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.TOKEN_URL,
+                    headers={
+                        "Authorization": f"Basic {encoded}",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    data={
+                        "grant_type": "client_credentials",
+                    },
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    self._access_token = data.get("access_token")
+                    logger.info("[Canva] OAuth token obtained successfully")
+                    return self._access_token
+                else:
+                    logger.error(f"[Canva] OAuth token request failed: {response.status_code} - {response.text}")
+                    return None
+        except Exception as e:
+            logger.exception(f"[Canva] OAuth token error: {e}")
+            return None
 
     async def authenticate(self) -> bool:
-        """Verify Canva API credentials."""
-        if not self.api_key:
-            logger.warning("CANVA_API_KEY not set")
+        """Verify Canva API credentials using OAuth or direct API key."""
+        # Try OAuth first if client credentials are available
+        if self.client_id and self.client_secret:
+            token = await self._get_oauth_token()
+            if token:
+                self._reset_client()  # Reset to use new token
+                try:
+                    response = await self.client.get("/users/me")
+                    if response.status_code == 200:
+                        self._authenticated = True
+                        user = response.json()
+                        logger.info(f"Authenticated with Canva as {user.get('display_name', 'Unknown')}")
+                        return True
+                except Exception as e:
+                    logger.error(f"Canva auth verification failed: {e}")
+
+        # Fall back to direct API key
+        if not self.api_key and not self._access_token:
+            logger.warning("CANVA_CLIENT_ID/SECRET or CANVA_API_KEY not set")
             return False
 
         try:

@@ -66,11 +66,14 @@ async def _maybe_create_canva_design(
         logger.debug(f"[Canva] Product type '{project_type}' doesn't need Canva")
         return None
 
-    # Check for Canva API key
+    # Check for Canva credentials (OAuth or direct API key)
+    canva_client_id = os.environ.get("CANVA_CLIENT_ID")
+    canva_client_secret = os.environ.get("CANVA_CLIENT_SECRET")
     canva_key = os.environ.get("CANVA_API_KEY")
-    if not canva_key:
-        logger.info("[Canva] CANVA_API_KEY not set - skipping auto-design")
-        return {"status": "skipped", "reason": "CANVA_API_KEY not configured"}
+
+    if not canva_key and not (canva_client_id and canva_client_secret):
+        logger.info("[Canva] No Canva credentials configured - skipping auto-design")
+        return {"status": "skipped", "reason": "CANVA_CLIENT_ID/SECRET or CANVA_API_KEY not configured"}
 
     try:
         # Extract HTML from build output
@@ -84,8 +87,12 @@ async def _maybe_create_canva_design(
             logger.info("[Canva] No HTML pages found in build output")
             return {"status": "skipped", "reason": "No HTML content to convert"}
 
-        # Create Canva integration
-        canva = CanvaIntegration({"api_key": canva_key})
+        # Create Canva integration with available credentials
+        canva = CanvaIntegration({
+            "api_key": canva_key,
+            "client_id": canva_client_id,
+            "client_secret": canva_client_secret,
+        })
 
         if not await canva.authenticate():
             logger.warning("[Canva] Failed to authenticate")
