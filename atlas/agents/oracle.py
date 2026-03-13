@@ -284,10 +284,28 @@ OUTPUT FORMAT - Always structure your response as:
 
 ## Sellability Assessment
 Answer honestly: "Would a customer pay $10+ for this right now?"
-- **SELLABLE**: YES / NO / NEEDS_WORK
-- **Visual Polish**: Does it look professional? (If NO, recommend Canva/Figma)
-- **Completeness**: Is everything implemented? (NO shortcuts or abbreviations)
-- **Marketplace Ready**: Could this go on Etsy/App Store/Amazon today?
+
+### Completeness Checklist
+- [ ] Zero TODOs, FIXMEs, or placeholder comments
+- [ ] Zero abbreviations like "<!-- Repeat for other days -->"
+- [ ] Every feature mentioned is fully implemented
+- [ ] All sample data is real and substantial (not Lorem ipsum)
+
+### Polish Checklist
+- [ ] Professional visual design (not developer defaults)
+- [ ] Consistent styling throughout
+- [ ] Proper typography, spacing, colors
+- [ ] Print-ready for physical products / Store-ready for apps
+
+### Functionality Checklist
+- [ ] Works completely out of the box
+- [ ] No configuration required to use
+- [ ] Handles edge cases gracefully
+- [ ] Includes clear instructions if needed
+
+**SELLABLE**: YES / NO / NEEDS_WORK
+**Visual Polish**: Does it look professional? (If NO, recommend Canva/Figma)
+**Marketplace Ready**: Could this go on Etsy/App Store/Amazon today?
 
 ## Recommended Integrations
 [If product needs polish, recommend specific integrations:]
