@@ -929,45 +929,118 @@ Build the solution step by step, working through each task."""
 
                 # Create mock mason output with the template result
                 from atlas.agents.base import AgentOutput
+                from ..utils import parse_code_blocks
+                from atlas.assembly.code_assembler import assemble_code
+                from atlas.assembly.validator import validate_code
+                from atlas.assembly.html_expander import expand_document_html
+
                 mason_output = AgentOutput(
                     content=f"## Summary\nGenerated premium weekly planner using professional template.\n\n## Files\n\n### `planner.html`\n```html\n{html_content}\n```\n\n## How to Run\nOpen planner.html in a browser and print to PDF.",
                     tokens_used=0,
                 )
+
+                # Process template output (should always pass validation)
+                extracted_files = parse_code_blocks(mason_output.content)
+                assembly_result = assemble_code(extracted_files)
+                assembled_files = assembly_result.files
+                assembled_files = expand_document_html(assembled_files)
+                validation_result = validate_code(assembled_files, mason_output.content)
+                regeneration_attempts = 0
+                regeneration_history = []
+
             else:
                 # Standard Mason build for non-planner products
+                # With auto-regeneration on validation failures
                 from atlas.agents.base import AgentOutput
+                from ..utils import parse_code_blocks
+                from atlas.assembly.code_assembler import assemble_code
+                from atlas.assembly.validator import validate_code
+                from atlas.assembly.html_expander import expand_document_html
+
+                MAX_REGENERATION_ATTEMPTS = 3
                 spec_output = AgentOutput(content=spec_content) if spec_content else None
-                mason_output = await agent_manager.mason.process(task_prompt, context, previous_output=spec_output)
 
-            # Update token counts
-            mason_tokens = mason_output.tokens_used
-            tokens["total"] += mason_tokens
-            tokens["by_agent"]["mason"] = tokens.get("by_agent", {}).get("mason", 0) + mason_tokens
+                regeneration_attempts = 0
+                regeneration_history = []
+                validation_result = None
 
-            # Extract files from Mason's code blocks
-            from ..utils import parse_code_blocks
-            extracted_files = parse_code_blocks(mason_output.content)
+                while regeneration_attempts < MAX_REGENERATION_ATTEMPTS:
+                    regeneration_attempts += 1
 
-            # Post-process: assemble code fragments into complete, runnable files
-            from atlas.assembly.code_assembler import assemble_code
-            from atlas.assembly.validator import validate_code
-            from atlas.assembly.html_expander import expand_document_html
+                    # Build feedback from previous attempt if any
+                    if regeneration_history:
+                        last_attempt = regeneration_history[-1]
+                        feedback = f"""
+CRITICAL: Your previous output was NOT SELLABLE. Fix these issues:
 
-            assembly_result = assemble_code(extracted_files)
-            assembled_files = assembly_result.files
+{chr(10).join(f'- {issue["message"]} (in {issue["file"]})' for issue in last_attempt["issues"])}
 
-            # Expand HTML templates (for document products like planners)
-            # This handles LLM shortcuts like "<!-- Repeat for Tuesday to Sunday -->"
-            assembled_files = expand_document_html(assembled_files)
+Remember:
+- Create ALL content (10 recipe cards means 10 ACTUAL cards with REAL recipes)
+- No placeholders like "Recipe Title", "Ingredient 1", "Step 1"
+- No HTML comments like "<!-- repeat this -->" or "<!-- add more -->"
+- Every file must be complete and ready to sell
 
+Try again with COMPLETE, SELLABLE content:
+"""
+                        current_prompt = feedback + task_prompt
+                        logger.info(f"[Build] Regeneration attempt {regeneration_attempts}/{MAX_REGENERATION_ATTEMPTS}")
+                    else:
+                        current_prompt = task_prompt
+
+                    # Run Tinker
+                    mason_output = await agent_manager.mason.process(
+                        current_prompt, context, previous_output=spec_output
+                    )
+
+                    # Track tokens
+                    mason_tokens = mason_output.tokens_used
+                    tokens["total"] += mason_tokens
+                    tokens["by_agent"]["mason"] = tokens.get("by_agent", {}).get("mason", 0) + mason_tokens
+
+                    # Extract and process files
+                    extracted_files = parse_code_blocks(mason_output.content)
+                    assembly_result = assemble_code(extracted_files)
+                    assembled_files = assembly_result.files
+                    assembled_files = expand_document_html(assembled_files)
+
+                    # Validate
+                    validation_result = validate_code(assembled_files, mason_output.content)
+
+                    # Check for sellability errors specifically
+                    sellability_errors = [
+                        i for i in validation_result.issues
+                        if i.severity == "error" and "SELLABILITY" in i.code
+                    ]
+
+                    if not sellability_errors:
+                        # No sellability errors - we're done
+                        logger.info(f"[Build] Passed validation on attempt {regeneration_attempts}")
+                        break
+                    else:
+                        # Track this failed attempt
+                        regeneration_history.append({
+                            "attempt": regeneration_attempts,
+                            "issues": [
+                                {"file": i.file, "message": i.message, "code": i.code}
+                                for i in sellability_errors
+                            ]
+                        })
+                        logger.warning(f"[Build] Attempt {regeneration_attempts} failed sellability: {len(sellability_errors)} errors")
+
+                # Store regeneration info
+                if regeneration_attempts > 1:
+                    logger.info(f"[Build] Completed after {regeneration_attempts} attempts")
+
+            # Final assembly info (use last attempt's results)
             assembly_info = {
                 "issues_fixed": assembly_result.issues_fixed,
                 "remaining_issues": assembly_result.remaining_issues,
                 "is_runnable": assembly_result.is_runnable,
+                "regeneration_attempts": regeneration_attempts if 'regeneration_attempts' in dir() else 0,
             }
 
-            # Validate the assembled code
-            validation_result = validate_code(assembled_files, mason_output.content)
+            # Final validation info
             validation_info = {
                 "passed": validation_result.passed,
                 "score": validation_result.score,
@@ -977,7 +1050,9 @@ Build the solution step by step, working through each task."""
                 "issues": [
                     {"severity": i.severity, "file": i.file, "message": i.message, "code": i.code}
                     for i in validation_result.issues
-                ]
+                ],
+                "regeneration_attempts": regeneration_attempts if 'regeneration_attempts' in dir() else 0,
+                "regeneration_history": regeneration_history if 'regeneration_history' in dir() else [],
             }
 
             # Generate build preview

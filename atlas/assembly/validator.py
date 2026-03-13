@@ -260,17 +260,21 @@ class CodeValidator:
             (r'\[Insert[^\]]*\]', "LLM placeholder - content not provided"),
             (r'\[Add[^\]]*here\]', "LLM placeholder - content not provided"),
             (r'\[Your[^\]]*\]', "LLM placeholder - user content not templated properly"),
-            # HTML comment abbreviations
-            (r'<!--\s*repeat\s+(this|for)', "HTML abbreviation - content not expanded"),
-            (r'<!--\s*similar\s+for', "HTML abbreviation - content not expanded"),
+            # HTML comment abbreviations - catch all "repeat" patterns
+            (r'<!--\s*repeat\s+', "HTML abbreviation - content not expanded"),
+            (r'<!--\s*similar\s+', "HTML abbreviation - content not expanded"),
             (r'<!--\s*\d+\s+more', "HTML abbreviation - content not expanded"),
             (r'<!--\s*add\s+more\s+\w+\s+as\s+needed', "HTML abbreviation - incomplete content"),
             (r'<!--\s*end\s+of\s+.*block', "HTML abbreviation - single block instead of multiple"),
+            (r'<!--\s*remaining\s+\d+', "HTML abbreviation - not all items created"),
+            (r'<!--\s*(continue|etc|and\s+so\s+on)', "HTML abbreviation - incomplete"),
             # Numbered placeholder patterns
             (r'(ingredient|step|item|task)\s*[1-3]\b(?![\w\d])', "Generic numbered placeholder"),
             (r'recipe\s+title\b', "Generic title placeholder"),
             # Ellipsis abbreviations
             (r'\.{3}\s*(repeat|similar|more|etc)', "LLM abbreviation - content not complete"),
+            # "for the remaining X" patterns
+            (r'for\s+the\s+remaining\s+\d+', "LLM abbreviation - not all items created"),
         ]
 
         for pattern, message in error_placeholders:
