@@ -125,9 +125,33 @@ class CodeValidator:
             self._validate_javascript(filename, content)
         elif ext == "json":
             self._validate_json(filename, content)
+        elif ext == "pdf":
+            self._validate_pdf(filename, content)
 
         # Common checks for all files
         self._check_placeholders(filename, content)
+
+    def _validate_pdf(self, filename: str, content: str):
+        """Validate PDF files - catch fake PDFs that are just text descriptions."""
+        # Real PDFs start with %PDF
+        if not content.strip().startswith('%PDF'):
+            # Check if it's just a text description
+            if content.strip().startswith('[') or 'containing' in content.lower():
+                self.issues.append(ValidationIssue(
+                    severity="error",
+                    file=filename,
+                    line=None,
+                    message="NOT SELLABLE: PDF file is a text description, not an actual PDF",
+                    code="SELLABILITY_FAKE_PDF"
+                ))
+            else:
+                self.issues.append(ValidationIssue(
+                    severity="error",
+                    file=filename,
+                    line=None,
+                    message="NOT SELLABLE: File has .pdf extension but is not a valid PDF",
+                    code="INVALID_PDF"
+                ))
 
     def _validate_python(self, filename: str, content: str):
         """Validate Python code."""
@@ -218,7 +242,8 @@ class CodeValidator:
 
     def _check_placeholders(self, filename: str, content: str):
         """Check for placeholder content that shouldn't be in production code."""
-        placeholders = [
+        # Warning-level placeholders
+        warning_placeholders = [
             (r'\bTODO\b', "TODO comment found"),
             (r'\bFIXME\b', "FIXME comment found"),
             (r'\bXXX\b', "XXX marker found"),
@@ -227,7 +252,39 @@ class CodeValidator:
             (r'example\.com', "Example.com placeholder domain"),
         ]
 
-        for pattern, message in placeholders:
+        # ERROR-level placeholders - these mean the file is NOT SELLABLE
+        error_placeholders = [
+            # LLM bracket placeholders
+            (r'\[PDF containing[^\]]*\]', "LLM placeholder - PDF not actually created"),
+            (r'\[Image[^\]]*\]', "LLM placeholder - image not actually created"),
+            (r'\[Insert[^\]]*\]', "LLM placeholder - content not provided"),
+            (r'\[Add[^\]]*here\]', "LLM placeholder - content not provided"),
+            (r'\[Your[^\]]*\]', "LLM placeholder - user content not templated properly"),
+            # HTML comment abbreviations
+            (r'<!--\s*repeat\s+(this|for)', "HTML abbreviation - content not expanded"),
+            (r'<!--\s*similar\s+for', "HTML abbreviation - content not expanded"),
+            (r'<!--\s*\d+\s+more', "HTML abbreviation - content not expanded"),
+            (r'<!--\s*add\s+more\s+\w+\s+as\s+needed', "HTML abbreviation - incomplete content"),
+            (r'<!--\s*end\s+of\s+.*block', "HTML abbreviation - single block instead of multiple"),
+            # Numbered placeholder patterns
+            (r'(ingredient|step|item|task)\s*[1-3]\b(?![\w\d])', "Generic numbered placeholder"),
+            (r'recipe\s+title\b', "Generic title placeholder"),
+            # Ellipsis abbreviations
+            (r'\.{3}\s*(repeat|similar|more|etc)', "LLM abbreviation - content not complete"),
+        ]
+
+        for pattern, message in error_placeholders:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            if matches:
+                self.issues.append(ValidationIssue(
+                    severity="error",
+                    file=filename,
+                    line=None,
+                    message=f"NOT SELLABLE: {message}",
+                    code="SELLABILITY_PLACEHOLDER"
+                ))
+
+        for pattern, message in warning_placeholders:
             matches = re.findall(pattern, content, re.IGNORECASE)
             if matches:
                 self.issues.append(ValidationIssue(

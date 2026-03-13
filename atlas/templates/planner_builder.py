@@ -191,11 +191,30 @@ def build_planner_direct(
 
 # Product type detection
 def is_planner_request(text: str) -> bool:
-    """Check if a request is for a planner/journal type product."""
+    """Check if a request is specifically for a planner/journal product.
+
+    Be specific - don't catch generic 'printable' products like recipe cards.
+    Only match when it's clearly a planner, journal, or tracker.
+    """
+    # Must contain one of these specific planner terms
     planner_keywords = [
-        "planner", "weekly planner", "daily planner", "journal",
-        "habit tracker", "goal tracker", "schedule", "organizer",
-        "printable", "pdf planner", "etsy planner", "printable planner",
+        "weekly planner", "daily planner", "monthly planner",
+        "planner", "journal", "bullet journal",
+        "habit tracker", "goal tracker", "mood tracker",
+        "schedule planner", "organizer planner",
     ]
+
+    # Exclude if it contains these (not a planner)
+    exclude_keywords = [
+        "recipe", "coloring", "flashcard", "worksheet",
+        "invitation", "card set", "cards",
+    ]
+
     text_lower = text.lower()
+
+    # Check exclusions first
+    if any(kw in text_lower for kw in exclude_keywords):
+        return False
+
+    # Then check for planner keywords
     return any(kw in text_lower for kw in planner_keywords)
