@@ -4266,3 +4266,65 @@ async def create_canva_planner(request: Request, project_id: int):
             "success": False,
             "error": str(e)
         }, status_code=500)
+
+
+@router.get("/canva/authorize")
+async def canva_authorize(request: Request):
+    """Start Canva OAuth flow - redirects user to Canva to authorize."""
+    from atlas.integrations.platforms.canva import CanvaIntegration
+
+    canva = CanvaIntegration()
+    if not canva.client_id:
+        return JSONResponse({
+            "error": "CANVA_CLIENT_ID not configured"
+        }, status_code=400)
+
+    # Build redirect URI based on current request
+    redirect_uri = str(request.base_url) + "projects/canva/callback"
+    auth_url = canva.get_authorization_url(redirect_uri)
+
+    return RedirectResponse(url=auth_url)
+
+
+@router.get("/canva/callback")
+async def canva_callback(request: Request, code: str = None, error: str = None):
+    """Handle Canva OAuth callback."""
+    from atlas.integrations.platforms.canva import CanvaIntegration
+
+    if error:
+        return HTMLResponse(f"""
+        <html><body>
+        <h1>Canva Authorization Failed</h1>
+        <p>Error: {error}</p>
+        <a href="/projects">Back to Projects</a>
+        </body></html>
+        """)
+
+    if not code:
+        return HTMLResponse("""
+        <html><body>
+        <h1>Canva Authorization Failed</h1>
+        <p>No authorization code received.</p>
+        <a href="/projects">Back to Projects</a>
+        </body></html>
+        """)
+
+    canva = CanvaIntegration()
+    redirect_uri = str(request.base_url) + "projects/canva/callback"
+
+    if await canva.exchange_code_for_token(code, redirect_uri):
+        return HTMLResponse("""
+        <html><body>
+        <h1>Canva Connected Successfully!</h1>
+        <p>ATLAS can now create designs in your Canva account.</p>
+        <a href="/projects">Back to Projects</a>
+        </body></html>
+        """)
+    else:
+        return HTMLResponse("""
+        <html><body>
+        <h1>Canva Authorization Failed</h1>
+        <p>Could not exchange authorization code for token.</p>
+        <a href="/projects">Back to Projects</a>
+        </body></html>
+        """)
