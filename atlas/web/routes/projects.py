@@ -100,10 +100,16 @@ async def _maybe_create_canva_design(
 
         # Create the design
         design_title = f"{project.name} - Design"
-        design = await canva.create_planner_from_html(
-            html_files,
-            title=design_title,
-        )
+        logger.info(f"[Canva] Creating design from {len(html_files)} HTML files...")
+
+        try:
+            design = await canva.create_planner_from_html(
+                html_files,
+                title=design_title,
+            )
+        except Exception as create_error:
+            logger.error(f"[Canva] create_planner_from_html error: {create_error}")
+            return {"status": "error", "reason": f"Design creation error: {str(create_error)}"}
 
         if design:
             logger.info(f"[Canva] Created design: {design.get('id')}")
@@ -116,7 +122,8 @@ async def _maybe_create_canva_design(
                 "created_at": datetime.now().isoformat(),
             }
         else:
-            return {"status": "error", "reason": "Design creation failed"}
+            logger.error("[Canva] create_planner_from_html returned None")
+            return {"status": "error", "reason": "Design creation returned empty result"}
 
     except Exception as e:
         logger.error(f"[Canva] Error creating design: {e}")

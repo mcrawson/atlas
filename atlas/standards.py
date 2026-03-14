@@ -82,6 +82,26 @@ PRODUCT_INTEGRATIONS = {
         "publish": ["etsy", "gumroad"],
         "needs_cover": True,
     },
+    "physical_planner": {
+        "design": ["canva"],
+        "publish": ["etsy", "gumroad"],
+        "needs_cover": True,
+    },
+    "physical_cards": {
+        "design": ["canva"],
+        "publish": ["etsy", "gumroad"],
+        "needs_cover": False,
+    },
+    "physical_worksheet": {
+        "design": ["canva"],
+        "publish": ["etsy", "gumroad"],
+        "needs_cover": False,
+    },
+    "physical_journal": {
+        "design": ["canva"],
+        "publish": ["etsy", "gumroad", "amazon_kdp"],
+        "needs_cover": True,
+    },
     # Mobile apps
     "mobile_ios": {
         "design": ["canva", "figma"],

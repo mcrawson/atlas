@@ -516,6 +516,7 @@ class CanvaIntegration(PlatformIntegration):
             # Create a new design
             payload = {
                 "design_type": {
+                    "type": "custom",
                     "width": specs.get("width", 1024),
                     "height": specs.get("height", 1024),
                 },
@@ -652,33 +653,15 @@ class CanvaIntegration(PlatformIntegration):
             name = image_path.stem
 
         try:
-            # Step 1: Create upload job
-            create_response = await self.client.post(
-                "/asset-uploads",
-                json={
-                    "name": name,
-                }
-            )
-
-            if create_response.status_code not in [200, 201]:
-                logger.error(f"Failed to create upload job: {create_response.status_code} - {create_response.text}")
-                return None
-
-            upload_job = create_response.json()
-            upload_url = upload_job.get("upload_url")
-            job_id = upload_job.get("id")
-
-            if not upload_url:
-                logger.error("No upload URL in response")
-                return None
-
-            # Step 2: Upload the actual file
+            # Read file first to get size
             with open(image_path, "rb") as f:
                 file_content = f.read()
 
+            file_size = len(file_content)
+
             # Determine content type
             suffix = image_path.suffix.lower()
-            content_type = {
+            mime_type = {
                 ".png": "image/png",
                 ".jpg": "image/jpeg",
                 ".jpeg": "image/jpeg",
@@ -686,34 +669,83 @@ class CanvaIntegration(PlatformIntegration):
                 ".webp": "image/webp",
             }.get(suffix, "image/png")
 
-            async with httpx.AsyncClient() as upload_client:
-                upload_response = await upload_client.put(
-                    upload_url,
+            # Step 1: Create upload job with required headers
+            token = self._access_token or self.api_key
+            async with httpx.AsyncClient() as job_client:
+                create_response = await job_client.post(
+                    f"{self.BASE_URL}/asset-uploads",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/octet-stream",
+                        "Content-Length": str(file_size),
+                        "Asset-Upload-Metadata": f'{{"name_base64": "{__import__("base64").b64encode(name.encode()).decode()}"}}',
+                    },
                     content=file_content,
-                    headers={"Content-Type": content_type},
                 )
 
-            if upload_response.status_code not in [200, 201, 204]:
-                logger.error(f"Failed to upload file: {upload_response.status_code}")
+            if create_response.status_code not in [200, 201]:
+                logger.error(f"Failed to upload asset: {create_response.status_code} - {create_response.text}")
+                return None
+
+            upload_result = create_response.json()
+            logger.info(f"[Canva] Upload response: {upload_result}")
+
+            # Check if asset was created directly (no job needed)
+            asset = upload_result.get("asset")
+            if asset and asset.get("id"):
+                logger.info(f"Asset created directly: {asset.get('id')}")
+                return {
+                    "id": asset.get("id"),
+                    "name": name,
+                    "thumbnail_url": asset.get("thumbnail", {}).get("url"),
+                }
+
+            job = upload_result.get("job", {})
+            job_id = job.get("id")
+            job_status = job.get("status")
+
+            # If job is already completed, return asset
+            if job_status == "success" or job_status == "completed":
+                asset = job.get("asset", {})
+                if asset.get("id"):
+                    logger.info(f"Asset from completed job: {asset.get('id')}")
+                    return {
+                        "id": asset.get("id"),
+                        "name": name,
+                    }
+
+            if not job_id:
+                logger.error(f"No job ID or asset in response: {upload_result}")
                 return None
 
             # Step 3: Poll for completion
             import asyncio
-            for _ in range(30):  # Max 30 seconds
+            logger.info(f"[Canva] Polling job {job_id}...")
+            for i in range(30):  # Max 30 seconds
                 status_response = await self.client.get(f"/asset-uploads/{job_id}")
                 if status_response.status_code == 200:
-                    status = status_response.json()
-                    if status.get("status") == "completed":
-                        asset = status.get("asset", {})
-                        logger.info(f"Uploaded asset: {asset.get('id')}")
+                    result = status_response.json()
+                    job_data = result.get("job", result)
+                    job_status = job_data.get("status")
+
+                    if i == 0:  # Log first poll result
+                        logger.info(f"[Canva] Poll response: {result}")
+
+                    if job_status in ["success", "completed"]:
+                        asset = job_data.get("asset", result.get("asset", {}))
+                        asset_id = asset.get("id")
+                        logger.info(f"Uploaded asset: {asset_id}")
                         return {
-                            "id": asset.get("id"),
+                            "id": asset_id,
                             "name": name,
                             "thumbnail_url": asset.get("thumbnail", {}).get("url"),
                         }
-                    elif status.get("status") == "failed":
-                        logger.error(f"Upload failed: {status}")
+                    elif job_status == "failed":
+                        error = job_data.get("error", {})
+                        logger.error(f"Upload failed: {error}")
                         return None
+                else:
+                    logger.warning(f"[Canva] Poll status {status_response.status_code}: {status_response.text[:200]}")
                 await asyncio.sleep(1)
 
             logger.error("Upload timed out")
@@ -779,11 +811,11 @@ class CanvaIntegration(PlatformIntegration):
             # Create the design
             payload = {
                 "design_type": {
+                    "type": "custom",
                     "width": width,
                     "height": height,
                 },
                 "title": title,
-                "pages": pages,
             }
 
             response = await self.client.post("/designs", json=payload)
