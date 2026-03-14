@@ -165,19 +165,50 @@ class CanvaIntegration(PlatformIntegration):
             self.TOKEN_FILE.chmod(0o600)  # Secure permissions
             logger.debug("[Canva] Saved token to file")
 
-    def get_authorization_url(self, redirect_uri: str = "http://localhost:8000/canva/callback") -> str:
-        """Get the URL for user to authorize the app."""
+    def _generate_pkce(self) -> tuple[str, str]:
+        """Generate PKCE code_verifier and code_challenge."""
+        import secrets
+        import hashlib
+        import base64
+
+        # Generate code_verifier (43-128 chars, URL-safe)
+        code_verifier = secrets.token_urlsafe(32)
+
+        # Generate code_challenge (SHA256 hash, base64url encoded)
+        digest = hashlib.sha256(code_verifier.encode()).digest()
+        code_challenge = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+
+        return code_verifier, code_challenge
+
+    def get_authorization_url(self, redirect_uri: str = "http://127.0.0.1:8000/projects/canva/callback") -> tuple[str, str]:
+        """Get the URL for user to authorize the app.
+
+        Returns:
+            Tuple of (authorization_url, code_verifier)
+            The code_verifier must be saved and used in token exchange.
+        """
         import urllib.parse
+
+        code_verifier, code_challenge = self._generate_pkce()
+
         params = {
             "response_type": "code",
             "client_id": self.client_id,
             "redirect_uri": redirect_uri,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
             "scope": "asset:read asset:write design:content:read design:content:write design:meta:read profile:read",
         }
-        return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
+        auth_url = f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
+        return auth_url, code_verifier
 
-    async def exchange_code_for_token(self, code: str, redirect_uri: str = "http://localhost:8000/canva/callback") -> bool:
-        """Exchange authorization code for access token."""
+    async def exchange_code_for_token(
+        self,
+        code: str,
+        code_verifier: str,
+        redirect_uri: str = "http://127.0.0.1:8000/projects/canva/callback"
+    ) -> bool:
+        """Exchange authorization code for access token using PKCE."""
         if not self.client_id or not self.client_secret:
             return False
 
@@ -196,6 +227,7 @@ class CanvaIntegration(PlatformIntegration):
                     data={
                         "grant_type": "authorization_code",
                         "code": code,
+                        "code_verifier": code_verifier,
                         "redirect_uri": redirect_uri,
                     },
                 )
