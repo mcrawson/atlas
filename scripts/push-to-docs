@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""
+Push markdown files to Google Docs.
+
+Usage:
+    ./scripts/push-to-docs docs/BUILD-PLAN.md
+    ./scripts/push-to-docs docs/BUILD-PLAN.md --doc-id <existing-doc-id>
+    ./scripts/push-to-docs --auth  # Re-authenticate
+
+Requirements:
+    pip install google-auth google-auth-oauthlib google-api-python-client
+"""
+
+import argparse
+import json
+import os
+import sys
+import re
+from pathlib import Path
+
+# Google API scopes needed
+SCOPES = [
+    'https://www.googleapis.com/auth/documents',
+    'https://www.googleapis.com/auth/drive.file',
+]
+
+CONFIG_DIR = Path.home() / '.config' / 'atlas'
+CREDENTIALS_FILE = CONFIG_DIR / 'google_credentials.json'
+TOKEN_FILE = CONFIG_DIR / 'google_docs_tokens.json'
+
+
+def get_credentials():
+    """Get or refresh Google credentials."""
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    creds = None
+
+    if TOKEN_FILE.exists():
+        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            print("Refreshing expired token...")
+            creds.refresh(Request())
+        else:
+            if not CREDENTIALS_FILE.exists():
+                print(f"Error: No credentials file found at {CREDENTIALS_FILE}")
+                print("\nTo set up Google Docs integration:")
+                print("1. Go to https://console.cloud.google.com/")
+                print("2. Create/select a project")
+                print("3. Enable Google Docs API and Google Drive API")
+                print("4. Go to 'APIs & Services' > 'Credentials'")
+                print("5. Create OAuth 2.0 Client ID (Desktop app)")
+                print("6. Download JSON and save to:")
+                print(f"   {CREDENTIALS_FILE}")
+                sys.exit(1)
+
+            print("Opening browser for authentication...")
+            flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), SCOPES)
+            creds = flow.run_local_server(port=0)
+
+        # Save credentials
+        TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(TOKEN_FILE, 'w') as f:
+            f.write(creds.to_json())
+        os.chmod(TOKEN_FILE, 0o600)
+        print("Credentials saved.")
+
+    return creds
+
+
+def markdown_to_docs_requests(markdown_content: str) -> list:
+    """Convert markdown to Google Docs API batch update requests."""
+    requests = []
+    index = 1  # Start after document start
+
+    lines = markdown_content.split('\n')
+
+    for line in lines:
+        text = line
+        style = None
+
+        # Headers
+        if line.startswith('# '):
+            text = line[2:] + '\n'
+            style = 'HEADING_1'
+        elif line.startswith('## '):
+            text = line[3:] + '\n'
+            style = 'HEADING_2'
+        elif line.startswith('### '):
+            text = line[4:] + '\n'
+            style = 'HEADING_3'
+        elif line.startswith('#### '):
+            text = line[5:] + '\n'
+            style = 'HEADING_4'
+        elif line.startswith('---'):
+            text = '─' * 50 + '\n'
+        elif line.startswith('```'):
+            # Code block marker - skip but mark context
+            continue
+        elif line.startswith('- [ ]'):
+            text = '☐ ' + line[5:].strip() + '\n'
+        elif line.startswith('- [x]'):
+            text = '☑ ' + line[5:].strip() + '\n'
+        elif line.startswith('- '):
+            text = '• ' + line[2:] + '\n'
+        elif line.startswith('|'):
+            # Table row - convert to simple text
+            cells = [c.strip() for c in line.split('|')[1:-1]]
+            if cells and not all(c.startswith('-') for c in cells):
+                text = '  '.join(cells) + '\n'
+            else:
+                continue
+        else:
+            text = line + '\n'
+
+        if text.strip() or text == '\n':
+            # Insert text
+            requests.append({
+                'insertText': {
+                    'location': {'index': index},
+                    'text': text
+                }
+            })
+
+            # Apply heading style if needed
+            if style:
+                requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': index,
+                            'endIndex': index + len(text)
+                        },
+                        'paragraphStyle': {
+                            'namedStyleType': style
+                        },
+                        'fields': 'namedStyleType'
+                    }
+                })
+
+            index += len(text)
+
+    return requests
+
+
+def create_document(service, title: str, content: str) -> str:
+    """Create a new Google Doc with content."""
+    # Create empty document
+    doc = service.documents().create(body={'title': title}).execute()
+    doc_id = doc.get('documentId')
+    print(f"Created document: {title}")
+
+    # Add content
+    requests = markdown_to_docs_requests(content)
+    if requests:
+        service.documents().batchUpdate(
+            documentId=doc_id,
+            body={'requests': requests}
+        ).execute()
+        print(f"Added content ({len(requests)} operations)")
+
+    return doc_id
+
+
+def update_document(service, doc_id: str, content: str):
+    """Replace content in existing Google Doc."""
+    # Get current document to find content length
+    doc = service.documents().get(documentId=doc_id).execute()
+
+    # Get end index of content
+    body = doc.get('body', {})
+    content_elements = body.get('content', [])
+    if content_elements:
+        end_index = content_elements[-1].get('endIndex', 1) - 1
+    else:
+        end_index = 1
+
+    requests = []
+
+    # Delete existing content (if any)
+    if end_index > 1:
+        requests.append({
+            'deleteContentRange': {
+                'range': {
+                    'startIndex': 1,
+                    'endIndex': end_index
+                }
+            }
+        })
+
+    # Execute delete first
+    if requests:
+        service.documents().batchUpdate(
+            documentId=doc_id,
+            body={'requests': requests}
+        ).execute()
+        print("Cleared existing content")
+
+    # Add new content
+    content_requests = markdown_to_docs_requests(content)
+    if content_requests:
+        service.documents().batchUpdate(
+            documentId=doc_id,
+            body={'requests': content_requests}
+        ).execute()
+        print(f"Added new content ({len(content_requests)} operations)")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Push markdown to Google Docs')
+    parser.add_argument('file', nargs='?', help='Markdown file to push')
+    parser.add_argument('--doc-id', help='Existing document ID to update')
+    parser.add_argument('--auth', action='store_true', help='Re-authenticate only')
+    parser.add_argument('--title', help='Document title (default: filename)')
+
+    args = parser.parse_args()
+
+    # Import here to give helpful error if not installed
+    try:
+        from googleapiclient.discovery import build
+    except ImportError:
+        print("Error: Google API client not installed.")
+        print("Run: pip install google-auth google-auth-oauthlib google-api-python-client")
+        sys.exit(1)
+
+    # Get credentials
+    creds = get_credentials()
+
+    if args.auth:
+        print("Authentication successful!")
+        return
+
+    if not args.file:
+        parser.print_help()
+        return
+
+    # Read file
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"Error: File not found: {file_path}")
+        sys.exit(1)
+
+    content = file_path.read_text()
+    title = args.title or file_path.stem.replace('-', ' ').replace('_', ' ').title()
+
+    # Build service
+    service = build('docs', 'v1', credentials=creds)
+
+    if args.doc_id:
+        # Update existing document
+        print(f"Updating document: {args.doc_id}")
+        update_document(service, args.doc_id, content)
+        doc_url = f"https://docs.google.com/document/d/{args.doc_id}/edit"
+    else:
+        # Create new document
+        doc_id = create_document(service, title, content)
+        doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+
+    print(f"\n✓ Document ready: {doc_url}")
+
+
+if __name__ == '__main__':
+    main()

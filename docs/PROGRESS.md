@@ -37,6 +37,7 @@
 | 7. Mobile Build | ⚪ Not Started | App builds |
 | 8. Publishing | ⚪ Not Started | Ship to stores |
 | 9. End-to-End | ⚪ Not Started | One-click shipping |
+| 10. OpenClaw/NemoClaw | ⚪ Not Started | Multi-platform chat + sandboxed execution |
 
 ---
 
@@ -52,6 +53,8 @@
 | Amazon KDP | ⚪ Not Started | Research API options |
 | App Store | ⚪ Not Started | - |
 | Play Store | ⚪ Not Started | - |
+| OpenClaw | 🟡 Installed | Gateway installed, skill not created yet |
+| NemoClaw | 🟡 Installed | Sandbox created, ATLAS not integrated yet |
 
 ---
 
@@ -66,6 +69,15 @@
 ---
 
 ## Session Log
+
+### 2026-03-17
+- Installed OpenClaw (multi-platform chat gateway)
+- Installed NemoClaw (NVIDIA sandbox + Nemotron 120B inference)
+- Created sandbox "claw" with security policies
+- Uploaded ATLAS codebase to sandbox for OpenClaw access
+- Added Phase 8 (OpenClaw/NemoClaw Integration) to BUILD-PLAN.md
+- Added Phase 10 to ROADMAP.md
+- Defined integration architecture and tasks
 
 ### 2026-03-05
 - Built Slack integration (webhooks, event handling, conversations)

@@ -163,7 +163,15 @@ Tinker builds the product following Sketch's plan:
 - Creates content
 - Applies structure
 
+**Build Type Options:**
+When approving the plan, you can choose your build type for web applications:
+- **Static HTML/CSS/JS** - Simpler, works in any browser, great for simple sites
+- **React SPA (TypeScript)** - Better for complex interactions, modern single-page apps
+
 **Quality Check:** QC reviews output against plan AND Business Brief
+- For React builds: QC evaluates the React/TypeScript source code
+- For static HTML: QC evaluates the HTML preview
+- You'll see an indicator showing which evaluation mode was used
 
 **Your Action:** Review rendered product + QC assessment, then approve
 
@@ -331,9 +339,72 @@ Every approval, change request, and rejection is logged. Over time, ATLAS learns
 |------|----------|-------------|---------------|
 | **Printable** | Planners, cards, worksheets | Analyst → Sketch → Tinker → Polish | PDF |
 | **Document** | Books, guides, manuals | Analyst → Sketch → Tinker → Polish | PDF/EPUB |
-| **Web App** | SPA, dashboard | Analyst → Sketch → Tinker | HTML/CSS/JS |
+| **Web App** | SPA, dashboard | Analyst → Sketch → Tinker | HTML/CSS/JS or React/TS |
 | **Mobile App** | iOS, Android | Analyst → Sketch → Tinker | React Native/Flutter |
 | **API** | REST, GraphQL | Analyst → Sketch → Tinker | Python/Node |
+
+### Web App Build Types
+
+When building web applications, you can choose between two build types:
+
+#### Static HTML/CSS/JS
+**Best for:**
+- Simple websites and landing pages
+- Content-focused sites
+- Projects that need to work everywhere
+- Quick deployment without build tools
+
+**Advantages:**
+- No build process required
+- Works in any browser
+- Easy to host (any static hosting)
+- Faster initial load
+- Simple to modify
+
+**Trade-offs:**
+- Limited interactivity
+- Manual DOM manipulation for dynamic features
+- Less organized for large projects
+
+#### React SPA (TypeScript)
+**Best for:**
+- Interactive applications
+- Complex state management
+- Single-page applications
+- Modern web experiences
+
+**Advantages:**
+- Component-based architecture
+- Type safety with TypeScript
+- Rich ecosystem of libraries
+- Better for complex interactions
+- Easier to maintain at scale
+
+**Trade-offs:**
+- Requires build process
+- Larger initial bundle size
+- Need Node.js environment for development
+- More complex deployment
+
+### How QC Evaluates Different Build Types
+
+#### React Builds
+When QC detects React source files (.tsx, .jsx), it:
+- Evaluates the React/TypeScript source code directly
+- Checks component structure and functionality
+- Reviews type safety and code quality
+- Understands that the HTML preview shows an empty `<div id="root">` (normal for React)
+
+You'll see: **⚛️ React Source Evaluation** badge in the QC report
+
+#### Static HTML Builds
+When QC evaluates static HTML, it:
+- Reviews the rendered HTML output
+- Checks styling and layout
+- Verifies interactive elements work
+- Ensures content is properly structured
+
+You'll see: **🌐 HTML Preview Evaluation** badge in the QC report
 
 ---
 
@@ -394,6 +465,17 @@ lsof -i :8080
 - Review the Business Brief - it may have unrealistic criteria
 - Check if your feedback is being incorporated
 - Lower quality thresholds in settings (not recommended)
+
+### React build shows empty page in preview
+- This is normal! React apps show an empty `<div id="root">` until JavaScript loads
+- Look for the **React Source Evaluation** badge in QC report
+- QC evaluates the React source code, not the HTML preview
+- To see it working, you'd need to run the build process (npm build)
+
+### Want to change build type after starting
+- Currently, build type is chosen when approving the plan
+- To change, you'll need to go back to the planning phase
+- Future versions may allow switching build type mid-project
 
 ---
 

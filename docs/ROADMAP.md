@@ -117,6 +117,13 @@ ATLAS is not just a code generator—it's a **product studio** that orchestrates
 | **GitHub Actions** | CI/CD | All code projects | ✅ Has API |
 | **TestFlight** | iOS beta testing | iOS apps | ✅ Via App Store Connect |
 
+### Tier 6: Universal Interface (Unlocks Multi-Platform Access)
+| Integration | Purpose | Products Unlocked | API Status |
+|-------------|---------|-------------------|------------|
+| **OpenClaw** | Chat gateway (15+ platforms) | All products via chat | ✅ Skills API |
+| **NemoClaw** | Sandboxed execution + NVIDIA inference | Secure enterprise deployment | ✅ Has API |
+| **ClawHub** | Skills marketplace | Share ATLAS skill publicly | ✅ Has API |
+
 ---
 
 ## Full Platform Ecosystem
@@ -461,6 +468,37 @@ When Tinker finishes building, the preview should show **what customers will see
 - [ ] Status tracking through review processes
 - [ ] Notification when products are live
 
+### Phase 10: OpenClaw/NemoClaw Integration
+*Goal: Universal chat interface + sandboxed execution*
+
+**OpenClaw Integration (Multi-Platform Chat):**
+- [ ] Create ATLAS skill for OpenClaw
+- [ ] Enable access from 15+ platforms (WhatsApp, Telegram, Discord, Signal, etc.)
+- [ ] Natural language triggers ("build me a...", "create a...")
+- [ ] Stream progress updates to chat
+- [ ] Return deliverables with preview links
+
+**NemoClaw Integration (Security + NVIDIA Inference):**
+- [ ] Add Nemotron-3 120B as provider option
+- [ ] Configure network policies for ATLAS
+- [ ] Sandboxed agent execution (optional/enterprise)
+- [ ] Memory bridge between OpenClaw and ATLAS
+
+**Architecture:**
+```
+User (Any Chat) → OpenClaw Gateway → ATLAS Skill → ATLAS Agents
+                                          ↓
+                              NemoClaw Sandbox (optional)
+                                          ↓
+                              NVIDIA Nemotron Inference
+```
+
+**Benefits:**
+- Access ATLAS from any device/platform
+- Persistent memory across sessions
+- Enterprise-grade security
+- Additional high-capability model (120B)
+
 ---
 
 ## What Each Agent Does (Updated Vision)
@@ -546,6 +584,10 @@ GOOGLE_PLAY_SERVICE_ACCOUNT=...
 AMAZON_KDP_CREDENTIALS=...  # If available
 GUMROAD_API_KEY=...
 ETSY_API_KEY=...
+
+# Phase 10: OpenClaw/NemoClaw
+NVIDIA_API_KEY=...          # For Nemotron inference
+# Note: OpenClaw uses local auth, NemoClaw handles via sandbox
 ```
 
 ### Database Additions
@@ -603,5 +645,5 @@ PLATFORMS = {
 
 ---
 
-*Last updated: 2026-03-05*
+*Last updated: 2026-03-17*
 *This is a living document - update as we progress*

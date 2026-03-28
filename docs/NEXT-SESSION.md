@@ -2,100 +2,72 @@
 
 **Project:** ATLAS 3.0 Rebuild
 **Last Session:** 2026-03-15
-**Status:** Phase 0 - Kickoff Meeting (In Progress)
+**Status:** Phase 1 Complete, Ready for Phase 2
 
 ---
 
 ## What We Accomplished This Session
 
-1. **Went back to fundamentals** - Started from the core idea, not the code
-2. **Defined the mission:**
-   > ATLAS is a product studio that combines human creativity with ethical AI to build transformative solutions for our clients and the public.
-3. **Mapped the complete process:**
-   - Idea Chat (conversation)
-   - Business Analysis (Go/No-Go)
-   - Round Table (assign work, define success)
-   - Mockup (polished visual BEFORE building)
-   - Build (specialized builders)
-   - QC (system + you)
-   - Deploy (push to marketplace)
-   - Amp - Advertise (promote the product)
-   - Pulse - Agent Review (HR for agents)
-   - Continuous Training (prompts + knowledge base)
-4. **Added Amp** - Journey documentation + product advertising
-5. **Added Pulse** - Agent operations and review
-6. **Updated all living documents** with mission at the core
-7. **Amp wrote first post** - "We Failed. Here's What We Learned."
-8. **Created files for Google Docs** - Social posts, Lessons Learned, User Manual
+### Phase 0: Kickoff Meeting (COMPLETE)
+- Answered all open questions
+- Business Brief: Full (comprehensive analysis)
+- QC Power: Advisory with warnings (user is final authority)
+- Phase 1 criteria defined
+
+### Phase 1: Foundation Reset (COMPLETE)
+1. **Removed Canva integration** - Deleted canva.py, removed all Canva routes and auto-triggers
+2. **Removed MCP server** - Deleted entire mcp/ directory, removed from app.py
+3. **Removed auto-triggers** - Cleaned up projects.py routes
+4. **Created builder architecture:**
+   - `atlas/agents/builders/base.py` - BaseBuilder class, BuildOutput, BuildContext
+   - `atlas/agents/builders/config.py` - BuilderConfig, type-specific configs
+   - `atlas/agents/builders/__init__.py` - Registry, get_builder() functions
+5. **Created agent stubs:**
+   - `atlas/agents/analyst.py` - AnalystAgent + BusinessBrief model
+   - `atlas/agents/qc.py` - QCAgent + QCReport model
+   - `atlas/agents/mockup.py` - MockupAgent + MockupOutput model
+6. **Updated database schema** - New TaskStatus enum with all ATLAS 3.0 workflow stages
+7. **Verified ATLAS starts** - 131 routes registered, no import errors
 
 ---
 
 ## Agenda for Next Session
 
-### 1. Review Build Plan Phases
+### Phase 2: Analyst Agent (Week 2)
 
-The Build Phases in BUILD-PLAN.md need updating to match the new process:
-- Add Mockup step
-- Add Amp integration (journey + advertising)
-- Add Pulse integration
-- Add Continuous Training
-- Reorder/rename phases as needed
+**Goal:** Business analysis before any building
 
-### 2. Answer Open Questions
+**Tasks:**
+1. [ ] Implement Analyst agent with prompts for:
+   - Executive summary
+   - Market analysis
+   - Target customer profile
+   - Competition analysis
+   - SWOT analysis
+   - Financial projections
+2. [ ] Create Business Brief template (populate the stub)
+3. [ ] Add UI for business brief display
+4. [ ] Add user approval step for brief
 
-**Q1: How detailed should the Business Brief be?**
-- Light (executive summary, target customer, 1-2 competitors)
-- Full (market analysis, SWOT, detailed financials)
-
-**Q2: Should QC have veto power or just advisory?**
-- Veto (QC fails = must revise before user sees it)
-- Advisory (QC reports issues, user decides)
-
-**Q3: What does "done" look like for Phase 1?**
-- Define clear completion criteria
-
-### 3. Make GO / UPDATE / PAUSE Decision
-
-| Decision | Meaning |
-|----------|---------|
-| GO | Start Phase 1: Foundation Reset |
-| UPDATE | Revise plan based on discussion |
-| PAUSE | More research/planning needed |
-
-### 4. If GO: Start Phase 1
-
-Phase 1 tasks (need to update these to match new process):
-1. Remove Canva auto-integration code
-2. Remove MCP server code
-3. Simplify project routes
-4. Create builder architecture
-5. Create new agent stubs (Analyst, QC, Mockup, Amp integration, Pulse integration)
-6. Update database schema
-7. Create Business Brief model
+**Deliverable:** New project flow starts with Analyst producing business brief
 
 ---
 
-## Key Documents
+## Files Changed This Session
 
-| Document | Path | Status |
-|----------|------|--------|
-| Mission | `MISSION.md` | Created |
-| Build Plan | `docs/BUILD-PLAN.md` | Updated (phases need review) |
-| User Manual | `docs/USER-MANUAL.md` | Updated |
-| Lessons Learned | `docs/LESSONS-LEARNED.md` | Updated |
-| Journey Posts | `docs/journey/` | First post created |
-| Next Session | `docs/NEXT-SESSION.md` | This file |
-
----
-
-## Google Docs (Living Documents)
-
-These should be synced with local files:
-- Social Media Posts Day 1
-- Lessons Learned
-- User Manual (Ops Manual)
-
-Local upload copies at: `/home/mcrawson/ai-workspace/docs/`
+| File | Change |
+|------|--------|
+| `atlas/integrations/platforms/canva.py` | Deleted |
+| `atlas/integrations/platforms/__init__.py` | Removed Canva imports |
+| `atlas/web/routes/projects.py` | Removed Canva routes, auto-triggers |
+| `atlas/mcp/` | Deleted entire directory |
+| `atlas/web/app.py` | Removed MCP initialization |
+| `atlas/agents/builders/` | Created (base.py, config.py, __init__.py) |
+| `atlas/agents/analyst.py` | Created |
+| `atlas/agents/qc.py` | Created |
+| `atlas/agents/mockup.py` | Created |
+| `atlas/projects/models.py` | Updated TaskStatus enum |
+| `docs/BUILD-PLAN.md` | Updated with decisions, marked Phase 1 complete |
 
 ---
 
@@ -103,19 +75,20 @@ Local upload copies at: `/home/mcrawson/ai-workspace/docs/`
 
 If starting fresh, say:
 
-> "Let's continue the ATLAS 3.0 rebuild. Read `MISSION.md`, `docs/BUILD-PLAN.md`, and `docs/NEXT-SESSION.md` to see where we left off. We're in Phase 0 Kickoff Meeting - need to update build phases and make the GO decision."
+> "Let's continue the ATLAS 3.0 rebuild. We completed Phase 1 (Foundation Reset). Read `docs/BUILD-PLAN.md` and `docs/NEXT-SESSION.md` to see the current state. Ready to start Phase 2: Analyst Agent implementation."
 
 ---
 
-## End of Session Checklist
+## Key Documents
 
-Before ending each session:
-- [ ] Update BUILD-PLAN.md with any decisions
-- [ ] Update LESSONS-LEARNED.md with any issues found
-- [ ] Have Amp write session recap for docs/journey/
-- [ ] Update Google Docs if living documents changed
-- [ ] Update this NEXT-SESSION.md file
+| Document | Path | Status |
+|----------|------|--------|
+| Mission | `MISSION.md` | Current |
+| Build Plan | `docs/BUILD-PLAN.md` | Phase 1 complete |
+| User Manual | `docs/USER-MANUAL.md` | Needs update after Phase 2 |
+| Lessons Learned | `docs/LESSONS-LEARNED.md` | Current |
+| Next Session | `docs/NEXT-SESSION.md` | This file |
 
 ---
 
-**Delete this file after kickoff is complete and Phase 1 begins.**
+**Last Updated:** 2026-03-15

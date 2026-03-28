@@ -31,9 +31,13 @@ The story:
 
 ## Posts
 
-| Date | Title | File | Status |
-|------|-------|------|--------|
-| 2026-03-15 | We Failed. Here's What We Learned. | `001-we-failed-heres-what-we-learned.md` | Ready to publish |
+| # | Date | Title | File | Status |
+|---|------|-------|------|--------|
+| 0 | 2026-03-15 | Building an AI Product Studio in Public | `000-building-an-ai-product-studio-in-public.md` | Published |
+| 1 | 2026-03-15 | We Failed. Here's What We Learned. | `001-we-failed-heres-what-we-learned.md` | Published |
+| 2 | 2026-03-15 | The Cleanup Before the Build | `002-the-cleanup-before-the-build.md` | Published |
+| 3 | 2026-03-15 | The Brain and the Builders | `003-the-brain-and-the-builders.md` | Published |
+| 5 | 2026-03-18 | Midnight Debugging and Robot Brains | `004-midnight-debugging-and-robot-brains.md` | Ready to publish |
 
 ---
 

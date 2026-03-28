@@ -1,8 +1,9 @@
 # ATLAS 3.0 Build Plan
 
-**Project:** ATLAS Rebuild - "Sellable Products, Not Code"
+**Project:** ATLAS Rebuild - "Watch AI Teams Build Your Products"
 **Started:** 2026-03-13
-**Status:** Planning Phase
+**Updated:** 2026-03-20
+**Status:** Phase 4 - Agent Collaboration Engine
 
 ---
 
@@ -22,521 +23,544 @@ This mission is the foundation. Every agent, every decision, every product ties 
 
 ---
 
-## Executive Summary
+## The Vision: Layla-Style Agent Collaboration
 
-ATLAS 2.x produced functional code but not sellable products. The output looked like developer prototypes, not market-ready goods. This rebuild fundamentally changes how ATLAS approaches product creation.
+ATLAS should work like this:
 
-**The Core Problem:** Agents executed prompts without understanding the mission. No business analysis, no design thinking, no mockups before building, no quality gates, no learning from feedback.
+1. **You describe ANY idea** - a planner, an app, a book, a website, anything
+2. **ATLAS analyzes the goal** and dynamically assembles a team of AI agents specific to that goal
+3. **You WATCH the agents work** - they discuss, debate, and refine in real-time
+4. **A Director orchestrates** - managing the conversation, resolving conflicts, keeping things moving
+5. **Agents actually BUILD** - producing sellable products, not just reports
+6. **You review and approve** - the human is always final authority
 
-**The Solution:** Transform ATLAS from a "prompt executor" into a "product studio" where:
-- Every agent knows the mission
-- Ideas are discussed, not just submitted
-- Business analysis happens before building
-- You see polished mockups before building starts
-- Specialized builders create quality products
-- QC is both system AND human
-- Agents learn and improve after every project
+**Reference:** [Layla AI](https://layla-ai.app/) - This is the experience we're building.
 
 ---
 
-## What We're Building
+## What Makes This Different
 
-### New Architecture Overview
+### Before (ATLAS 2.0)
+```
+User → Agent 1 → Agent 2 → Agent 3 → Output
+         ↓          ↓          ↓
+      (silent)  (silent)   (silent)
+```
+- Sequential pipeline
+- Pre-defined agents
+- User can't see what's happening
+- Agents don't talk to each other
+
+### After (ATLAS 3.0)
+```
+User → Director → ┌─────────────────────────────────┐
+                  │     AGENT CONVERSATION ROOM      │
+                  │                                  │
+                  │  🧠 Expert: "For this planner,   │
+                  │     we should use weekly spread" │
+                  │                                  │
+                  │  📋 Planner: "I'll structure it  │
+                  │     with habit tracking sections"│
+                  │                                  │
+                  │  ✅ QC: "Make sure pages print   │
+                  │     correctly at A5 size"        │
+                  │                                  │
+                  │  🎨 Builder: "Starting design... │
+                  │     using minimalist palette"    │
+                  │                                  │
+                  └─────────────────────────────────┘
+                              ↑
+                         USER WATCHES
+                         IN REAL-TIME
+```
+- Dynamic agent creation
+- Agents debate and collaborate
+- User sees everything happening
+- Director keeps things moving
+
+---
+
+## Architecture Overview
 
 ```
-                         ┌─────────────────────────────────┐
-                         │           THE MISSION            │
-                         │  "ATLAS is a product studio      │
-                         │   that combines human creativity │
-                         │   with ethical AI to build       │
-                         │   transformative solutions"      │
-                         └─────────────────────────────────┘
-                                        │
-                    Every agent, every step ties back to this
-                                        │
-                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PRODUCT CREATION FLOW                              │
+│                              USER INTERFACE                                  │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    CONVERSATION VIEWER                               │    │
+│  │  Real-time stream of agent discussion                               │    │
+│  │  WebSocket connection shows live agent-to-agent messages            │    │
+│  │  User can see reasoning, debates, decisions                         │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐          │
+│  │   Agent Panel    │  │   Build Status   │  │   Deliverables   │          │
+│  │   (who's active) │  │   (progress)     │  │   (outputs)      │          │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘          │
 └─────────────────────────────────────────────────────────────────────────────┘
-
-1. IDEA CHAT
-   ┌─────────────────────────────────────────────────────────┐
-   │ You + ATLAS discuss the idea                            │
-   │ - Conversation, not submission                          │
-   │ - Flush it out, explore options                         │
-   │ - Come up with a game plan                              │
-   └─────────────────────────────────────────────────────────┘
-                              ↓
-2. BUSINESS ANALYSIS
-   ┌─────────────────────────────────────────────────────────┐
-   │ Is this a good idea?                                    │
-   │ - Market analysis                                       │
-   │ - Competition                                           │
-   │ - Viability                                             │
-   │ → GO / NO-GO DECISION                                   │
-   └─────────────────────────────────────────────────────────┘
-                              ↓ (if Go)
-3. ROUND TABLE
-   ┌─────────────────────────────────────────────────────────┐
-   │ Assign the work                                         │
-   │ - Who builds this? (which specialized builder)          │
-   │ - What are they going to do?                            │
-   │ - What does success mean?                               │
-   └─────────────────────────────────────────────────────────┘
-                              ↓
-4. MOCKUP (Polished)
-   ┌─────────────────────────────────────────────────────────┐
-   │ See the product BEFORE building                         │
-   │ - Polished visual preview                               │
-   │ - Close to final appearance                             │
-   │ → YOU APPROVE / REVISE                                  │
-   └─────────────────────────────────────────────────────────┘
-                              ↓ (if Approved)
-5. BUILD
-   ┌─────────────────────────────────────────────────────────┐
-   │ SPECIALIZED BUILDERS                                    │
-   │                                                         │
-   │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │
-   │  │ Printable    │ │ Document     │ │ Web          │    │
-   │  │ Builder      │ │ Builder      │ │ Builder      │    │
-   │  │ - Planners   │ │ - Books      │ │ - Landing    │    │
-   │  │ - Cards      │ │ - Guides     │ │ - SPAs       │    │
-   │  │ - Worksheets │ │ - Manuals    │ │ - Dashboards │    │
-   │  └──────────────┘ └──────────────┘ └──────────────┘    │
-   │                                                         │
-   │  ┌──────────────┐                                       │
-   │  │ App Builder  │  ← React Native (cross-platform)      │
-   │  │ - iOS apps   │                                       │
-   │  │ - Android    │                                       │
-   │  └──────────────┘                                       │
-   │                                                         │
-   │ Builds based on approved mockup                         │
-   └─────────────────────────────────────────────────────────┘
-                              ↓
-6. QC (Two Layers)
-   ┌─────────────────────────────────────────────────────────┐
-   │ System Tests: Does it work technically?                 │
-   │ You Test: Is it sellable? Does it feel right?          │
-   │ → PASS / FAIL                                           │
-   └─────────────────────────────────────────────────────────┘
-                              ↓ (if Pass)
-7. DEPLOY
-   ┌─────────────────────────────────────────────────────────┐
-   │ Push to marketplace                                     │
-   │ - Etsy, Amazon KDP, App Store, etc.                    │
-   │ - You decide when and where                            │
-   └─────────────────────────────────────────────────────────┘
-                              ↓
-8. AMP - ADVERTISE
-   ┌─────────────────────────────────────────────────────────┐
-   │ Social media promotion                                  │
-   │ - Create content to sell the product                   │
-   │ - Platform-optimized posts                             │
-   └─────────────────────────────────────────────────────────┘
-
+                                    │
+                                    │ WebSocket
+                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          AFTER EVERY PROJECT                                 │
+│                           CONVERSATION ENGINE                                │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                         DIRECTOR AGENT                               │    │
+│  │  • Analyzes user's goal                                             │    │
+│  │  • Spawns appropriate agents dynamically                            │    │
+│  │  • Manages conversation flow                                        │    │
+│  │  • Resolves conflicts between agents                                │    │
+│  │  • Decides when to move to next phase                               │    │
+│  │  • Streams all messages to UI in real-time                          │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                    ┌───────────────┼───────────────┐                        │
+│                    ▼               ▼               ▼                        │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                      DYNAMIC AGENT POOL                               │   │
+│  │                                                                       │   │
+│  │  🧠 Custom Expert     📋 Planner        ✅ QC Agent                  │   │
+│  │  (spawned per project) (build strategy)  (quality gates)             │   │
+│  │                                                                       │   │
+│  │  🎨 PrintableBuilder  📚 DocumentBuilder  🌐 WebBuilder  📱 AppBuilder│   │
+│  │  (planners, cards)     (books, guides)    (websites)    (mobile apps)│   │
+│  │                                                                       │   │
+│  │  More agents spawned as needed based on project requirements...      │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
-
-9. PULSE - AGENT REVIEW
-   ┌─────────────────────────────────────────────────────────┐
-   │ HR for the agents                                       │
-   │ - How did each agent perform?                          │
-   │ - What gaps showed up?                                 │
-   │ - What needs updating?                                 │
-   │ → Recommends prompt updates                            │
-   └─────────────────────────────────────────────────────────┘
-                              ↓
-10. CONTINUOUS TRAINING
-   ┌─────────────────────────────────────────────────────────┐
-   │ Two methods:                                            │
-   │ 1. Prompt Updates - Pulse recommends, we update agents │
-   │ 2. Knowledge Base - Lessons, tech, patterns grow       │
-   │                                                         │
-   │ Agents get smarter with every project                  │
-   └─────────────────────────────────────────────────────────┘
-
+                                    │
+                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              ONGOING                                         │
+│                           MESSAGE BROKER                                     │
+│                                                                              │
+│  • Agent-to-agent messaging                                                  │
+│  • Conversation history                                                      │
+│  • Real-time broadcast to all participants                                   │
+│  • WebSocket fan-out to UI                                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
-
-AMP - JOURNEY DOCUMENTATION
-   ┌─────────────────────────────────────────────────────────┐
-   │ Documents the ATLAS story                               │
-   │ - What we're building                                  │
-   │ - Challenges and successes                             │
-   │ - Public blog posts and social content                 │
-   └─────────────────────────────────────────────────────────┘
 ```
 
-### Specialized Builder Architecture
+---
 
-Instead of one "Tinker" that does everything poorly, we have focused builders:
+## Core Components to Build
 
-```
-atlas/agents/builders/
-├── __init__.py              # Builder registry (add new builders here)
-├── base.py                  # Shared logic (change once, affects all)
-├── config.py                # Settings that change often (not in code)
-├── templates/               # Shared design assets
-│   ├── color_palettes.py
-│   └── typography.py
-│
-├── printable/               # Planners, cards, worksheets
-│   ├── builder.py           # PrintableBuilder class
-│   ├── prompts.py           # Printable-specific prompts
-│   └── templates/           # Planner layouts, card templates
-│
-├── document/                # Books, guides, manuals
-│   ├── builder.py           # DocumentBuilder class
-│   ├── prompts.py           # Document-specific prompts
-│   └── templates/           # Book layouts, chapter templates
-│
-├── web/                     # Landing pages, SPAs
-│   ├── builder.py           # WebBuilder class
-│   ├── prompts.py           # Web-specific prompts
-│   └── templates/           # Component templates
-│
-└── app/                     # Mobile apps
-    ├── builder.py           # AppBuilder class
-    ├── prompts.py           # Mobile-specific prompts
-    └── templates/
-        └── react_native/    # React Native components
-```
+### 1. Director Agent
+The orchestrator that runs the show.
 
-**Why this structure:**
-- Each builder is an expert in its domain
-- Shared logic in `base.py` - change once, affects all
-- Config separated from code - tweak settings without touching builders
-- Add new builders by creating a folder + one line in registry
-
-**Builder Registry:**
 ```python
-BUILDERS = {
-    "physical_planner": PrintableBuilder,
-    "physical_cards": PrintableBuilder,
-    "doc_book": DocumentBuilder,
-    "doc_guide": DocumentBuilder,
-    "web_spa": WebBuilder,
-    "web_landing": WebBuilder,
-    "mobile_ios": AppBuilder,         # React Native
-    "mobile_android": AppBuilder,     # React Native
-    "mobile_cross_platform": AppBuilder,
+class DirectorAgent:
+    """Orchestrates the agent conversation."""
+
+    async def analyze_goal(self, user_input: str) -> TeamComposition:
+        """Analyze what the user wants and determine which agents to spawn."""
+
+    async def spawn_team(self, composition: TeamComposition) -> List[Agent]:
+        """Dynamically create the agent team for this project."""
+
+    async def run_conversation(self, team: List[Agent], goal: str) -> None:
+        """Manage the agent discussion until consensus/completion."""
+
+    async def broadcast_message(self, message: AgentMessage) -> None:
+        """Send message to all agents AND stream to UI."""
+
+    async def resolve_conflict(self, positions: List[Position]) -> Decision:
+        """When agents disagree, make a decision."""
+
+    async def advance_phase(self) -> None:
+        """Move from planning → design → build → review."""
+```
+
+### 2. Message Broker
+Handles all agent-to-agent and agent-to-UI communication.
+
+```python
+class MessageBroker:
+    """Central hub for all agent communication."""
+
+    async def send(self, message: AgentMessage) -> None:
+        """Send message to specific agent(s)."""
+
+    async def broadcast(self, message: AgentMessage) -> None:
+        """Send message to all agents in conversation."""
+
+    async def stream_to_ui(self, message: AgentMessage) -> None:
+        """Push message to WebSocket for real-time UI display."""
+
+    def get_conversation_history(self) -> List[AgentMessage]:
+        """Full conversation log."""
+```
+
+### 3. Agent Factory
+Dynamically creates agents based on project needs.
+
+```python
+class AgentFactory:
+    """Creates agents on-demand based on project requirements."""
+
+    def create_expert(self, domain: str, brief: BusinessBrief) -> CustomExpert:
+        """Spawn a domain expert for this specific project."""
+
+    def create_builder(self, product_type: str) -> Builder:
+        """Get the right builder for this product type."""
+
+    def create_specialist(self, specialty: str) -> Agent:
+        """Create any specialized agent needed."""
+```
+
+### 4. WebSocket Manager
+Real-time connection to the UI.
+
+```python
+class ConversationStream:
+    """WebSocket handler for real-time UI updates."""
+
+    async def connect(self, project_id: str) -> None:
+        """Establish WebSocket connection for a project."""
+
+    async def push_message(self, message: AgentMessage) -> None:
+        """Send agent message to connected UI."""
+
+    async def push_status(self, status: BuildStatus) -> None:
+        """Send build progress update."""
+
+    async def push_deliverable(self, deliverable: Deliverable) -> None:
+        """Send completed artifact to UI."""
+```
+
+---
+
+## Conversation Flow
+
+### Phase 1: Goal Analysis
+```
+User: "Build me a weekly planner for fitness tracking"
+        │
+        ▼
+Director: [Analyzes goal]
+        │
+        ├── Product Type: Printable (planner)
+        ├── Domain: Fitness/Health
+        ├── Features Needed: Weekly layout, habit tracking, workout logging
+        └── Team Required: Expert (fitness), Planner, PrintableBuilder, QC
+        │
+        ▼
+Director: "I've analyzed your goal. Spawning a fitness planning expert
+          and assembling the team. Watch us work..."
+```
+
+### Phase 2: Team Assembly (Visible to User)
+```
+Director: "Team assembled. Let me introduce everyone."
+        │
+        ▼
+🧠 FitnessExpert: "I'm your fitness planning specialist. I know what
+                  makes workout trackers effective - we need space for
+                  sets, reps, and progressive overload tracking."
+        │
+📋 Planner: "I'll structure the weekly spread. Should we do
+            single-page or two-page weekly view?"
+        │
+✅ QC: "I'll make sure this is printable at standard sizes and
+       looks professional enough to sell on Etsy."
+        │
+🎨 PrintableBuilder: "Ready to design. I work in clean, modern layouts
+                      optimized for both screen viewing and printing."
+```
+
+### Phase 3: Agent Discussion (Real-Time, Visible)
+```
+📋 Planner: "For fitness tracking, I recommend:
+            - Two-page weekly spread (more space for workouts)
+            - Daily workout section with exercise rows
+            - Weekly goal summary at the top
+            - Habit tracker on the side"
+
+🧠 FitnessExpert: "Good structure. Add a 'Personal Best' tracking
+                  section - users love seeing progress. Also need
+                  rest day indicators."
+
+✅ QC: "Two-page spread works, but make sure it prints correctly
+       as facing pages. Margins need to account for binding."
+
+🎨 PrintableBuilder: "I'll use a clean sans-serif font and muted
+                      color palette - professional but motivating.
+                      Thinking charcoal gray with accent blue."
+
+Director: "Consensus reached on structure. Moving to design phase."
+```
+
+### Phase 4: Build Phase (Progress Visible)
+```
+🎨 PrintableBuilder: "Starting design..."
+        │
+        ├── [Generating weekly spread layout...]
+        ├── [Adding workout tracking rows...]
+        ├── [Styling habit tracker...]
+        ├── [Creating cover page...]
+        │
+🎨 PrintableBuilder: "First draft complete. Sending to QC."
+        │
+        ▼
+✅ QC: "Reviewing against brief and sellability criteria..."
+        │
+        ├── ✓ Layout is clean and professional
+        ├── ✓ Printable at A5 and Letter sizes
+        ├── ⚠ Workout rows might be too small for handwriting
+        │
+✅ QC: "One issue: workout rows are 6mm - recommend 8mm for
+       comfortable handwriting. Otherwise looks sellable."
+        │
+        ▼
+🎨 PrintableBuilder: "Adjusting row height to 8mm..."
+        │
+🎨 PrintableBuilder: "Revision complete. Ready for user review."
+```
+
+### Phase 5: User Review
+```
+Director: "Your fitness planner is ready for review."
+        │
+        ▼
+[UI shows PDF preview]
+[User can: Approve / Request Changes / Reject]
+        │
+        ▼
+User: [Approves]
+        │
+Director: "Excellent! Generating final files for Etsy listing..."
+```
+
+---
+
+## Build Phases (Updated)
+
+### Phase 1: Foundation ✅ COMPLETE
+- Clean codebase
+- Builder architecture
+- Business Brief model
+- Basic agent structure
+
+### Phase 2: Analyst Agent ✅ COMPLETE
+- Business Brief generation
+- Go/No-Go decision
+- Market analysis
+
+### Phase 3: Specialized Builders ✅ COMPLETE
+- PrintableBuilder
+- DocumentBuilder
+- WebBuilder
+- AppBuilder
+
+### Phase 4: Agent Conversation Engine 🔄 IN PROGRESS
+
+**Goal:** Build the real-time agent collaboration system
+
+**Tasks:**
+1. [ ] **Director Agent** - Orchestrates everything
+   - Goal analysis and team composition
+   - Conversation management
+   - Conflict resolution
+   - Phase advancement
+
+2. [ ] **Message Broker** - Agent communication hub
+   - Agent-to-agent messaging
+   - Conversation history
+   - Event broadcasting
+
+3. [ ] **WebSocket Manager** - Real-time UI streaming
+   - `/ws/projects/{id}/conversation` endpoint
+   - Push messages as they happen
+   - Handle reconnection
+
+4. [ ] **Agent Factory** - Dynamic agent creation
+   - Spawn custom experts based on domain
+   - Get appropriate builder
+   - Create specialists as needed
+
+5. [ ] **Conversation UI** - Watch it happen
+   - Real-time message stream
+   - Agent avatars/identification
+   - Phase indicators
+   - Typing indicators
+
+**Deliverable:** Users watch agents discuss and build in real-time
+
+### Phase 5: QC Integration
+
+**Goal:** Quality gates throughout the conversation
+
+**Tasks:**
+1. [ ] QC participates in agent conversation
+2. [ ] QC reviews at each phase transition
+3. [ ] Warning → Retry → Block flow
+4. [ ] QC reports visible in conversation stream
+5. [ ] Sellability scoring
+
+**Deliverable:** QC is a conversation participant, not a post-process check
+
+### Phase 6: Polish & Learning
+
+**Goal:** Refinement and improvement over time
+
+**Tasks:**
+1. [ ] Polish agent for design refinement
+2. [ ] User feedback collection
+3. [ ] Agent performance tracking
+4. [ ] Knowledge base updates
+
+**Deliverable:** System improves based on feedback
+
+### Phase 7: Multi-Platform (OpenClaw)
+
+**Goal:** Access ATLAS from any chat platform
+
+**Tasks:**
+1. [ ] ATLAS skill for OpenClaw
+2. [ ] WhatsApp, Telegram, Discord integration
+3. [ ] Same conversation experience everywhere
+
+**Deliverable:** Message ATLAS from any platform
+
+---
+
+## Technical Requirements
+
+### WebSocket Protocol
+```typescript
+// Client connects
+ws://localhost:8000/ws/projects/123/conversation
+
+// Server pushes messages as they happen
+{
+  "type": "agent_message",
+  "sender": "planner",
+  "content": "I recommend a two-page weekly spread...",
+  "timestamp": "2026-03-20T10:30:00Z"
+}
+
+{
+  "type": "status_update",
+  "phase": "design",
+  "progress": 45,
+  "current_action": "Generating layout..."
+}
+
+{
+  "type": "deliverable",
+  "name": "weekly_spread.pdf",
+  "preview_url": "/projects/123/preview/weekly_spread.pdf"
 }
 ```
 
-### Key Principles
+### Agent Message Format
+```python
+@dataclass
+class AgentMessage:
+    sender: str           # Agent identifier
+    content: str          # Message text
+    message_type: str     # 'discussion', 'decision', 'question', 'deliverable'
+    recipient: str | None # Specific agent or None for broadcast
+    timestamp: datetime
+    metadata: dict        # Phase, confidence, etc.
+```
 
-1. **Mission First**: Every agent knows the mission. Every decision ties back to it.
-2. **Human Creativity + Ethical AI**: You bring ideas and judgment. AI builds responsibly.
-3. **Mockup Before Build**: See polished visuals before committing to build.
-4. **Show Product, Not Code**: Users see rendered output AND code (for learning).
-5. **QC is System + Human**: Automated tests AND you test it yourself.
-6. **User is Final Authority**: Nothing ships without your explicit approval.
-7. **Specialized Builders**: Expert builders for each product type.
-8. **Continuous Improvement**: Agents learn from every project via prompts and knowledge base.
+### Director Decision Flow
+```python
+async def run_conversation(self, team, goal):
+    # Phase 1: Analysis
+    await self.broadcast("Analyzing your goal...")
+    composition = await self.analyze_goal(goal)
 
----
+    # Phase 2: Team Assembly
+    await self.broadcast("Assembling your team...")
+    agents = await self.spawn_team(composition)
+    await self.introduce_team(agents)
 
-## What We Keep
+    # Phase 3: Discussion
+    while not self.consensus_reached():
+        # Let agents discuss
+        for agent in agents:
+            response = await agent.respond_to_conversation()
+            await self.broadcast(response)
+            await self.stream_to_ui(response)
 
-### Keep - Core Infrastructure
-| Component | Location | Why Keep |
-|-----------|----------|----------|
-| FastAPI web framework | `atlas/web/` | Solid foundation, works well |
-| SQLite database | `atlas.db` | Simple, reliable, sufficient |
-| Project model | `atlas/projects/` | Good data structure |
-| Multi-provider agents | `atlas/agents/ollama_provider.py` | OpenAI/Ollama flexibility |
-| Web templates | `atlas/web/templates/` | Good UI foundation |
-| Logging middleware | `atlas/web/middleware/` | Useful for debugging |
+        # Director checks progress
+        if self.needs_intervention():
+            await self.intervene()
 
-### Keep - Modified
-| Component | Location | Changes Needed |
-|-----------|----------|----------------|
-| Sketch agent | `atlas/agents/sketch.py` | Add business context consumption |
-| Tinker agent | `atlas/agents/tinker.py` | Focus on sellable output |
-| Oracle agent | `atlas/agents/oracle.py` | Become QC at each stage |
-| Project routes | `atlas/web/routes/projects.py` | Add new workflow stages |
-| Standards | `atlas/standards.py` | Update sellability criteria |
+    # Phase 4: Build
+    await self.advance_to_build()
+    builder = self.get_active_builder()
+    async for progress in builder.build():
+        await self.stream_to_ui(progress)
 
----
-
-## What We Remove
-
-### Remove - Complexity That Didn't Work
-| Component | Location | Why Remove |
-|-----------|----------|------------|
-| Canva auto-integration | `atlas/integrations/platforms/canva.py` | API can't place assets on canvas - fundamental limitation |
-| Auto-deploy logic | Various | Premature - focus on quality first |
-| Complex routing | `atlas/agents/governor.py` | Over-engineered for current needs |
-| MCP server | `atlas/mcp/` | Adds complexity without value yet |
-
-### Remove - Misleading Features
-| Component | Why Remove |
-|-----------|------------|
-| "Sellability" checks that don't work | Oracle was just another LLM guessing |
-| Automatic "passed validation" | Gave false confidence |
-| Silent retries | Hid problems from user |
-
----
-
-## Build Phases
-
-### Phase 0: Kickoff Meeting (Before We Start)
-
-**Goal:** Align on the plan before writing any code
-
-**Participants:** You + Claude
-
-**Agenda:**
-1. [ ] Review this Build Plan together
-2. [ ] Confirm architecture decisions make sense
-3. [ ] Confirm builder priority order (Printable → Document → App → Web)
-4. [ ] Answer any open questions
-5. [ ] Identify any missing pieces
-6. [ ] Set expectations for Phase 1
-7. [ ] Go / No-Go decision
-
-**Questions to Answer:**
-- [ ] How detailed should the Business Brief be?
-- [ ] Should QC have veto power or just advisory?
-- [ ] Any product types missing from the builders?
-- [ ] What does "done" look like for Phase 1?
-
-**Outcome Options:**
-| Decision | What Happens |
-|----------|--------------|
-| **GO** | Proceed to Phase 1: Foundation Reset |
-| **UPDATE** | Revise the plan based on discussion, then re-review |
-| **PAUSE** | More research needed before proceeding |
-
-**Status:** IN PROGRESS
-
-**Session Notes:**
-- 2026-03-13: Reviewed architecture, confirmed specialized builders, confirmed React Native for mobile. Open questions remain. Resume next session to complete kickoff.
-
----
-
-### Phase 1: Foundation Reset (Week 1)
-
-**Goal:** Clean up codebase, establish new builder architecture
-
-**Tasks:**
-1. [ ] Remove Canva auto-integration code
-2. [ ] Remove MCP server code
-3. [ ] Simplify project routes (remove auto-triggers)
-4. [ ] Create builder architecture:
-   - `atlas/agents/builders/__init__.py` (registry)
-   - `atlas/agents/builders/base.py` (shared logic)
-   - `atlas/agents/builders/config.py` (settings)
-5. [ ] Create `atlas/agents/analyst.py` (stub)
-6. [ ] Create `atlas/agents/qc.py` (stub)
-7. [ ] Update database schema for new workflow stages
-8. [ ] Create Business Brief model
-
-**Deliverable:** Clean codebase with builder architecture in place
-
-### Phase 2: Analyst Agent (Week 2)
-
-**Goal:** Business analysis before any building
-
-**Tasks:**
-1. [ ] Implement Analyst agent with prompts for:
-   - Executive summary
-   - Market analysis
-   - Target customer profile
-   - Competition analysis
-   - SWOT analysis
-   - Financial projections
-2. [ ] Create Business Brief template
-3. [ ] Add UI for business brief display
-4. [ ] Add user approval step for brief
-
-**Deliverable:** New project flow starts with Analyst producing business brief
-
-### Phase 3: Specialized Builders (Week 2-3)
-
-**Goal:** Expert builders for each product type
-
-**Tasks:**
-1. [ ] Create PrintableBuilder
-   - Prompts for planners, cards, worksheets
-   - Templates for common layouts
-   - PDF rendering pipeline
-2. [ ] Create DocumentBuilder
-   - Prompts for books, guides, manuals
-   - Chapter/section templates
-   - PDF/EPUB output
-3. [ ] Create WebBuilder
-   - Prompts for landing pages, SPAs
-   - Component templates
-   - HTML/CSS/JS output
-4. [ ] Create AppBuilder
-   - React Native as default framework
-   - Prompts for mobile apps
-   - Screen/navigation templates
-   - App store asset generation
-5. [ ] Update builder registry with all product types
-6. [ ] Add routing logic (project type → correct builder)
-
-**Deliverable:** Four specialized builders, each expert in its domain
-
-### Phase 4: Kickoff + QC Integration (Week 3-4)
-
-**Goal:** Shared context and quality gates
-
-**Tasks:**
-1. [ ] Create Kickoff process that distributes Business Brief
-2. [ ] Each builder receives:
-   - Business Brief
-   - Plan from Sketch
-   - Quality criteria for its product type
-3. [ ] Implement QC agent that checks against Business Brief
-4. [ ] Add QC checkpoint after Sketch
-5. [ ] Add QC checkpoint after each Builder
-6. [ ] Create QC report format:
-   - Pass/Fail status
-   - Issues found
-   - Recommendations
-   - Alignment with brief score
-7. [ ] Add UI for QC reports
-
-**Deliverable:** Builders work with full context, QC runs at each stage
-
-### Phase 5: User Review Flow (Week 4-5)
-
-**Goal:** User is final authority at every stage
-
-**Tasks:**
-1. [ ] Create staged approval UI
-2. [ ] Show PRODUCT not code:
-   - Printables: PDF preview
-   - Documents: PDF/rendered preview
-   - Web: Live iframe preview
-   - Apps: Screenshots + video mockup
-3. [ ] Show QC assessment alongside product
-4. [ ] User options: Approve / Request Changes / Reject
-5. [ ] On "Request Changes": Generate revision guidance
-6. [ ] On "Reject": Log reason for learning
-
-**Deliverable:** User reviews rendered product at each stage
-
-### Phase 6: Learning System (Week 5-6)
-
-**Goal:** ATLAS learns what "sellable" means to THIS user
-
-**Tasks:**
-1. [ ] Create feedback logging (approvals, rejections, reasons)
-2. [ ] Build user preference profile over time
-3. [ ] Analyst incorporates user history
-4. [ ] QC calibrates to user standards
-5. [ ] Surface patterns in Lessons Learned doc
-
-**Deliverable:** System improves based on user feedback
-
-### Phase 7: Polish Agent (Week 6)
-
-**Goal:** Design refinement as a dedicated step
-
-**Tasks:**
-1. [ ] Create Polish agent focused on visual quality
-2. [ ] Style guides and consistency checking
-3. [ ] Typography, spacing, color application
-4. [ ] Professional finishing touches
-5. [ ] Before/after comparison UI
-
-**Deliverable:** Dedicated design polish step
+    # Phase 5: Review
+    await self.qc_review()
+    await self.request_user_approval()
+```
 
 ---
 
 ## Success Criteria
 
-### Minimum Viable Success
-- [ ] User can submit an idea and see a Business Brief before building starts
-- [ ] User approves plan before Tinker builds
-- [ ] User sees rendered PRODUCT, not code
-- [ ] QC report accompanies each deliverable
-- [ ] Failed QC generates actionable report
+### The Test
+Can a user:
+1. Submit any idea (planner, app, book, website)
+2. Watch agents discuss and debate in real-time
+3. See the product being built with progress updates
+4. Receive a sellable, finished product
 
-### Full Success
-- [ ] System learns from user feedback
-- [ ] Products look professional, not like prototypes
-- [ ] Zero "just text on paper" outputs
-- [ ] User says: "This looks like something I could sell"
-
----
-
-## Risk Mitigation
-
-### Risk 1: LLMs Still Can't Design
-**Mitigation:** Focus on templates, style guides, design systems. Don't ask LLM to invent design - ask it to apply established patterns.
-
-### Risk 2: Business Analysis Adds Too Much Overhead
-**Mitigation:** Make Analyst fast. Default templates for common product types. Skip for simple projects.
-
-### Risk 3: Too Many Approval Steps Slow Everything Down
-**Mitigation:** Add "auto-approve if QC passes with high confidence" option. But default to user review.
+### Specific Metrics
+- [ ] Real-time conversation visible within 2 seconds of agent response
+- [ ] Dynamic expert spawned matches the domain (fitness → fitness expert)
+- [ ] Agents reference each other's points in discussion
+- [ ] QC catches issues before user review
+- [ ] Final product looks professional, not prototype-y
 
 ---
 
-## Timeline
+## What We Keep From Current Build
 
-| Week | Focus | Key Deliverable |
-|------|-------|-----------------|
-| 1 | Foundation Reset | Clean codebase, builder architecture |
-| 2 | Analyst + Builders Start | Business brief flow, PrintableBuilder |
-| 3 | Builders Complete | DocumentBuilder, WebBuilder, AppBuilder |
-| 4 | Kickoff + QC | Shared context, quality gates |
-| 5 | User Review | Staged approval UI, product previews |
-| 6 | Learning + Polish | Feedback system, design refinement |
+| Component | Keep | Modify |
+|-----------|------|--------|
+| BusinessBrief model | ✓ | Used by Director for team composition |
+| Specialized Builders | ✓ | Become conversation participants |
+| QC Agent | ✓ | Participates in conversation |
+| Web templates | ✓ | Add real-time conversation viewer |
+| FastAPI backend | ✓ | Add WebSocket endpoints |
 
-**Total:** 6 weeks to functional ATLAS 3.0
+## What's New
 
-### Builder Priority Order
-
-Build the specialized builders in this order based on your priorities:
-
-| Priority | Builder | Products | Why This Order |
-|----------|---------|----------|----------------|
-| 1 | PrintableBuilder | Planners, cards, worksheets | Etsy products, quickest to sell |
-| 2 | DocumentBuilder | Books, guides | KDP products, similar to printables |
-| 3 | AppBuilder | Mobile apps (React Native) | Higher value, more complex |
-| 4 | WebBuilder | Landing pages, SPAs | Support for app marketing sites |
+| Component | Purpose |
+|-----------|---------|
+| Director Agent | Orchestrates everything |
+| Message Broker | Agent-to-agent communication |
+| WebSocket Manager | Real-time UI streaming |
+| Agent Factory | Dynamic agent creation |
+| Conversation UI | Watch agents work |
 
 ---
-
-## Open Questions
-
-1. How detailed should the Business Brief be? (MVP vs comprehensive)
-2. Should QC have veto power or just advisory?
-3. What constitutes "high confidence" for auto-approve?
-4. ~~How do we show rendered products for all product types?~~ **ANSWERED:**
-   - Printables/Documents: PDF preview
-   - Web: Live iframe
-   - Apps: Screenshots + video mockup (Expo preview link if possible)
 
 ## Decisions Made
 
 | Decision | Choice | Date |
 |----------|--------|------|
-| Mobile framework | React Native (cross-platform) | 2026-03-13 |
-| Builder architecture | Specialized builders, not one Tinker | 2026-03-13 |
-| Builder priority | Printable → Document → App → Web | 2026-03-13 |
+| Mobile framework | React Native | 2026-03-13 |
+| Builder architecture | Specialized builders | 2026-03-13 |
+| Agent collaboration | Layla-style real-time conversation | 2026-03-20 |
+| UI experience | Watch agents work in real-time | 2026-03-20 |
+| Agent spawning | Dynamic based on goal analysis | 2026-03-20 |
+| Communication | WebSocket streaming | 2026-03-20 |
 
 ---
 
 ## Living Documents
 
-These documents must be updated as we proceed:
-
 | Document | Purpose | Update When |
 |----------|---------|-------------|
-| **MISSION.md** | The foundation - why ATLAS exists | Rarely (only if mission evolves) |
-| **BUILD-PLAN.md** | What we're building, how, and status | Decisions made, phases complete, scope changes |
-| **USER-MANUAL.md** | How to use ATLAS | Features added, workflows change |
-| **LESSONS-LEARNED.md** | Issues and root causes | Bugs found, mistakes made, patterns discovered |
-| **docs/journey/** | Amp's public content about building ATLAS | After every session |
+| **MISSION.md** | Why ATLAS exists | Rarely |
+| **BUILD-PLAN.md** | What we're building | Decisions made, phases complete |
+| **USER-MANUAL.md** | How to use ATLAS | Features added |
+| **LESSONS-LEARNED.md** | Issues and fixes | Bugs found, patterns discovered |
 
-This is non-negotiable. Every session should check if these need updates.
-
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-03-20 (Rewritten for Layla-style agent collaboration)
