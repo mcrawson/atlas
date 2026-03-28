@@ -25,7 +25,12 @@ from datetime import datetime
 from pathlib import Path
 
 # Add atlas to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+atlas_root = Path(__file__).parent.parent
+sys.path.insert(0, str(atlas_root))
+
+# Load environment variables (needed for cron/automated runs)
+from dotenv import load_dotenv
+load_dotenv(atlas_root / ".env")
 
 from atlas.operator import OvernightOperator, OvernightConfig
 from atlas.operator.router import TaskRouter
