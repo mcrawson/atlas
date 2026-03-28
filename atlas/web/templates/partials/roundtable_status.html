@@ -1,0 +1,705 @@
+<!-- Round Table V2 Status Partial -->
+<div id="roundtable-status" class="roundtable-status">
+    {% if roundtable %}
+    <div class="rt-header">
+        <div class="rt-title">
+            <span class="rt-icon">🪑</span>
+            <h3>Round Table</h3>
+            <span class="rt-status-badge status-{{ roundtable.status | default('active') }}">
+                {{ roundtable.status | default('active') | upper }}
+            </span>
+        </div>
+        <span class="rt-started">Started {{ roundtable.started_at[:16] if roundtable.started_at else 'recently' }}</span>
+    </div>
+
+    <!-- Mission Reminder -->
+    <div class="rt-mission">
+        <span class="mission-icon">🎯</span>
+        <span class="mission-text">Building a <strong>SELLABLE</strong> product</span>
+    </div>
+
+    <!-- Participants / Specialists -->
+    <div class="rt-section">
+        <h4>Team Assembled</h4>
+        <div class="participants-grid">
+            <!-- Core Agents -->
+            <div class="participant">
+                <span class="participant-icon" style="background: #2196f3;">📋</span>
+                <span class="participant-name">Director</span>
+                <span class="participant-role">Orchestrator</span>
+            </div>
+            <div class="participant">
+                <span class="participant-icon" style="background: #4caf50;">📝</span>
+                <span class="participant-name">Planner</span>
+                <span class="participant-role">Planning</span>
+            </div>
+            <div class="participant">
+                <span class="participant-icon" style="background: #ff5722;">✅</span>
+                <span class="participant-name">QC Agent</span>
+                <span class="participant-role">Quality Control</span>
+            </div>
+
+            <!-- Dynamic Specialists (V2) -->
+            {% if roundtable.specialists %}
+                {% for specialist in roundtable.specialists %}
+                <div class="participant specialist">
+                    <span class="participant-icon" style="background: #9c27b0;">🧠</span>
+                    <span class="participant-name">{{ specialist.name }}</span>
+                    <span class="participant-role">{{ specialist.expertise[:30] }}{% if specialist.expertise|length > 30 %}...{% endif %}</span>
+                </div>
+                {% endfor %}
+            {% elif roundtable.custom_expert %}
+                <!-- Fallback to V1 custom_expert if present -->
+                <div class="participant specialist">
+                    <span class="participant-icon" style="background: #9c27b0;">🧠</span>
+                    <span class="participant-name">{{ roundtable.custom_expert.name | default('Expert') }}</span>
+                    <span class="participant-role">{{ roundtable.custom_expert.expertise[:30] | default('Domain Expert') }}</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Validated Pain Points (V2) -->
+    {% if roundtable.validated_pain_points %}
+    <div class="rt-section pain-section">
+        <h4>Validated Pain Points</h4>
+        <div class="pain-points-list">
+            {% for pain in roundtable.validated_pain_points %}
+            <div class="pain-point">
+                <div class="pain-header">
+                    <span class="pain-importance {{ pain.importance | default('important') }}">{{ pain.importance | default('important') | upper }}</span>
+                    <span class="pain-text">{{ pain.pain_point }}</span>
+                </div>
+                <div class="pain-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Success:</span>
+                        <span class="metric-value">{{ pain.success_looks_like }}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Measure:</span>
+                        <span class="metric-value">{{ pain.how_to_measure }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Pricing (V2) -->
+    {% if roundtable.validated_pricing %}
+    <div class="rt-section pricing-section">
+        <h4>Pricing Decision</h4>
+        <div class="pricing-card">
+            <div class="price-main">
+                <span class="price-label">Target Price</span>
+                <span class="price-value">{{ roundtable.validated_pricing.price }}</span>
+            </div>
+            <div class="price-details">
+                <span class="price-model">Model: {{ roundtable.validated_pricing.model | default('one-time') | title }}</span>
+                <span class="price-justify">{{ roundtable.validated_pricing.justification }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Deliverables (V2) -->
+    {% if roundtable.deliverables %}
+    <div class="rt-section deliverables-section">
+        <h4>Deliverables</h4>
+        <div class="deliverables-list">
+            {% for d in roundtable.deliverables %}
+            <div class="deliverable {{ d.status | default('pending') }}">
+                <div class="deliverable-icon">
+                    {% if d.status == 'complete' %}✅
+                    {% elif d.status == 'in_progress' %}⏳
+                    {% elif d.status == 'blocked' %}🚫
+                    {% else %}📋{% endif %}
+                </div>
+                <div class="deliverable-info">
+                    <span class="deliverable-name">{{ d.name }}</span>
+                    <span class="deliverable-owner">Owner: {{ d.owner | replace('_', ' ') | title }}</span>
+                    {% if d.estimated_effort %}
+                    <span class="deliverable-effort">{{ d.estimated_effort }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Timeline (V2) -->
+    {% if roundtable.timeline %}
+    <div class="rt-section timeline-section">
+        <h4>Timeline</h4>
+        <div class="timeline">
+            {% for phase in roundtable.timeline %}
+            <div class="timeline-phase">
+                <div class="phase-marker">
+                    <span class="phase-number">{{ loop.index }}</span>
+                </div>
+                <div class="phase-content">
+                    <span class="phase-name">{{ phase.name }}</span>
+                    <span class="phase-duration">{{ phase.duration }}</span>
+                    <span class="phase-gate">Gate: {{ phase.gate }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Brief Summary -->
+    {% if roundtable.brief %}
+    <div class="rt-section">
+        <h4>Brief Reference</h4>
+        <div class="brief-summary">
+            <p><strong>{{ roundtable.brief.product_name }}</strong> ({{ roundtable.brief.product_type }})</p>
+            <p>{{ roundtable.brief.executive_summary[:150] if roundtable.brief.executive_summary else 'No summary' }}...</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="rt-actions">
+        <button type="button"
+                id="view-conversation-btn"
+                class="btn btn-view-conversation"
+                hx-get="/projects/{{ project_id }}/conversation-view"
+                hx-target="#live-conversation-container"
+                hx-swap="innerHTML">
+            💬 View Conversation
+        </button>
+        <button type="button"
+                id="start-director-btn"
+                class="btn btn-success"
+                onclick="startDirector()">
+            🚀 Start Agent Debate
+        </button>
+    </div>
+
+    <script>
+    // Fallback for View Conversation button
+    document.getElementById('view-conversation-btn')?.addEventListener('click', async function(e) {
+        const target = document.getElementById('live-conversation-container');
+        if (!target) return;
+
+        try {
+            const response = await fetch('/projects/{{ project_id }}/conversation-view');
+            const html = await response.text();
+            target.innerHTML = html;
+            // Execute any scripts in the loaded content
+            target.querySelectorAll('script').forEach(script => {
+                const newScript = document.createElement('script');
+                newScript.textContent = script.textContent;
+                document.body.appendChild(newScript);
+            });
+        } catch (err) {
+            console.error('Failed to load conversation:', err);
+        }
+    });
+
+    // Start Director function
+    async function startDirector() {
+        const btn = document.getElementById('start-director-btn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Starting...';
+
+        try {
+            const response = await fetch('/projects/{{ project_id }}/start-director', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) throw new Error('Failed to start director');
+
+            const result = await response.json();
+            console.log('Director started:', result);
+            btn.textContent = '✓ Director Running';
+
+            // Load conversation view to see the messages
+            const target = document.getElementById('live-conversation-container');
+            if (target) {
+                const convResponse = await fetch('/projects/{{ project_id }}/conversation-view');
+                const html = await convResponse.text();
+                target.innerHTML = html;
+                target.querySelectorAll('script').forEach(script => {
+                    const newScript = document.createElement('script');
+                    newScript.textContent = script.textContent;
+                    document.body.appendChild(newScript);
+                });
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            btn.disabled = false;
+            btn.textContent = '🚀 Start Agent Debate';
+            alert('Failed to start: ' + error.message);
+        }
+    }
+    </script>
+
+    {% else %}
+    <div class="rt-empty">
+        <span class="empty-icon">🪑</span>
+        <h3>Round Table Not Started</h3>
+        <p>Approve the Business Brief to start the Round Table kickoff.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.roundtable-status {
+    background: #0d0d12;
+    border-radius: 8px;
+    padding: 20px;
+    color: #e0e0e0;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.rt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.rt-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rt-icon {
+    font-size: 24px;
+}
+
+.rt-title h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #fff;
+}
+
+.rt-status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.status-active {
+    background: rgba(0, 255, 65, 0.2);
+    color: #00ff41;
+}
+
+.status-planning_complete {
+    background: rgba(0, 170, 255, 0.2);
+    color: #00aaff;
+}
+
+.status-in_progress {
+    background: rgba(255, 200, 0, 0.2);
+    color: #ffc800;
+}
+
+.status-complete {
+    background: rgba(0, 255, 65, 0.2);
+    color: #00ff41;
+}
+
+.rt-started {
+    font-size: 12px;
+    color: #808080;
+}
+
+/* Mission Banner */
+.rt-mission {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 152, 0, 0.1));
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.mission-icon {
+    font-size: 20px;
+}
+
+.mission-text {
+    color: #ffc107;
+    font-size: 14px;
+}
+
+.rt-section {
+    margin-bottom: 20px;
+}
+
+.rt-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #808080;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+/* Participants Grid */
+.participants-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.participant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.participant.specialist {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.1), rgba(103, 58, 183, 0.05));
+    border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.participant-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.participant-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+.participant-role {
+    font-size: 10px;
+    color: #808080;
+}
+
+/* Pain Points */
+.pain-section {
+    background: rgba(255, 87, 34, 0.05);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 87, 34, 0.2);
+}
+
+.pain-points-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pain-point {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.pain-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.pain-importance {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.pain-importance.critical {
+    background: rgba(244, 67, 54, 0.3);
+    color: #ef5350;
+}
+
+.pain-importance.important {
+    background: rgba(255, 152, 0, 0.3);
+    color: #ffb74d;
+}
+
+.pain-text {
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+.pain-metrics {
+    font-size: 12px;
+}
+
+.metric-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.metric-label {
+    color: #808080;
+    min-width: 60px;
+}
+
+.metric-value {
+    color: #a0a0a0;
+}
+
+/* Pricing */
+.pricing-section {
+    background: rgba(76, 175, 80, 0.05);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.pricing-card {
+    text-align: center;
+}
+
+.price-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.price-label {
+    font-size: 11px;
+    color: #808080;
+    text-transform: uppercase;
+}
+
+.price-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #4caf50;
+}
+
+.price-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: #a0a0a0;
+}
+
+.price-model {
+    font-weight: 500;
+    color: #c0c0c0;
+}
+
+/* Deliverables */
+.deliverables-section {
+    background: rgba(33, 150, 243, 0.05);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.deliverables-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.deliverable {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.deliverable.complete {
+    opacity: 0.7;
+}
+
+.deliverable.blocked {
+    border-left: 3px solid #f44336;
+}
+
+.deliverable-icon {
+    font-size: 16px;
+}
+
+.deliverable-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.deliverable-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #e0e0e0;
+}
+
+.deliverable-owner {
+    font-size: 11px;
+    color: #808080;
+}
+
+.deliverable-effort {
+    font-size: 10px;
+    color: #607d8b;
+}
+
+/* Timeline */
+.timeline-section {
+    background: rgba(156, 39, 176, 0.05);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.timeline-phase {
+    display: flex;
+    gap: 12px;
+}
+
+.phase-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.phase-number {
+    width: 28px;
+    height: 28px;
+    background: #9c27b0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.phase-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.phase-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.phase-duration {
+    font-size: 11px;
+    color: #ce93d8;
+}
+
+.phase-gate {
+    font-size: 11px;
+    color: #808080;
+}
+
+/* Brief Summary */
+.brief-summary {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+}
+
+.brief-summary p {
+    margin: 0;
+    font-size: 13px;
+    color: #a0a0a0;
+    line-height: 1.5;
+}
+
+.brief-summary p:first-child {
+    color: #e0e0e0;
+    margin-bottom: 8px;
+}
+
+/* Actions */
+.rt-actions {
+    display: flex;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn-view-conversation {
+    background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+    color: #fff;
+}
+
+.btn-view-conversation:hover {
+    box-shadow: 0 0 20px rgba(156, 39, 176, 0.4);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #4caf50, #388e3c);
+    color: #fff;
+}
+
+.btn-success:hover {
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Empty State */
+.rt-empty {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.rt-empty .empty-icon {
+    font-size: 48px;
+    opacity: 0.5;
+}
+
+.rt-empty h3 {
+    color: #808080;
+    margin: 16px 0 8px;
+}
+
+.rt-empty p {
+    color: #606060;
+    margin: 0;
+}
+</style>

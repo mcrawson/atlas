@@ -1,0 +1,1219 @@
+<!-- QC Report Display Partial -->
+<div id="qc-report" class="qc-report">
+    {% if qc_report %}
+
+    <!-- Verdict Banner -->
+    <div class="qc-verdict verdict-{{ qc_report.verdict }}">
+        <div class="verdict-header">
+            {% if qc_report.verdict == 'pass' %}
+            <span class="verdict-icon">✅</span>
+            <span class="verdict-text">QC PASS</span>
+            {% elif qc_report.verdict == 'pass_with_notes' %}
+            <span class="verdict-icon">📝</span>
+            <span class="verdict-text">PASS WITH NOTES</span>
+            {% elif qc_report.verdict == 'needs_revision' %}
+            <span class="verdict-icon">⚠️</span>
+            <span class="verdict-text">NEEDS REVISION</span>
+            {% elif qc_report.verdict == 'blocked' %}
+            <span class="verdict-icon">🛑</span>
+            <span class="verdict-text">BLOCKED</span>
+            {% else %}
+            <span class="verdict-icon">❓</span>
+            <span class="verdict-text">{{ qc_report.verdict | upper }}</span>
+            {% endif %}
+            <span class="attempt-badge">Attempt {{ qc_report.attempt | default(1) }} of {{ qc_report.max_attempts | default(2) }}</span>
+        </div>
+        <p class="verdict-reason">{{ qc_report.verdict_reason }}</p>
+
+        <!-- Scores -->
+        <div class="scores-grid">
+            <div class="score-item">
+                <span class="score-label">Alignment</span>
+                <div class="score-bar">
+                    <div class="score-fill alignment-fill" style="width: {{ qc_report.alignment_score | default(0) }}%;"></div>
+                </div>
+                <span class="score-value">{{ qc_report.alignment_score | default(0) | round }}%</span>
+            </div>
+            <div class="score-item">
+                <span class="score-label">Sellability</span>
+                <div class="score-bar">
+                    <div class="score-fill sellability-fill" style="width: {{ qc_report.sellability_score | default(0) }}%;"></div>
+                </div>
+                <span class="score-value">{{ qc_report.sellability_score | default(0) | round }}%</span>
+            </div>
+            <div class="score-item">
+                <span class="score-label">Quality</span>
+                <div class="score-bar">
+                    <div class="score-fill quality-fill" style="width: {{ qc_report.quality_score | default(0) }}%;"></div>
+                </div>
+                <span class="score-value">{{ qc_report.quality_score | default(0) | round }}%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evaluation Mode Indicator -->
+    {% if qc_report.evaluation_mode %}
+    <div class="qc-eval-mode {% if qc_report.evaluation_mode == 'react_source' %}eval-react{% else %}eval-html{% endif %}">
+        {% if qc_report.evaluation_mode == 'react_source' %}
+        <span class="eval-icon">⚛️</span>
+        <p><strong>React Source Evaluation</strong> - QC evaluated the React/TypeScript source code for functionality and features.</p>
+        {% elif qc_report.evaluation_mode == 'html_preview' %}
+        <span class="eval-icon">🌐</span>
+        <p><strong>HTML Preview Evaluation</strong> - QC evaluated the static HTML output.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Blocked Warning -->
+    {% if qc_report.verdict == 'blocked' %}
+    <div class="qc-blocked-warning">
+        <span class="warning-icon">🛑</span>
+        <div>
+            <p><strong>Progress Blocked</strong></p>
+            <p>Issues were not fixed after retry. Manual intervention required.</p>
+        </div>
+    </div>
+    {% else %}
+    <!-- Advisory Notice -->
+    <div class="qc-advisory">
+        <span class="advisory-icon">ℹ️</span>
+        <p>QC evaluates against the Business Brief. The core question: <strong>"Would someone pay for this?"</strong></p>
+    </div>
+    {% endif %}
+
+    <!-- Fix Instructions (for agents) -->
+    {% if qc_report.fix_instructions %}
+    <div class="qc-section fix-instructions">
+        <h3>Fix Instructions</h3>
+        <div class="fix-content">
+            {{ qc_report.fix_instructions | replace('\n', '<br>') | safe }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Issues with Selectable Fixes -->
+    {% if qc_report.issues %}
+    <div class="qc-section">
+        {% if qc_report.applied %}
+        <!-- FIXES WERE APPLIED - Show success state -->
+        <div class="fixes-applied-banner">
+            <span class="applied-icon">✅</span>
+            <div class="applied-content">
+                <strong>Fixes Applied</strong>
+                <p>The agent has revised the content based on QC feedback. Run QC again to verify the fixes.</p>
+            </div>
+        </div>
+        <h3>Previous Issues ({{ qc_report.issues | length }}) - Fixes Attempted</h3>
+        <div class="issues-list issues-applied">
+            {% for issue in qc_report.issues %}
+            <div class="issue-item issue-{{ issue.severity }} issue-applied">
+                <div class="issue-content">
+                    <div class="issue-header">
+                        <span class="severity-badge badge-applied">ADDRESSED</span>
+                        <span class="issue-description" style="text-decoration: line-through; opacity: 0.6;">{{ issue.description }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="fixes-submit-row">
+            <button type="button"
+                    class="btn btn-primary"
+                    hx-post="{{ qc_endpoint | default('/projects/' ~ project_id ~ '/run-qc') }}"
+                    hx-target="{{ qc_container | default('#qc-report-container') }}"
+                    hx-swap="innerHTML"
+                    hx-indicator="#qc-rerun-loading">
+                🔄 Re-run QC to Verify Fixes
+            </button>
+            <span id="qc-rerun-loading" class="htmx-indicator">Checking...</span>
+        </div>
+        {% else %}
+        <!-- FIXES NOT YET APPLIED - Show selectable form -->
+        <h3>Issues Found ({{ qc_report.issues | length }}) - Select fixes to apply</h3>
+        <form id="fixes-form" action="/projects/{{ project_id }}/apply-qc-fixes" method="post" onsubmit="return handleFixesSubmit(this);">
+            <input type="hidden" name="qc_type" value="{{ qc_type | default('build') }}">
+
+            <div class="select-all-row">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="select-all-fixes" onchange="toggleAllFixes(this)">
+                    <span>Select All Fixes</span>
+                </label>
+            </div>
+
+            <div class="issues-list">
+                {% for issue in qc_report.issues %}
+                <div class="issue-item issue-{{ issue.severity }} selectable-issue">
+                    <label class="issue-checkbox-label">
+                        <input type="checkbox"
+                               name="selected_fixes"
+                               value="{{ loop.index0 }}"
+                               class="fix-checkbox"
+                               {% if issue.severity == 'critical' %}checked{% endif %}>
+                        <div class="issue-content">
+                            <div class="issue-header">
+                                {% if issue.severity == 'critical' %}
+                                <span class="severity-badge badge-critical">CRITICAL</span>
+                                {% elif issue.severity == 'warning' %}
+                                <span class="severity-badge badge-warning">WARNING</span>
+                                {% else %}
+                                <span class="severity-badge badge-info">INFO</span>
+                                {% endif %}
+                                <span class="issue-description">{{ issue.description }}</span>
+                            </div>
+                            {% if issue.location %}
+                            <p class="issue-detail"><strong>Where:</strong> {{ issue.location }}</p>
+                            {% endif %}
+                            {% if issue.fix %}
+                            <div class="issue-fix-box">
+                                <span class="fix-label">🔧 How to fix:</span>
+                                <span class="fix-text">{{ issue.fix }}</span>
+                            </div>
+                            {% endif %}
+                            {% if issue.brief_reference %}
+                            <p class="issue-detail brief-ref"><strong>Brief Section:</strong> {{ issue.brief_reference }}</p>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="fixes-submit-row">
+                <button type="submit" class="btn btn-success" id="apply-selected-btn">
+                    🔧 Apply Selected Fixes (<span id="selected-count">{{ qc_report.issues | selectattr('severity', 'equalto', 'critical') | list | length }}</span>)
+                </button>
+                <span class="fixes-hint">Critical issues are pre-selected</span>
+                <span id="fixes-loading" class="htmx-indicator" style="display: none;">⏳ Applying fixes...</span>
+            </div>
+        </form>
+
+        <!-- Auto-Fix All Button -->
+        <div class="auto-fix-section">
+            <div class="auto-fix-divider">
+                <span>OR</span>
+            </div>
+            <button type="button"
+                    class="btn btn-auto-fix"
+                    id="auto-fix-btn"
+                    onclick="startAutoFix({{ project_id }}, '{{ qc_type | default('build') }}')">
+                🔄 Auto-Fix All (Loop until pass)
+            </button>
+            <p class="auto-fix-hint">Automatically applies all fixes and re-runs QC until pass or max 5 attempts</p>
+
+            <!-- Auto-fix progress display -->
+            <div id="auto-fix-progress" class="auto-fix-progress" style="display: none;">
+                <div class="progress-header">
+                    <span class="progress-icon">⏳</span>
+                    <span class="progress-text">Auto-fixing...</span>
+                </div>
+                <div class="progress-log" id="auto-fix-log"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Checks -->
+    <div class="qc-section qc-checks">
+        <h3>Quality Checks</h3>
+        <div class="checks-grid">
+            {% if qc_report.checks_passed %}
+            <div class="checks-column passed">
+                <h4>✓ Passed ({{ qc_report.checks_passed | length }})</h4>
+                <ul>
+                    {% for check in qc_report.checks_passed %}
+                    <li>{{ check }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if qc_report.checks_failed %}
+            <div class="checks-column failed">
+                <h4>✗ Failed ({{ qc_report.checks_failed | length }})</h4>
+                <ul>
+                    {% for check in qc_report.checks_failed %}
+                    <li>{{ check }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- QC Notes -->
+    {% if qc_report.qc_notes %}
+    <div class="qc-section">
+        <h3>QC Notes</h3>
+        <p class="qc-notes-text">{{ qc_report.qc_notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
+    <div class="qc-actions">
+        {% if qc_report.verdict == 'pass' or qc_report.verdict == 'pass_with_notes' %}
+        <form action="/projects/{{ project_id }}/approve-brief" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-success">
+                ✓ Approve & Continue to Build
+            </button>
+        </form>
+        {% elif qc_report.verdict == 'blocked' %}
+        <div class="blocked-actions">
+            <p class="blocked-text">Progress is blocked. Review the issues above and decide:</p>
+            <form action="/projects/{{ project_id }}/override-brief" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-danger">
+                    ⚠️ Override Block & Continue Anyway
+                </button>
+            </form>
+            <a href="/projects/{{ project_id }}" class="btn btn-secondary">
+                ← Back to Edit Brief
+            </a>
+        </div>
+        {% else %}
+        <!-- needs_revision -->
+        <div class="revision-actions">
+            <p class="revision-text">Select the fixes above, then click "Apply Selected Fixes" to update your build.</p>
+
+            <button type="button"
+                    class="btn btn-primary"
+                    hx-post="{{ qc_endpoint | default('/projects/' ~ project_id ~ '/run-qc') }}"
+                    hx-target="{{ qc_container | default('#qc-report-container') }}"
+                    hx-swap="innerHTML"
+                    hx-indicator="#qc-retry-loading">
+                🔄 Re-run QC Check
+            </button>
+            <span id="qc-retry-loading" class="htmx-indicator">Checking...</span>
+
+            <form action="/projects/{{ project_id }}/override-brief" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-warning">
+                    Skip & Continue Anyway
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <div class="qc-empty">
+        <p>No QC report available. Run quality check first.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* QC Report Styles - Dark Theme */
+.qc-report {
+    background: #0d0d12;
+    border-radius: 8px;
+    padding: 24px;
+    margin: 20px 0;
+    color: #e0e0e0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Verdict Banner */
+.qc-verdict {
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.qc-verdict.verdict-pass {
+    background: linear-gradient(135deg, rgba(0, 255, 65, 0.15), rgba(0, 200, 50, 0.1));
+    border: 1px solid rgba(0, 255, 65, 0.3);
+}
+
+.qc-verdict.verdict-pass_with_notes {
+    background: linear-gradient(135deg, rgba(255, 200, 0, 0.15), rgba(200, 150, 0, 0.1));
+    border: 1px solid rgba(255, 200, 0, 0.3);
+}
+
+.qc-verdict.verdict-needs_revision {
+    background: linear-gradient(135deg, rgba(255, 100, 0, 0.15), rgba(200, 80, 0, 0.1));
+    border: 1px solid rgba(255, 100, 0, 0.3);
+}
+
+.qc-verdict.verdict-blocked {
+    background: linear-gradient(135deg, rgba(255, 30, 30, 0.2), rgba(200, 20, 20, 0.15));
+    border: 2px solid rgba(255, 50, 50, 0.5);
+}
+
+.verdict-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.verdict-icon {
+    font-size: 28px;
+}
+
+.verdict-text {
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.verdict-pass .verdict-text { color: #00ff41; }
+.verdict-pass_with_notes .verdict-text { color: #ffc800; }
+.verdict-needs_revision .verdict-text { color: #ff6400; }
+.verdict-blocked .verdict-text { color: #ff3232; }
+
+.attempt-badge {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #a0a0a0;
+}
+
+.verdict-reason {
+    color: #a0a0a0;
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Scores Grid */
+.scores-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.score-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.score-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #808080;
+}
+
+.score-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.alignment-fill { background: linear-gradient(90deg, #00aaff, #0088cc); }
+.sellability-fill { background: linear-gradient(90deg, #00ff41, #00cc33); }
+.quality-fill { background: linear-gradient(90deg, #aa66ff, #8844dd); }
+
+.score-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+/* Blocked Warning */
+.qc-blocked-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(255, 50, 50, 0.15);
+    border: 1px solid rgba(255, 50, 50, 0.3);
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.qc-blocked-warning .warning-icon {
+    font-size: 24px;
+}
+
+.qc-blocked-warning p {
+    margin: 0;
+    font-size: 14px;
+    color: #ff6666;
+}
+
+.qc-blocked-warning p:first-child {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* Evaluation Mode Indicator */
+.qc-eval-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+
+.qc-eval-mode.eval-react {
+    background: rgba(97, 218, 251, 0.1);
+    border: 1px solid rgba(97, 218, 251, 0.3);
+}
+
+.qc-eval-mode.eval-html {
+    background: rgba(255, 165, 0, 0.1);
+    border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.qc-eval-mode .eval-icon {
+    font-size: 20px;
+}
+
+.qc-eval-mode p {
+    margin: 0;
+    color: #c0c0c0;
+    line-height: 1.4;
+}
+
+.qc-eval-mode strong {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* Advisory Notice */
+.qc-advisory {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(0, 150, 255, 0.1);
+    border: 1px solid rgba(0, 150, 255, 0.2);
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.qc-advisory .advisory-icon {
+    font-size: 20px;
+}
+
+.qc-advisory p {
+    margin: 0;
+    font-size: 13px;
+    color: #a0a0a0;
+    line-height: 1.5;
+}
+
+.qc-advisory strong {
+    color: #00aaff;
+}
+
+/* Sections */
+.qc-section {
+    margin-bottom: 24px;
+}
+
+.qc-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Fix Instructions */
+.fix-instructions {
+    background: rgba(0, 170, 255, 0.1);
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 170, 255, 0.2);
+}
+
+.fix-instructions h3 {
+    color: #00aaff;
+    border-bottom-color: rgba(0, 170, 255, 0.3);
+}
+
+.fix-content {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #c0c0c0;
+}
+
+/* Issues */
+.issues-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.issue-item {
+    padding: 14px;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.issue-item.issue-critical {
+    background: rgba(255, 50, 50, 0.1);
+    border-left-color: #ff3232;
+}
+
+.issue-item.issue-warning {
+    background: rgba(255, 150, 0, 0.1);
+    border-left-color: #ff9600;
+}
+
+.issue-item.issue-info {
+    background: rgba(0, 150, 255, 0.1);
+    border-left-color: #0096ff;
+}
+
+.issue-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.severity-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-critical {
+    background: #ff3232;
+    color: #fff;
+}
+
+.badge-warning {
+    background: #ff9600;
+    color: #000;
+}
+
+.badge-info {
+    background: #0096ff;
+    color: #fff;
+}
+
+.issue-description {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e0e0e0;
+}
+
+.issue-detail {
+    font-size: 13px;
+    color: #a0a0a0;
+    margin: 4px 0 0 0;
+}
+
+.issue-fix {
+    font-size: 13px;
+    color: #00ff41;
+    margin: 8px 0 0 0;
+    padding: 8px;
+    background: rgba(0, 255, 65, 0.1);
+    border-radius: 4px;
+}
+
+.issue-fix strong {
+    color: #00cc33;
+}
+
+/* Checks Grid */
+.checks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.checks-column h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.checks-column.passed h4 {
+    color: #00ff41;
+}
+
+.checks-column.failed h4 {
+    color: #ff6464;
+}
+
+.checks-column ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.checks-column li {
+    padding: 6px 0;
+    font-size: 13px;
+    color: #a0a0a0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.checks-column li:last-child {
+    border-bottom: none;
+}
+
+/* QC Notes */
+.qc-notes-text {
+    font-size: 14px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Action Buttons */
+.qc-actions {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.blocked-actions,
+.revision-actions {
+    text-align: center;
+}
+
+.blocked-text,
+.revision-text {
+    color: #a0a0a0;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.qc-actions .btn {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    margin: 4px;
+}
+
+.qc-actions .btn-success {
+    background: linear-gradient(135deg, #00ff41, #00cc33);
+    color: #000;
+}
+
+.qc-actions .btn-success:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+}
+
+.qc-actions .btn-primary {
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    color: #fff;
+}
+
+.qc-actions .btn-primary:hover {
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
+}
+
+.qc-actions .btn-warning {
+    background: linear-gradient(135deg, #ff9600, #cc7800);
+    color: #000;
+}
+
+.qc-actions .btn-warning:hover {
+    box-shadow: 0 0 20px rgba(255, 150, 0, 0.4);
+}
+
+.qc-actions .btn-danger {
+    background: linear-gradient(135deg, #ff4444, #cc2222);
+    color: #fff;
+}
+
+.qc-actions .btn-danger:hover {
+    box-shadow: 0 0 20px rgba(255, 50, 50, 0.4);
+}
+
+.qc-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #a0a0a0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.qc-actions .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+}
+
+.htmx-indicator {
+    display: none;
+    color: #00aaff;
+    font-size: 0.85rem;
+    margin-left: 8px;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    display: inline-block;
+}
+
+/* Empty State */
+.qc-empty {
+    text-align: center;
+    padding: 40px;
+    color: #606060;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .scores-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .verdict-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* Selectable Issues Styles */
+.select-all-row {
+    padding: 0.75rem 1rem;
+    background: rgba(0, 170, 255, 0.1);
+    border: 1px solid rgba(0, 170, 255, 0.2);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #00aaff;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #00aaff;
+}
+
+.selectable-issue {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.selectable-issue:hover {
+    border-color: rgba(0, 170, 255, 0.3);
+    background: rgba(0, 170, 255, 0.05);
+}
+
+.selectable-issue:has(input:checked) {
+    border-color: #00ff41;
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.issue-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    cursor: pointer;
+    width: 100%;
+}
+
+.issue-checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 0.25rem;
+    cursor: pointer;
+    accent-color: #00ff41;
+    flex-shrink: 0;
+}
+
+.issue-content {
+    flex: 1;
+}
+
+.issue-fix-box {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(0, 255, 65, 0.1);
+    border-left: 3px solid #00ff41;
+    border-radius: 0 6px 6px 0;
+}
+
+.fix-label {
+    font-weight: 600;
+    color: #00ff41;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.fix-text {
+    color: #a0aec0;
+    font-size: 0.9rem;
+}
+
+.brief-ref {
+    font-size: 0.8rem;
+    color: #718096;
+    margin-top: 0.5rem;
+}
+
+.fixes-submit-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fixes-hint {
+    font-size: 0.85rem;
+    color: #718096;
+}
+
+#apply-selected-btn {
+    min-width: 200px;
+}
+
+#apply-selected-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Fixes Applied State */
+.fixes-applied-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(0, 255, 65, 0.15), rgba(0, 200, 50, 0.1));
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.applied-icon {
+    font-size: 24px;
+}
+
+.applied-content strong {
+    color: #00ff41;
+    font-size: 16px;
+}
+
+.applied-content p {
+    margin: 4px 0 0 0;
+    color: #a0a0a0;
+    font-size: 14px;
+}
+
+.issues-applied .issue-item {
+    opacity: 0.7;
+    border-left-color: #00cc33;
+}
+
+.issue-applied {
+    background: rgba(0, 255, 65, 0.05) !important;
+}
+
+.badge-applied {
+    background: #00cc33;
+    color: #000;
+}
+
+/* Loading state for Apply Fixes button */
+.btn-applying {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn-applying::after {
+    content: ' ⏳';
+}
+
+/* Auto-Fix Section */
+.auto-fix-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+}
+
+.auto-fix-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.auto-fix-divider::before,
+.auto-fix-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.auto-fix-divider span {
+    color: #606060;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.btn-auto-fix {
+    width: 100%;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-auto-fix:hover {
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.5);
+    transform: translateY(-1px);
+}
+
+.btn-auto-fix:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-auto-fix.running {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.auto-fix-hint {
+    text-align: center;
+    color: #718096;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+}
+
+.auto-fix-progress {
+    margin-top: 1rem;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: #a5b4fc;
+}
+
+.progress-icon {
+    font-size: 1.2rem;
+}
+
+.progress-log {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #a0aec0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.progress-log .attempt {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    border-left: 3px solid;
+}
+
+.progress-log .attempt.pass {
+    border-left-color: #00ff41;
+    background: rgba(0, 255, 65, 0.1);
+}
+
+.progress-log .attempt.pass_with_notes {
+    border-left-color: #ffc800;
+    background: rgba(255, 200, 0, 0.1);
+}
+
+.progress-log .attempt.needs_revision {
+    border-left-color: #ff6400;
+}
+
+.progress-log .attempt.failed {
+    border-left-color: #ff3232;
+    background: rgba(255, 50, 50, 0.1);
+}
+
+.progress-log .final-result {
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.progress-log .final-result.success {
+    background: rgba(0, 255, 65, 0.15);
+    color: #00ff41;
+    border: 1px solid rgba(0, 255, 65, 0.3);
+}
+
+.progress-log .final-result.failure {
+    background: rgba(255, 100, 0, 0.15);
+    color: #ff9664;
+    border: 1px solid rgba(255, 100, 0, 0.3);
+}
+</style>
+
+<script>
+function toggleAllFixes(checkbox) {
+    const allCheckboxes = document.querySelectorAll('.fix-checkbox');
+    allCheckboxes.forEach(cb => cb.checked = checkbox.checked);
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checked = document.querySelectorAll('.fix-checkbox:checked').length;
+    const countEl = document.getElementById('selected-count');
+    const btn = document.getElementById('apply-selected-btn');
+
+    if (countEl) countEl.textContent = checked;
+    if (btn) btn.disabled = checked === 0;
+}
+
+// Add listeners to all checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.fix-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    updateSelectedCount();
+});
+
+// Also run when loaded via HTMX
+document.querySelectorAll('.fix-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateSelectedCount);
+});
+updateSelectedCount();
+
+// Prevent double-submission of fixes form
+function handleFixesSubmit(form) {
+    const btn = form.querySelector('#apply-selected-btn');
+    const loading = form.querySelector('#fixes-loading');
+
+    // Check if already submitting
+    if (btn.classList.contains('btn-applying')) {
+        console.log('Already submitting, blocking duplicate');
+        return false;
+    }
+
+    // Disable button and show loading
+    btn.classList.add('btn-applying');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Applying Fixes...';
+    if (loading) loading.style.display = 'inline';
+
+    // Allow the form to submit
+    return true;
+}
+
+// Auto-Fix All functionality
+async function startAutoFix(projectId, qcType) {
+    const btn = document.getElementById('auto-fix-btn');
+    const progress = document.getElementById('auto-fix-progress');
+    const log = document.getElementById('auto-fix-log');
+
+    // Disable button and show progress
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.innerHTML = '⏳ Auto-Fixing...';
+    progress.style.display = 'block';
+    log.innerHTML = '<div class="attempt">Starting auto-fix loop...</div>';
+
+    try {
+        const formData = new FormData();
+        formData.append('qc_type', qcType);
+        formData.append('max_attempts', '5');
+
+        const response = await fetch(`/projects/${projectId}/auto-fix-qc`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        // Display results
+        log.innerHTML = '';
+
+        // Show each attempt
+        if (result.attempts) {
+            result.attempts.forEach(attempt => {
+                const attemptDiv = document.createElement('div');
+                attemptDiv.className = `attempt ${attempt.verdict}`;
+                attemptDiv.innerHTML = `
+                    <strong>Attempt ${attempt.attempt}:</strong> ${attempt.verdict.toUpperCase()}
+                    <br>
+                    <small>Alignment: ${attempt.alignment}% | Sellability: ${attempt.sellability}% | Quality: ${attempt.quality}%</small>
+                    <br>
+                    <small>Issues: ${attempt.issues_count}</small>
+                `;
+                log.appendChild(attemptDiv);
+            });
+        }
+
+        // Show final result
+        const finalDiv = document.createElement('div');
+        finalDiv.className = `final-result ${result.success ? 'success' : 'failure'}`;
+        if (result.success) {
+            finalDiv.innerHTML = `✅ ${result.stopped_reason} - ${result.final_verdict.toUpperCase()}`;
+        } else {
+            finalDiv.innerHTML = `⚠️ ${result.stopped_reason} - Final: ${result.final_verdict?.toUpperCase() || 'Unknown'}`;
+        }
+        log.appendChild(finalDiv);
+
+        // Update button
+        btn.classList.remove('running');
+        if (result.success) {
+            btn.innerHTML = '✅ QC Passed!';
+            btn.style.background = 'linear-gradient(135deg, #00ff41, #00cc33)';
+            btn.style.color = '#000';
+
+            // Reload the page after a short delay to show the passing QC
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            btn.innerHTML = '🔄 Try Again';
+            btn.disabled = false;
+        }
+
+    } catch (error) {
+        log.innerHTML = `<div class="attempt failed">Error: ${error.message}</div>`;
+        btn.classList.remove('running');
+        btn.innerHTML = '🔄 Auto-Fix All';
+        btn.disabled = false;
+    }
+}
+</script>
