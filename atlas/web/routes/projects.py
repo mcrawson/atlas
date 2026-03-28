@@ -1812,9 +1812,24 @@ async def approve_plan(request: Request, project_id: int, build_type: str = Form
     # Add spec to context for Mason to reference
     context["spec"] = spec
 
-    # Add build_type from user selection to context for Mason
-    context["build_type"] = build_type
-    logger.info(f"[Build] User selected build_type: {build_type}")
+    # Auto-detect build_type from kickoff_plan tech_stack if not explicitly set
+    # The form default is "static_html", but we should infer from tech stack
+    kickoff_plan = new_metadata.get("kickoff_plan", {})
+    tech_stack = kickoff_plan.get("tech_stack", {})
+    framework = tech_stack.get("framework", "").lower()
+
+    # Check if framework suggests React/modern SPA
+    spa_frameworks = ["react", "vue", "angular", "next", "nuxt", "svelte", "typescript"]
+    if any(fw in framework for fw in spa_frameworks):
+        inferred_build_type = "react_spa"
+    else:
+        inferred_build_type = "static_html"
+
+    # Use inferred type (form always sends default, so we trust tech stack)
+    # If user explicitly chose static_html for a React project, they can re-select
+    effective_build_type = inferred_build_type
+    context["build_type"] = effective_build_type
+    logger.info(f"[Build] Tech stack: {framework} -> build_type: {effective_build_type}")
 
     # Add team chat summary if available (resolved concerns)
     if "team_chat" in new_metadata:
