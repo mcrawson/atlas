@@ -296,3 +296,56 @@ class EmailClient:
             lines.append(f"  - {self.format_email_for_briefing(email)}")
 
         return "\n".join(lines)
+
+    async def send_email(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        html: bool = False
+    ) -> bool:
+        """Send an email using Gmail API.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body (plain text or HTML)
+            html: Whether body is HTML
+
+        Returns:
+            True if sent successfully
+        """
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        service = self._get_service()
+        if not service:
+            logger.error("Gmail service not available")
+            return False
+
+        try:
+            # Create message
+            if html:
+                message = MIMEMultipart("alternative")
+                message.attach(MIMEText(body, "html"))
+            else:
+                message = MIMEText(body)
+
+            message["to"] = to
+            message["subject"] = subject
+
+            # Encode message
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+            # Send
+            service.users().messages().send(
+                userId="me",
+                body={"raw": raw}
+            ).execute()
+
+            logger.info(f"Email sent to {to}: {subject}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send email: {e}")
+            return False

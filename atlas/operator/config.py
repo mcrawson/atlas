@@ -78,6 +78,13 @@ class BriefingConfig:
 
 
 @dataclass
+class EmailConfig:
+    """Email notification configuration."""
+    enabled: bool = False
+    to: str = ""  # Recipient email address
+
+
+@dataclass
 class OvernightConfig:
     """Main configuration container."""
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
@@ -87,6 +94,7 @@ class OvernightConfig:
     general: GeneralConfig = field(default_factory=GeneralConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     briefing: BriefingConfig = field(default_factory=BriefingConfig)
+    email: EmailConfig = field(default_factory=EmailConfig)
 
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "OvernightConfig":
@@ -118,6 +126,10 @@ class OvernightConfig:
             briefing=BriefingConfig(
                 enabled=data.get("briefing", {}).get("enabled", True),
                 dir=Path(os.path.expanduser(data.get("briefing", {}).get("dir", "~/.claude/data/overnight-briefings"))),
+            ),
+            email=EmailConfig(
+                enabled=data.get("email", {}).get("enabled", False),
+                to=data.get("email", {}).get("to", ""),
             ),
         )
 

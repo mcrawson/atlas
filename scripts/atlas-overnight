@@ -20,6 +20,7 @@ Usage:
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -290,6 +291,29 @@ async def cmd_run(args) -> int:
             slack_summary = operator._format_slack_briefing()
             await slack.post_briefing(slack_summary)
             print("Briefing posted to Slack")
+
+        # Send briefing via email if configured
+        email_to = os.environ.get("OVERNIGHT_EMAIL_TO") or (config.email.to if config.email.enabled else "")
+        if email_to:
+            try:
+                from atlas.integrations.email import EmailClient
+                email_client = EmailClient()
+                if email_client.is_available():
+                    briefing_content = operator._format_briefing()
+                    subject = f"Overnight Report - {date_str}"
+                    success = await email_client.send_email(
+                        to=email_to,
+                        subject=subject,
+                        body=briefing_content
+                    )
+                    if success:
+                        print(f"Briefing emailed to {email_to}")
+                    else:
+                        print("Email send failed")
+                else:
+                    print("Email not available (not authenticated)")
+            except Exception as e:
+                print(f"Email notification failed: {e}")
 
     return 0 if session_stats.tasks_failed == 0 else 1
 

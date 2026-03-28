@@ -54,6 +54,7 @@ class BuilderMode:
         self._mason = None
         self._qc = None
         self._router = None
+        self._providers = None
 
     async def _get_provider(self):
         """Lazy-load the Claude provider."""
@@ -71,12 +72,29 @@ class BuilderMode:
             self._router = Router()
         return self._router
 
+    async def _get_providers(self):
+        """Lazy-load providers dict for agents."""
+        if self._providers is None:
+            try:
+                from atlas.agents.ollama_provider import create_multi_provider_agent_manager
+                agent_manager = create_multi_provider_agent_manager()
+                if hasattr(agent_manager, 'providers'):
+                    self._providers = agent_manager.providers
+                else:
+                    self._providers = {}
+                self.logger.info(f"Initialized providers: {list(self._providers.keys())}")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize providers: {e}")
+                self._providers = {}
+        return self._providers
+
     async def _get_analyst(self):
         """Lazy-load the Analyst agent."""
         if self._analyst is None:
             from atlas.agents.analyst import AnalystAgent
             router = await self._get_router()
-            self._analyst = AnalystAgent(router=router, memory=None)
+            providers = await self._get_providers()
+            self._analyst = AnalystAgent(router=router, memory=None, providers=providers)
         return self._analyst
 
     async def _get_mason(self):
@@ -84,7 +102,8 @@ class BuilderMode:
         if self._mason is None:
             from atlas.agents.mason import MasonAgent
             router = await self._get_router()
-            self._mason = MasonAgent(router=router, memory=None)
+            providers = await self._get_providers()
+            self._mason = MasonAgent(router=router, memory=None, providers=providers)
         return self._mason
 
     async def _get_qc(self):
@@ -92,7 +111,8 @@ class BuilderMode:
         if self._qc is None:
             from atlas.agents.qc import QCAgent
             router = await self._get_router()
-            self._qc = QCAgent(router=router, memory=None)
+            providers = await self._get_providers()
+            self._qc = QCAgent(router=router, memory=None, providers=providers)
         return self._qc
 
     async def execute(self, task: dict) -> BuildResult:
