@@ -122,9 +122,9 @@ class TestRateLimitConfig:
         """Test default configuration values."""
         config = RateLimitConfig()
 
-        assert config.requests_per_minute == 60
-        assert config.requests_per_hour == 1000
-        assert config.burst_size == 10
+        assert config.requests_per_minute == 120
+        assert config.requests_per_hour == 3000
+        assert config.burst_size == 30
         assert "/health" in config.excluded_paths
 
     def test_custom_config(self):

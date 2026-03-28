@@ -26,7 +26,7 @@ class ProjectCategory(Enum):
     LIBRARY = "library"         # Reusable library or package
     SCRIPT = "script"           # Automation script or one-off tool
     DOCUMENT = "document"       # Book, documentation, or written content
-    PHYSICAL = "physical"       # Physical products (planners, printed materials)
+    PRINTABLE = "printable"     # Digital PDFs customers print (planners, worksheets, etc.)
     OTHER = "other"             # Doesn't fit other categories
 
 
@@ -75,12 +75,12 @@ class ProjectType(Enum):
     DOC_REPORT = "doc_report"
     DOC_GUIDE = "doc_guide"
 
-    # Physical products category
-    PHYSICAL_PLANNER = "physical_planner"
-    PHYSICAL_JOURNAL = "physical_journal"
-    PHYSICAL_WORKBOOK = "physical_workbook"
-    PHYSICAL_CARDS = "physical_cards"
-    PHYSICAL_PRINTABLE = "physical_printable"
+    # Printable products (digital PDFs customers print themselves)
+    PRINTABLE_PLANNER = "printable_planner"
+    PRINTABLE_JOURNAL = "printable_journal"
+    PRINTABLE_WORKBOOK = "printable_workbook"
+    PRINTABLE_CARDS = "printable_cards"
+    PRINTABLE_OTHER = "printable_other"
 
     # Other
     OTHER = "other"
@@ -211,24 +211,24 @@ PROJECT_TYPE_PATTERNS = {
         "phrases": [r'(write|create) a guide', r'how.?to (guide|document)', r'step.?by.?step'],
     },
 
-    # Physical Products
-    ProjectType.PHYSICAL_PLANNER: {
+    # Printable Products (digital PDFs customers print)
+    ProjectType.PRINTABLE_PLANNER: {
         "keywords": [r'\b(planner|daily planner|weekly planner|agenda|organizer)\b'],
         "phrases": [r'physical planner', r'planner book', r'printable planner', r'paper planner'],
     },
-    ProjectType.PHYSICAL_JOURNAL: {
+    ProjectType.PRINTABLE_JOURNAL: {
         "keywords": [r'\b(journal|diary|gratitude journal|bullet journal|bujo)\b'],
         "phrases": [r'physical journal', r'journal book', r'printable journal'],
     },
-    ProjectType.PHYSICAL_WORKBOOK: {
+    ProjectType.PRINTABLE_WORKBOOK: {
         "keywords": [r'\b(workbook|worksheet|activity book|exercise book)\b'],
         "phrases": [r'physical workbook', r'printable workbook', r'worksheet book'],
     },
-    ProjectType.PHYSICAL_CARDS: {
+    ProjectType.PRINTABLE_CARDS: {
         "keywords": [r'\b(cards|flashcards|playing cards|game cards|greeting cards)\b'],
         "phrases": [r'physical cards', r'printable cards', r'card deck'],
     },
-    ProjectType.PHYSICAL_PRINTABLE: {
+    ProjectType.PRINTABLE_OTHER: {
         "keywords": [r'\b(printable|print.?ready|pdf template|downloadable)\b'],
         "phrases": [r'printable (template|pdf)', r'print.?ready', r'downloadable (pdf|template)'],
     },
@@ -449,11 +449,11 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         key_questions=["Beginner or advanced?", "Include screenshots?", "Code examples?"],
     ),
 
-    # Physical Products
-    ProjectType.PHYSICAL_PLANNER: ProjectTypeConfig(
-        type=ProjectType.PHYSICAL_PLANNER,
-        category=ProjectCategory.PHYSICAL,
-        name="Physical Planner",
+    # Printable Products (digital PDFs customers print)
+    ProjectType.PRINTABLE_PLANNER: ProjectTypeConfig(
+        type=ProjectType.PRINTABLE_PLANNER,
+        category=ProjectCategory.PRINTABLE,
+        name="Printable Planner",
         description="Printable planner book or pages",
         icon="📅",
         suggested_stack=["HTML", "CSS", "PDF"],
@@ -461,10 +461,10 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         verification_focus=["print margins", "page dimensions", "readability", "completeness"],
         key_questions=["Page size (letter, A4, A5)?", "Binding side (left, top)?", "Color or black & white?", "How many pages/sections?"],
     ),
-    ProjectType.PHYSICAL_JOURNAL: ProjectTypeConfig(
-        type=ProjectType.PHYSICAL_JOURNAL,
-        category=ProjectCategory.PHYSICAL,
-        name="Physical Journal",
+    ProjectType.PRINTABLE_JOURNAL: ProjectTypeConfig(
+        type=ProjectType.PRINTABLE_JOURNAL,
+        category=ProjectCategory.PRINTABLE,
+        name="Printable Journal",
         description="Printable journal or diary",
         icon="📓",
         suggested_stack=["HTML", "CSS", "PDF"],
@@ -472,10 +472,10 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         verification_focus=["print margins", "line spacing", "prompt clarity", "aesthetic appeal"],
         key_questions=["Guided prompts or blank?", "Daily, weekly, or undated?", "Include cover design?"],
     ),
-    ProjectType.PHYSICAL_WORKBOOK: ProjectTypeConfig(
-        type=ProjectType.PHYSICAL_WORKBOOK,
-        category=ProjectCategory.PHYSICAL,
-        name="Physical Workbook",
+    ProjectType.PRINTABLE_WORKBOOK: ProjectTypeConfig(
+        type=ProjectType.PRINTABLE_WORKBOOK,
+        category=ProjectCategory.PRINTABLE,
+        name="Printable Workbook",
         description="Printable workbook with exercises",
         icon="📝",
         suggested_stack=["HTML", "CSS", "PDF"],
@@ -483,10 +483,10 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         verification_focus=["exercise clarity", "answer space", "progression", "instructions"],
         key_questions=["Subject/topic?", "Age group?", "Include answer key?"],
     ),
-    ProjectType.PHYSICAL_CARDS: ProjectTypeConfig(
-        type=ProjectType.PHYSICAL_CARDS,
-        category=ProjectCategory.PHYSICAL,
-        name="Physical Cards",
+    ProjectType.PRINTABLE_CARDS: ProjectTypeConfig(
+        type=ProjectType.PRINTABLE_CARDS,
+        category=ProjectCategory.PRINTABLE,
+        name="Printable Cards",
         description="Printable cards (flashcards, game cards, etc.)",
         icon="🃏",
         suggested_stack=["HTML", "CSS", "PDF"],
@@ -494,9 +494,9 @@ PROJECT_CONFIGS: dict[ProjectType, ProjectTypeConfig] = {
         verification_focus=["card dimensions", "cut lines", "front/back alignment", "readability"],
         key_questions=["Card size?", "Number of cards?", "Double-sided?", "Cut lines needed?"],
     ),
-    ProjectType.PHYSICAL_PRINTABLE: ProjectTypeConfig(
-        type=ProjectType.PHYSICAL_PRINTABLE,
-        category=ProjectCategory.PHYSICAL,
+    ProjectType.PRINTABLE_OTHER: ProjectTypeConfig(
+        type=ProjectType.PRINTABLE_OTHER,
+        category=ProjectCategory.PRINTABLE,
         name="Printable Template",
         description="General printable PDF template",
         icon="🖨️",

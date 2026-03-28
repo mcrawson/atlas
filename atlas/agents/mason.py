@@ -167,7 +167,7 @@ TYPE_DELIVERABLES = {
 - Scheduling instructions (if applicable)
 """,
 
-    ProjectCategory.PHYSICAL: """
+    ProjectCategory.PRINTABLE: """
 ## Required Deliverables for Physical Product (Planner/Journal/Printable)
 
 ### CRITICAL: Generate ACTUAL Printable HTML/CSS Templates
@@ -268,7 +268,150 @@ class MasonAgent(BaseAgent):
     icon = "🛠️"
     color = "#E67E22"
 
-    def get_system_prompt(self, project_category: ProjectCategory = None, project_config=None) -> str:
+    # Design system constants for visual quality
+    DESIGN_SYSTEM = """
+═══════════════════════════════════════════════════════════════════════
+                         DESIGN SYSTEM (REQUIRED)
+═══════════════════════════════════════════════════════════════════════
+
+You are not just a coder - you are a DESIGNER. Every output must be visually polished.
+
+## COLOR PALETTE
+Primary:    #4361ee (blue - headers, accents, links)
+Secondary:  #7c3aed (purple - secondary actions)
+Success:    #10b981 (green - positive states)
+Warning:    #f59e0b (amber - caution, highlights)
+Error:      #ef4444 (red - errors, priorities)
+
+Backgrounds:
+- Page:     #f8fafc (light gray)
+- Card:     #ffffff (white)
+- Subtle:   #f1f5f9 (very light gray)
+- Accent:   #fef3c7 (warm yellow), #dbeafe (light blue), #d1fae5 (light green)
+
+Text:
+- Primary:   #1e293b (dark blue-gray)
+- Secondary: #64748b (medium gray)
+- Muted:     #94a3b8 (light gray)
+
+## TYPOGRAPHY
+Font Stack: 'Inter', 'Segoe UI', -apple-system, sans-serif
+- Headings: font-weight: 600-700, letter-spacing: -0.025em
+- Body: font-weight: 400, line-height: 1.6
+- Small/Labels: font-size: 0.75rem, text-transform: uppercase, letter-spacing: 0.05em
+
+Scale:
+- h1: 1.875rem (30px)
+- h2: 1.25rem (20px)
+- h3: 1rem (16px)
+- body: 0.875rem (14px)
+- small: 0.75rem (12px)
+
+## SPACING & LAYOUT
+Base unit: 4px
+- xs: 4px, sm: 8px, md: 16px, lg: 24px, xl: 32px, 2xl: 48px
+
+Border radius:
+- Small elements: 4px
+- Cards/sections: 8px
+- Large containers: 12px
+
+Shadows:
+- Subtle: 0 1px 3px rgba(0,0,0,0.08)
+- Card: 0 2px 8px rgba(0,0,0,0.08)
+- Elevated: 0 4px 16px rgba(0,0,0,0.12)
+
+## VISUAL HIERARCHY
+1. Use whitespace generously - don't cram content
+2. Group related items with consistent spacing
+3. Use color to create visual sections
+4. Icons/emojis for quick recognition (🎯 📋 ✓ 🕐)
+5. Subtle borders or backgrounds to define sections
+6. Left-align body text, center headings sparingly
+
+## CSS PATTERNS TO USE
+
+Section headers:
+```css
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.section-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+.section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    color: #64748b;
+}
+```
+
+Cards/containers:
+```css
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+```
+
+Two-column layout:
+```css
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+```
+
+Checkbox items:
+```css
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #f8fafc;
+    margin-bottom: 6px;
+}
+.checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+```
+
+## FOR PRINTABLES
+- Use @page { size: letter; margin: 0.5in; }
+- Use @media print { } for print-specific styles
+- Color-code time of day (morning=warm, afternoon=blue, evening=purple)
+- Add visual interest with colored section backgrounds
+- Include proper line-height for handwriting areas (22-24px)
+
+REMEMBER: The difference between amateur and professional is ATTENTION TO DETAIL.
+- Consistent spacing throughout
+- Harmonious color combinations
+- Clear visual hierarchy
+- Thoughtful typography
+- Polished, refined appearance
+"""
+
+    def get_system_prompt(self, project_category: ProjectCategory = None, project_config=None, build_type: str = None) -> str:
         """Get Tinker's system prompt - focused and bulletproof."""
 
         # Get stack guidance from config
@@ -278,10 +421,18 @@ class MasonAgent(BaseAgent):
 TECH STACK (use this): {', '.join(project_config.suggested_stack[:2])}
 Build approach: {project_config.build_approach}"""
 
+        # Add build type guidance if specified
+        if build_type == "static_html":
+            stack_guidance += "\n\nBUILD TYPE: Static HTML/CSS/JS ONLY (NO React, NO TypeScript, NO build tools)"
+        elif build_type == "react_spa":
+            stack_guidance += "\n\nBUILD TYPE: React SPA (React/TypeScript allowed)"
+
         # Get agent-specific philosophy
         philosophy = get_agent_philosophy("tinker")
 
         return f"""You are Tinker, a master craftsman who builds SELLABLE, PRODUCTION-READY products.
+
+{self.DESIGN_SYSTEM}
 
 {philosophy}
 
@@ -498,11 +649,36 @@ Create clean, working code that solves this problem."""
                 if "tech_stack" in context:
                     ts = context["tech_stack"]
                     prompt += f"\n\n## REQUIRED TECH STACK (from spec)"
-                    prompt += f"\n- Language: {ts.get('language', 'Python')}"
-                    prompt += f"\n- Framework: {ts.get('framework', 'None')}"
-                    if ts.get('reasoning'):
-                        prompt += f"\n- Reasoning: {ts.get('reasoning')}"
+                    # Handle both dict and string formats for tech_stack
+                    if isinstance(ts, dict):
+                        prompt += f"\n- Language: {ts.get('language', 'Python')}"
+                        prompt += f"\n- Framework: {ts.get('framework', 'None')}"
+                        if ts.get('reasoning'):
+                            prompt += f"\n- Reasoning: {ts.get('reasoning')}"
+                    elif isinstance(ts, str):
+                        # tech_stack passed as string description
+                        prompt += f"\n{ts}"
                     prompt += "\n\nYou MUST use this tech stack. Do not switch to a different language or framework."
+
+                # Handle build_type preference (static HTML vs React SPA)
+                build_type = context.get("build_type")
+                if build_type == "static_html":
+                    prompt += "\n\n## BUILD TYPE: STATIC HTML"
+                    prompt += "\n\nCRITICAL: Build this as PLAIN HTML/CSS/JavaScript ONLY."
+                    prompt += "\n- NO React, NO TypeScript, NO JSX/TSX files"
+                    prompt += "\n- NO build tools (webpack, vite, etc.)"
+                    prompt += "\n- NO npm packages or dependencies"
+                    prompt += "\n- All functionality must be in vanilla JavaScript"
+                    prompt += "\n- All content must be visible in the HTML markup"
+                    prompt += "\n- Use <script> tags for JavaScript, <style> tags or external CSS"
+                    prompt += "\n- The HTML file should be self-contained and work when opened directly in a browser"
+                elif build_type == "react_spa":
+                    prompt += "\n\n## BUILD TYPE: REACT SPA"
+                    prompt += "\n\nYou may use React, TypeScript, and modern build tools for this project."
+                    prompt += "\n- React/TypeScript is ALLOWED and ENCOURAGED"
+                    prompt += "\n- Use JSX/TSX files as needed"
+                    prompt += "\n- Include proper package.json with dependencies"
+                    prompt += "\n- Structure as a proper React application"
 
                 # Include team chat resolved concerns if available
                 if "team_chat_summary" in context:
@@ -530,10 +706,13 @@ Create clean, working code that solves this problem."""
 
             self.status = AgentStatus.WORKING
 
+            # Extract build_type from context if available
+            build_type = context.get("build_type") if context else None
+
             # Generate implementation with type-aware system prompt
             response, token_info = await self._generate_with_provider(
                 prompt,
-                system_prompt=self.get_system_prompt(project_category, project_config),
+                system_prompt=self.get_system_prompt(project_category, project_config, build_type),
                 temperature=0.4,  # Lower temperature for more precise code
             )
 

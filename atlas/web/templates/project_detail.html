@@ -117,6 +117,7 @@
         <div class="pipeline">
             {% set phases = [
                 ('idea', 'Idea', '💡', 'Define'),
+                ('analysis', 'Analyze', '📊', 'Analyst'),
                 ('plan', 'Plan', '💡', 'Sketch'),
                 ('meeting', 'Review', '👥', 'Team'),
                 ('build', 'Build', '🛠️', 'Tinker'),
@@ -125,11 +126,11 @@
             ] %}
 
             {% for phase_key, phase_name, phase_icon, phase_agent in phases %}
-            {% set is_current = phase == phase_key or (phase_key == 'plan' and phase in ['plan', 'plan_review']) or (phase_key == 'meeting' and phase == 'sprint_meeting') or (phase_key == 'build' and phase in ['build', 'build_review']) or (phase_key == 'verify' and phase == 'verify_review') %}
-            {% set phase_order = {'idea': 0, 'plan': 1, 'plan_review': 1, 'sprint_meeting': 2, 'meeting': 2, 'build': 3, 'build_review': 3, 'verify': 4, 'verify_review': 4, 'deliver': 5} %}
+            {% set is_current = phase == phase_key or (phase_key == 'analysis' and phase in ['analysis', 'brief_review']) or (phase_key == 'plan' and phase in ['plan', 'plan_review']) or (phase_key == 'meeting' and phase == 'sprint_meeting') or (phase_key == 'build' and phase in ['build', 'build_review']) or (phase_key == 'verify' and phase == 'verify_review') %}
+            {% set phase_order = {'idea': 0, 'analysis': 1, 'brief_review': 1, 'plan': 2, 'plan_review': 2, 'sprint_meeting': 3, 'meeting': 3, 'build': 4, 'build_review': 4, 'verify': 5, 'verify_review': 5, 'deliver': 6} %}
             {% set current_phase_order = phase_order.get(phase, 0) %}
             {% set is_done = loop.index0 < current_phase_order %}
-            {% set target_phase = {'idea': 'idea', 'plan': 'plan_review', 'meeting': 'sprint_meeting', 'build': 'build_review', 'verify': 'verify_review', 'deliver': 'deliver'} %}
+            {% set target_phase = {'idea': 'idea', 'analysis': 'brief_review', 'plan': 'plan_review', 'meeting': 'sprint_meeting', 'build': 'build_review', 'verify': 'verify_review', 'deliver': 'deliver'} %}
 
             <div class="pipeline-step {% if is_current %}current{% elif is_done %}done clickable{% endif %}"
                  {% if is_done %}
@@ -186,19 +187,160 @@
             </div>
         </div>
 
+        <!-- Start Analysis Button (when ready) -->
+        {% if readiness >= 70 %}
+        <div class="ready-to-analyze">
+            <div class="ready-message">
+                <span class="ready-icon">✅</span>
+                <span class="ready-text">Your idea is ready for business analysis!</span>
+            </div>
+            <form action="/projects/{{ project.id }}/start-analysis" method="post">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <span class="btn-icon">📊</span> Start Business Analysis
+                </button>
+            </form>
+            <p class="analysis-hint">The Analyst will create a comprehensive Business Brief with market analysis, competition review, and Go/No-Go recommendation.</p>
+        </div>
+        {% else %}
         <!-- Buzz Notification Hint -->
         <div class="buzz-hint">
             <span class="buzz-icon">📡</span>
-            <span class="buzz-text">Buzz will notify you when your idea is ready for planning</span>
+            <span class="buzz-text">Answer more questions to unlock business analysis ({{ readiness }}% ready)</span>
+        </div>
+        {% endif %}
+
+        {% elif phase in ['analysis', 'brief_review'] %}
+        <!-- BUSINESS ANALYSIS PHASE -->
+        <div class="phase-card analysis-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">📊</span>
+                    <span class="agent-name">Analyst</span>
+                </div>
+                <h2>Business Brief</h2>
+                <p class="analysis-subtitle">Comprehensive viability analysis before building</p>
+            </div>
+
+            {% set business_brief = project.metadata.get('business_brief', {}) %}
+
+            {% if business_brief %}
+            <!-- Include the business brief partial -->
+            {% set brief = business_brief %}
+            {% set project_id = project.id %}
+            {% include "partials/business_brief.html" %}
+
+            <!-- QC Report Container (populated via HTMX) -->
+            <div id="qc-report-container">
+                {% set qc_report = project.metadata.get('qc_report') %}
+                {% if qc_report %}
+                {% set qc_type = "brief" %}
+                {% set qc_endpoint = "/projects/" ~ project.id ~ "/run-qc" %}
+                {% set qc_container = "#qc-report-container" %}
+                {% include "partials/qc_report.html" %}
+                {% endif %}
+            </div>
+            {% else %}
+            <!-- Loading/Analyzing State -->
+            <div class="analyzing-state">
+                <div class="spinner"></div>
+                <h3>Analyzing Your Idea...</h3>
+                <p>The Analyst is creating a comprehensive Business Brief</p>
+                <ul class="analysis-steps">
+                    <li>Researching market viability</li>
+                    <li>Analyzing competition</li>
+                    <li>Defining target customers</li>
+                    <li>Creating financial projections</li>
+                    <li>Generating Go/No-Go recommendation</li>
+                </ul>
+            </div>
+            {% endif %}
         </div>
 
         {% elif phase in ['plan', 'plan_review'] %}
-        <!-- SPEC REVIEW PHASE (Spec-Driven Development) -->
-        <div class="phase-card spec-card">
+        <!-- PLANNING PHASE - Round Table + Build Plan -->
+
+        {% set roundtable = project.metadata.get('roundtable', {}) %}
+        {% set build_plan = project.metadata.get('build_plan', {}) %}
+
+        <!-- Round Table Status -->
+        {% if roundtable %}
+        <div class="phase-card roundtable-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">🪑</span>
+                    <span class="agent-name">Round Table</span>
+                </div>
+                <h2>Agent Coordination</h2>
+                <p class="roundtable-subtitle">Your team is assembled and ready</p>
+            </div>
+
+            <div id="roundtable-container"
+                 hx-get="/projects/{{ project.id }}/roundtable"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading Round Table...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Agent Conversation (WebSocket) -->
+        <div class="phase-card conversation-card">
+            <div id="live-conversation-container"
+                 hx-get="/projects/{{ project.id }}/conversation-view"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading conversation...</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Build Plan -->
+        <div class="phase-card plan-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">📋</span>
+                    <span class="agent-name">Planner</span>
+                </div>
+                <h2>Build Plan</h2>
+                <p class="plan-subtitle">Phases, deliverables, and QC checkpoints</p>
+            </div>
+
+            {% if build_plan %}
+            {% set plan = build_plan %}
+            {% set project_id = project.id %}
+            {% include "partials/build_plan.html" %}
+            {% else %}
+            <div id="build-plan-container">
+                <div class="plan-empty-state">
+                    <span class="empty-icon">📋</span>
+                    <h3>No Build Plan Yet</h3>
+                    <p>The Planner will create a detailed build plan based on the Business Brief.</p>
+                    <button type="button"
+                            class="btn btn-primary btn-lg"
+                            hx-post="/projects/{{ project.id }}/start-planning"
+                            hx-target="#build-plan-container"
+                            hx-swap="innerHTML"
+                            hx-indicator="#planning-indicator">
+                        <span class="btn-icon">📋</span> Create Build Plan
+                    </button>
+                    <span id="planning-indicator" class="htmx-indicator">Planner is working...</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Legacy Spec Flow (fallback) -->
+        {% if not roundtable and not build_plan %}
+        <div class="phase-card spec-card legacy-spec">
             <div class="phase-card-header">
                 <div class="agent-badge">
                     <span class="agent-icon">💡</span>
-                    <span class="agent-name">Sketch</span>
+                    <span class="agent-name">Sketch (Legacy)</span>
                 </div>
                 <h2>Review the Specification</h2>
                 <p class="spec-subtitle">Requirements, Design & Tasks in EARS format</p>
@@ -412,16 +554,16 @@
                         <span class="btn-icon">👥</span> Start Team Review
                     </button>
                 </form>
-                <button type="button" class="btn btn-secondary" onclick="toggleRevisionForm()">Request Changes</button>
+                <button type="button" class="btn btn-secondary" onclick="toggleForm('plan-revision-form')">Request Changes</button>
             </div>
 
-            <form id="revision-form" class="revision-form" style="display: none;"
+            <form id="plan-revision-form" class="revision-form" style="display: none;"
                   action="/projects/{{ project.id }}/revise-with-feedback" method="post">
                 <input type="hidden" name="agent" value="architect">
                 <textarea name="feedback" rows="4" placeholder="What changes would you like to the spec?"></textarea>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Submit Feedback</button>
-                    <button type="button" class="btn btn-ghost" onclick="toggleRevisionForm()">Cancel</button>
+                    <button type="button" class="btn btn-ghost" onclick="toggleForm('plan-revision-form')">Cancel</button>
                 </div>
             </form>
             {% else %}
@@ -452,6 +594,8 @@
             event.currentTarget.classList.add('active');
         }
         </script>
+        {% endif %}
+        <!-- End Legacy Spec -->
 
         {% elif phase == 'sprint_meeting' %}
         <!-- SPRINT MEETING PHASE -->
@@ -620,6 +764,17 @@
             <div class="phase-actions">
                 {% if can_proceed %}
                 <form action="/projects/{{ project.id }}/approve-plan" method="post">
+                    <!-- Build Type Selector -->
+                    <div class="build-type-selector" style="margin-bottom: 1rem;">
+                        <label for="build_type" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Build Type:</label>
+                        <select name="build_type" id="build_type" class="form-select" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); min-width: 200px;">
+                            <option value="static_html">Static HTML/CSS/JS</option>
+                            <option value="react_spa">React SPA (TypeScript)</option>
+                        </select>
+                        <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+                            Static HTML is simpler and works in any browser. React SPA is better for complex interactions.
+                        </p>
+                    </div>
                     <button type="submit" class="btn btn-primary">
                         <span class="btn-icon">🛠️</span> Proceed to Build
                     </button>
@@ -651,6 +806,9 @@
                 <h2>Building from Spec</h2>
                 <p class="build-subtitle">Executing tasks from the approved specification</p>
             </div>
+
+            <!-- Customer Preview (always show what we're building) -->
+            {% include "partials/product_preview.html" %}
 
             {% set build = project.metadata.get('build', {}) %}
             {% set spec = project.metadata.get('spec', {}) %}
@@ -694,9 +852,6 @@
             </div>
             {% endif %}
 
-            <!-- Customer Preview -->
-            {% include "partials/product_preview.html" %}
-
             <!-- Technical Preview if available -->
             {% if preview %}
             {% include "partials/build_preview.html" %}
@@ -711,7 +866,10 @@
                     <span class="status-icon">🎨</span>
                     <div class="status-content">
                         <span class="status-title">Canva Design Created</span>
-                        <span class="status-desc">{{ canva_status.page_count or 0 }} pages</span>
+                        <span class="status-desc">{{ canva_status.assets_uploaded or canva_status.page_count or 0 }} images uploaded to Canva</span>
+                        {% if canva_status.note %}
+                        <span class="status-note">💡 {{ canva_status.note }}</span>
+                        {% endif %}
                     </div>
                     <a href="{{ canva_status.edit_url }}" target="_blank" class="btn btn-sm btn-primary">Open in Canva</a>
                 </div>
@@ -805,16 +963,28 @@
                 <form action="/projects/{{ project.id }}/approve-build" method="post">
                     <button type="submit" class="btn btn-primary">Approve Build</button>
                 </form>
-                <button type="button" class="btn btn-secondary" onclick="toggleRevisionForm()">Request Changes</button>
+                <button type="button"
+                        class="btn btn-qc"
+                        hx-post="/projects/{{ project.id }}/qc-build"
+                        hx-target="#build-qc-report-container"
+                        hx-swap="innerHTML"
+                        hx-indicator="#build-qc-indicator">
+                    ✅ Run QC Check
+                </button>
+                <span id="build-qc-indicator" class="htmx-indicator">Checking...</span>
+                <button type="button" class="btn btn-secondary" onclick="toggleForm('build-revision-form')">Request Changes</button>
             </div>
 
-            <form id="revision-form" class="revision-form" style="display: none;"
+            <!-- QC Report Container -->
+            <div id="build-qc-report-container"></div>
+
+            <form id="build-revision-form" class="revision-form" style="display: none;"
                   action="/projects/{{ project.id }}/revise-with-feedback" method="post">
                 <input type="hidden" name="agent" value="mason">
                 <textarea name="feedback" rows="4" placeholder="What changes would you like?"></textarea>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Submit Feedback</button>
-                    <button type="button" class="btn btn-ghost" onclick="toggleRevisionForm()">Cancel</button>
+                    <button type="button" class="btn btn-ghost" onclick="toggleForm('build-revision-form')">Cancel</button>
                 </div>
             </form>
             {% else %}
@@ -1046,8 +1216,15 @@
 
 <script>
 function toggleRevisionForm() {
-    const form = document.getElementById('revision-form');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    // Legacy function - kept for backwards compatibility
+    toggleForm('revision-form');
+}
+
+function toggleForm(formId) {
+    const form = document.getElementById(formId);
+    if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
 }
 
 function goToPhase(phase) {
@@ -1075,6 +1252,40 @@ function toggleTeamFeedback() {
         form.style.display = form.style.display === 'none' ? 'block' : 'none';
     }
 }
+
+// QC Build button fallback (in case HTMX doesn't work on dynamically loaded content)
+document.addEventListener('DOMContentLoaded', function() {
+    const buildQcBtn = document.querySelector('.phase-actions .btn-qc');
+    if (buildQcBtn && buildQcBtn.getAttribute('hx-post')?.includes('qc-build')) {
+        buildQcBtn.addEventListener('click', async function(e) {
+            // Only use fallback if HTMX isn't handling it
+            if (window.htmx && htmx.find(this)) return;
+
+            e.preventDefault();
+            const projectId = {{ project.id }};
+            const container = document.getElementById('build-qc-report-container');
+            const indicator = document.getElementById('build-qc-indicator');
+
+            if (indicator) indicator.style.display = 'inline';
+            this.disabled = true;
+
+            try {
+                const response = await fetch(`/projects/${projectId}/qc-build`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+                const html = await response.text();
+                if (container) container.innerHTML = html;
+            } catch (err) {
+                console.error('Build QC check failed:', err);
+                if (container) container.innerHTML = '<div class="error">QC check failed. Please try again.</div>';
+            } finally {
+                if (indicator) indicator.style.display = 'none';
+                this.disabled = false;
+            }
+        });
+    }
+});
 
 function setProjectType(projectType, category) {
     document.getElementById('project-type-input').value = projectType;
@@ -1476,6 +1687,196 @@ function showTeamComplete() {
         </div>
     `;
 }
+
+// Execute scripts in HTMX dynamically loaded content
+// This is needed because HTMX doesn't execute inline scripts by default
+document.addEventListener('htmx:afterSwap', function(event) {
+    const target = event.detail.target;
+    if (!target) return;
+
+    // Find all scripts in the newly loaded content
+    const scripts = target.querySelectorAll('script');
+
+    scripts.forEach(oldScript => {
+        try {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.body.appendChild(newScript);
+        } catch (e) {
+            console.error('Script execution error:', e);
+        }
+    });
+
+    // Note: Don't call htmx.process() here - it re-triggers hx-trigger="load" causing infinite loops
+});
+
+// WebSocket connection for agent conversation
+// This runs in project_detail.html where we know it will execute
+(function() {
+    const projectId = {{ project.id }};
+    let socket = null;
+    let retryCount = 0;
+    const maxRetries = 5;
+
+    function connectWebSocket() {
+        const statusEl = document.getElementById('connection-status');
+        if (!statusEl) {
+            // Conversation panel not loaded yet, retry
+            if (retryCount < maxRetries) {
+                retryCount++;
+                setTimeout(connectWebSocket, 500);
+            }
+            return;
+        }
+
+        statusEl.textContent = 'Connecting...';
+        statusEl.className = 'status-badge status-connecting';
+
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/projects/${projectId}/conversation`;
+
+        try {
+            socket = new WebSocket(wsUrl);
+        } catch (e) {
+            console.error('WebSocket creation failed:', e);
+            statusEl.textContent = 'Failed';
+            statusEl.className = 'status-badge status-disconnected';
+            return;
+        }
+
+        socket.onopen = function() {
+            console.log('WebSocket connected');
+            statusEl.textContent = 'Connected';
+            statusEl.className = 'status-badge status-connected';
+            retryCount = 0;
+        };
+
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleConversationMessage(data);
+            } catch (e) {
+                console.error('Failed to parse message:', e);
+            }
+        };
+
+        socket.onclose = function() {
+            console.log('WebSocket closed');
+            statusEl.textContent = 'Disconnected';
+            statusEl.className = 'status-badge status-disconnected';
+        };
+
+        socket.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            statusEl.textContent = 'Error';
+            statusEl.className = 'status-badge status-disconnected';
+        };
+
+        // Expose for reconnect button
+        window.conversationSocket = socket;
+        window.reconnectConversation = function() {
+            if (socket) socket.close();
+            retryCount = 0;
+            connectWebSocket();
+        };
+    }
+
+    function handleConversationMessage(data) {
+        const messagesEl = document.getElementById('messages');
+        if (!messagesEl) return;
+
+        if (data.type === 'agent_message' || data.sender) {
+            addMessage(data);
+        } else if (data.type === 'connected') {
+            console.log('Confirmed connected to conversation stream');
+        }
+    }
+
+    const agentIcons = {
+        'director': '🎬', 'planner': '📋', 'qc': '✅', 'user': '👤',
+        'expert_printable': '🧠', 'expert_document': '🧠', 'expert_web': '🧠', 'expert_app': '🧠',
+        'builder_printable': '🎨', 'builder_document': '📚', 'builder_web': '🌐', 'builder_app': '📱',
+        'system': '🔔'
+    };
+
+    function addMessage(msg) {
+        const messagesEl = document.getElementById('messages');
+        if (!messagesEl) return;
+
+        // Remove waiting message
+        const waiting = messagesEl.querySelector('.message-system');
+        if (waiting && waiting.textContent.includes('Waiting')) {
+            waiting.remove();
+        }
+
+        const messageEl = document.createElement('div');
+        messageEl.className = `message message-${msg.message_type || 'discussion'}`;
+
+        const sender = msg.sender || 'unknown';
+        const icon = agentIcons[sender] || '🤖';
+        const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+        const senderName = sender.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        messageEl.innerHTML = `
+            <div class="message-header">
+                <span class="sender-icon">${icon}</span>
+                <span class="sender sender-${sender}">${senderName}</span>
+                <span class="timestamp">${timestamp}</span>
+            </div>
+            <div class="message-content">${escapeHtml(msg.content || '')}</div>
+        `;
+
+        messagesEl.appendChild(messageEl);
+
+        // Auto-scroll
+        const container = document.getElementById('messages-container');
+        if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // User chat functionality
+    window.sendUserMessage = function() {
+        const textarea = document.getElementById('user-message');
+        if (!textarea) return;
+
+        const content = textarea.value.trim();
+        if (!content) return;
+
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            alert('Not connected. Click Reconnect and try again.');
+            return;
+        }
+
+        socket.send(JSON.stringify({
+            type: 'user_message',
+            content: content
+        }));
+
+        // Show user's message locally
+        addMessage({
+            sender: 'user',
+            content: content,
+            message_type: 'user'
+        });
+
+        textarea.value = '';
+    };
+
+    window.handleUserInputKeydown = function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            window.sendUserMessage();
+        }
+    };
+
+    // Start connection after a short delay to let HTMX load the panel
+    setTimeout(connectWebSocket, 1000);
+})();
 </script>
 
 <style>
@@ -1861,6 +2262,12 @@ function showTeamComplete() {
     color: var(--text-secondary, #8b949e);
 }
 
+.canva-auto-status .status-note {
+    font-size: 0.8rem;
+    color: var(--text-tertiary, #6e7681);
+    font-style: italic;
+}
+
 .canva-auto-status .status-success {
     background: rgba(0, 255, 65, 0.1);
     border-color: rgba(0, 255, 65, 0.3);
@@ -2041,6 +2448,105 @@ function showTeamComplete() {
 .canva-modal-actions .btn-primary:hover {
     background: #00a8b0;
     border-color: #00a8b0;
+}
+
+/* Business Analysis Phase Styles */
+.analysis-card {
+    max-width: 900px;
+}
+
+.analysis-subtitle {
+    color: var(--text-secondary, #8b949e);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.ready-to-analyze {
+    text-align: center;
+    padding: 2rem;
+    margin: 1rem 0;
+    background: linear-gradient(135deg, rgba(0, 255, 65, 0.1), rgba(74, 144, 217, 0.1));
+    border: 2px solid rgba(0, 255, 65, 0.4);
+    border-radius: 12px;
+}
+
+.ready-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-color, #00ff41);
+}
+
+.ready-icon {
+    font-size: 1.5rem;
+}
+
+.analysis-hint {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #8b949e);
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.analyzing-state {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.analyzing-state h3 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary, #fff);
+}
+
+.analyzing-state p {
+    color: var(--text-secondary, #8b949e);
+    margin-bottom: 1.5rem;
+}
+
+.analysis-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    display: inline-block;
+}
+
+.analysis-steps li {
+    padding: 0.5rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+    color: var(--text-secondary, #8b949e);
+    font-size: 0.9rem;
+}
+
+.analysis-steps li::before {
+    content: '○';
+    position: absolute;
+    left: 0;
+    color: var(--accent-color, #4A90D9);
+}
+
+.analysis-steps li:nth-child(1) { animation: fadeInStep 0.5s ease 0.1s both; }
+.analysis-steps li:nth-child(2) { animation: fadeInStep 0.5s ease 0.3s both; }
+.analysis-steps li:nth-child(3) { animation: fadeInStep 0.5s ease 0.5s both; }
+.analysis-steps li:nth-child(4) { animation: fadeInStep 0.5s ease 0.7s both; }
+.analysis-steps li:nth-child(5) { animation: fadeInStep 0.5s ease 0.9s both; }
+
+@keyframes fadeInStep {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.btn-lg {
+    padding: 0.875rem 2rem;
+    font-size: 1.1rem;
 }
 </style>
 

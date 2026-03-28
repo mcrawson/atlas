@@ -69,25 +69,6 @@ async def lifespan(app: FastAPI):
     if app.state.project_manager:
         await app.state.project_manager.init_db()
 
-    # Initialize MCP server if enabled
-    mcp_server = None
-    try:
-        import os
-        if os.getenv("ATLAS_MCP_ENABLED", "true").lower() == "true":
-            from atlas.mcp import get_oracle_server, OracleConfig
-            config = OracleConfig.from_env()
-            mcp_server = get_oracle_server(
-                project_manager=app.state.project_manager,
-                agent_manager=app.state.agent_manager,
-                config=config,
-            )
-            app.state.mcp_server = mcp_server
-            logger.info("MCP Oracle server initialized")
-    except ImportError as e:
-        logger.debug(f"MCP module not available: {e}")
-    except Exception as e:
-        logger.warning(f"Could not initialize MCP server: {e}")
-
     # Initialize GitHub Transporter if configured
     try:
         import os
@@ -248,6 +229,7 @@ def create_default_app(use_ollama: bool = True, prefer_provider: str = "openai")
         prefer_provider: Preferred AI provider ("openai", "claude", "gemini", "ollama")
     """
     from atlas.projects.manager import ProjectManager
+    from atlas.routing.router import Router
 
     # Use default data directory
     data_dir = Path(__file__).parent.parent.parent / "data"
@@ -255,13 +237,21 @@ def create_default_app(use_ollama: bool = True, prefer_provider: str = "openai")
     # Create project manager
     project_manager = ProjectManager(data_dir)
 
+    # Create router for AI provider routing
+    router = Router()
+    logger.info("Router initialized")
+
     # Create agent manager with multiple providers
     agent_manager = None
+    providers = {}
     if use_ollama:
         try:
             # Try multi-provider first (uses OpenAI/Claude when available)
             from atlas.agents.ollama_provider import create_multi_provider_agent_manager
             agent_manager = create_multi_provider_agent_manager(prefer_provider=prefer_provider)
+            # Extract providers from agent_manager if available
+            if hasattr(agent_manager, 'providers'):
+                providers = agent_manager.providers
             logger.info("Agent Manager initialized with multiple providers")
         except Exception as e:
             logger.warning(f"Multi-provider init failed: {e}")
@@ -269,6 +259,9 @@ def create_default_app(use_ollama: bool = True, prefer_provider: str = "openai")
             try:
                 from atlas.agents.ollama_provider import create_agent_manager_with_ollama
                 agent_manager = create_agent_manager_with_ollama()
+                # Extract providers from agent_manager if available
+                if hasattr(agent_manager, 'providers'):
+                    providers = agent_manager.providers
                 logger.info("Agent Manager initialized with Ollama (fallback)")
             except Exception as e2:
                 logger.warning(f"Could not initialize Ollama: {e2}. Running in demo mode.")
@@ -276,6 +269,8 @@ def create_default_app(use_ollama: bool = True, prefer_provider: str = "openai")
     return create_app(
         project_manager=project_manager,
         agent_manager=agent_manager,
+        router=router,
+        providers=providers,
     )
 
 

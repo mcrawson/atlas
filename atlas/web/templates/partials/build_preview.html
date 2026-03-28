@@ -44,7 +44,7 @@
                 <div class="preview-frame-container" id="preview-frame-container">
                 <iframe id="live-preview-frame"
                         class="live-preview-frame"
-                        sandbox="allow-scripts"
+                        sandbox="allow-scripts allow-same-origin"
                         srcdoc="{{ preview.content|e }}"></iframe>
                 </div>
             </div>
@@ -334,6 +334,8 @@
     width: 375px;
     height: 667px;
     border-radius: 20px;
+    /* Force mobile viewport behavior */
+    transform-origin: top center;
 }
 
 .live-preview-frame.tablet {
@@ -850,8 +852,76 @@ function setPreviewDevice(device) {
     if (device === 'mobile') {
         frame.classList.add('mobile');
         container.classList.add('mobile');
+        // Inject responsive styles into iframe for cached content
+        injectResponsiveStyles(frame);
     } else if (device === 'tablet') {
         frame.classList.add('tablet');
+        injectResponsiveStyles(frame);
+    } else {
+        // Desktop - remove injected styles
+        removeResponsiveStyles(frame);
+    }
+}
+
+// Inject responsive CSS into iframe content
+function injectResponsiveStyles(frame) {
+    try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        if (!doc) return;
+
+        // Remove existing injected styles
+        const existing = doc.getElementById('atlas-responsive-inject');
+        if (existing) existing.remove();
+
+        // Inject responsive overrides
+        const style = doc.createElement('style');
+        style.id = 'atlas-responsive-inject';
+        style.textContent = `
+            /* Injected responsive overrides */
+            html, body {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: hidden !important;
+            }
+            img, video, iframe, embed, object {
+                max-width: 100% !important;
+                height: auto !important;
+            }
+            .container, .wrapper, .content, main, section, article, header, footer, nav {
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+            .grid, .row, .flex-container {
+                flex-wrap: wrap !important;
+            }
+            table {
+                max-width: 100% !important;
+                display: block !important;
+                overflow-x: auto !important;
+            }
+            /* Mobile text sizing */
+            body { font-size: 14px !important; }
+            h1 { font-size: 1.75rem !important; }
+            h2 { font-size: 1.5rem !important; }
+            h3 { font-size: 1.25rem !important; }
+            .btn, button { padding: 0.75rem 1rem !important; min-height: 44px !important; }
+        `;
+        doc.head.appendChild(style);
+    } catch (e) {
+        // Cross-origin or sandbox restrictions - styles already in srcdoc
+        console.log('Could not inject responsive styles:', e.message);
+    }
+}
+
+// Remove injected responsive styles
+function removeResponsiveStyles(frame) {
+    try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        if (!doc) return;
+        const existing = doc.getElementById('atlas-responsive-inject');
+        if (existing) existing.remove();
+    } catch (e) {
+        // Ignore cross-origin errors
     }
 }
 
@@ -913,11 +983,22 @@ function printPreview() {
     }
 }
 
-// Initialize syntax highlighting
+// Initialize syntax highlighting and responsive preview
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof hljs !== 'undefined') {
         document.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightElement(block);
+        });
+    }
+
+    // Apply responsive styles when iframe loads (for cached content)
+    const frame = document.getElementById('live-preview-frame');
+    if (frame) {
+        frame.addEventListener('load', function() {
+            // Check if mobile view is active
+            if (frame.classList.contains('mobile') || frame.classList.contains('tablet')) {
+                injectResponsiveStyles(frame);
+            }
         });
     }
 });

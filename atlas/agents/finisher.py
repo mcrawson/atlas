@@ -89,7 +89,7 @@ REQUIRED_DELIVERABLES = {
         },
     },
 
-    ProjectCategory.PHYSICAL: {
+    ProjectCategory.PRINTABLE: {
         "templates": {
             "name": "Print Templates",
             "description": "Complete HTML/PDF templates for all pages",
@@ -210,7 +210,7 @@ POLISH_CHECKLIST = {
         "Front matter (title, copyright) is complete",
     ],
 
-    ProjectCategory.PHYSICAL: [
+    ProjectCategory.PRINTABLE: [
         "Page numbers don't appear on blank pages",
         "Bleed areas are properly defined",
         "Fonts are embedded or converted to outlines",

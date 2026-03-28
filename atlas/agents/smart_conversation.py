@@ -22,6 +22,47 @@ from atlas.projects.idea_types import IdeaTypeDetector, IdeaType, IDEA_CONFIGS
 from atlas.projects.project_types import ProjectTypeDetector, ProjectType, ProjectCategory
 
 
+# Required topics that must be discussed before analysis (by product type)
+REQUIRED_TOPICS = {
+    "printable": {
+        "what_it_is": "What kind of printable (planner, journal, worksheet, etc.)",
+        "who_its_for": "Who will use this and their situation",
+        "problem_solved": "What problem or need it addresses",
+        "key_sections": "Main sections, pages, or components",
+        "how_theyll_use_it": "How and when people will use it",
+        "style_preferences": "Look and feel (minimal, colorful, etc.)",
+        "price_expectations": "What they'd charge or what similar products cost",
+    },
+    "document": {
+        "what_it_is": "Type of document (ebook, guide, workbook, etc.)",
+        "who_its_for": "Target reader and their current situation",
+        "problem_solved": "What transformation or learning it provides",
+        "key_sections": "Main chapters or sections",
+        "format": "Length, format, exercises included",
+        "unique_angle": "What makes this different from other resources",
+        "price_expectations": "Pricing thoughts",
+    },
+    "web": {
+        "what_it_does": "Core function of the site",
+        "who_its_for": "Who will use it and why",
+        "problem_solved": "What problem it solves",
+        "key_features": "Main features for first version",
+        "user_accounts": "Whether people need to sign up/log in",
+        "monetization": "How it makes money (if applicable)",
+        "similar_sites": "Sites that do something similar",
+    },
+    "app": {
+        "what_it_does": "Core function of the app",
+        "who_its_for": "Who will use it",
+        "when_theyd_use_it": "The moment someone opens the app",
+        "key_screens": "Main screens or features",
+        "platform": "iOS, Android, or both",
+        "offline_needs": "Whether it needs to work offline",
+        "similar_apps": "Apps that do something similar",
+    },
+}
+
+
 @dataclass
 class IdeaBrief:
     """A fully fleshed out idea ready for the Architect."""
@@ -47,6 +88,12 @@ class IdeaBrief:
     color_scheme: str = ""  # user's color preferences or theme
     design_inspiration: str = ""  # apps/sites they like, reference examples
     design_priorities: List[str] = field(default_factory=list)  # e.g., ["easy to use", "visually impressive", "fast"]
+    # Topic tracking for thorough conversations
+    topics_covered: Dict[str, bool] = field(default_factory=dict)
+    # Market research (filled by Analyst)
+    competitors: List[str] = field(default_factory=list)
+    price_range: str = ""
+    market_opportunity: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -70,6 +117,10 @@ class IdeaBrief:
             "color_scheme": self.color_scheme,
             "design_inspiration": self.design_inspiration,
             "design_priorities": self.design_priorities,
+            "topics_covered": self.topics_covered,
+            "competitors": self.competitors,
+            "price_range": self.price_range,
+            "market_opportunity": self.market_opportunity,
         }
 
     def is_ready(self) -> bool:
@@ -79,6 +130,9 @@ class IdeaBrief:
     def get_missing_elements(self) -> List[str]:
         """Get list of missing or weak elements."""
         missing = []
+        # CRITICAL: Product format/type should be asked FIRST
+        if not self.project_type and not self.project_category:
+            missing.insert(0, "product format (digital app/website vs physical/printable)")
         if not self.description or len(self.description) < 50:
             missing.append("detailed description")
         if not self.problem_statement:
@@ -94,6 +148,34 @@ class IdeaBrief:
             if not self.design_style and not self.color_scheme:
                 missing.append("design preferences (style, colors, inspiration)")
         return missing
+
+    def get_required_topics(self) -> Dict[str, str]:
+        """Get required topics for this product type."""
+        return REQUIRED_TOPICS.get(self.project_category, REQUIRED_TOPICS.get("printable", {}))
+
+    def get_topics_coverage(self) -> tuple:
+        """Get (covered_count, total_count, percentage) for required topics."""
+        required = self.get_required_topics()
+        if not required:
+            return (0, 0, 100)
+        covered = sum(1 for topic in required if self.topics_covered.get(topic, False))
+        total = len(required)
+        percentage = int((covered / total) * 100) if total > 0 else 100
+        return (covered, total, percentage)
+
+    def get_uncovered_topics(self) -> List[tuple]:
+        """Get list of (topic_key, topic_description) that haven't been covered."""
+        required = self.get_required_topics()
+        uncovered = []
+        for key, description in required.items():
+            if not self.topics_covered.get(key, False):
+                uncovered.append((key, description))
+        return uncovered
+
+    def is_ready_for_analysis(self) -> bool:
+        """Check if enough topics are covered for analysis (at least 80%)."""
+        covered, total, percentage = self.get_topics_coverage()
+        return percentage >= 80
 
 
 @dataclass
@@ -146,36 +228,35 @@ Your job is to understand what they need to write, for whom, and help them struc
         "unknown": """You are a helpful consultant. Start by understanding what the person is trying to accomplish.""",
     }
 
-    SYSTEM_PROMPT = """You are an expert product consultant helping someone clarify their project idea.
+    SYSTEM_PROMPT = """You're helping someone figure out what they want to create. Talk like a friendly person, not a consultant.
 
-Your job is to have a collaborative conversation that transforms a vague idea into a clear, actionable project brief.
+HOW TO TALK:
+- Use plain, everyday language
+- Keep responses short - 2-3 sentences is usually enough
+- Ask one question at a time
+- If their answer is vague, ask a follow-up: "Tell me more about that"
 
-IMPORTANT GUIDELINES:
-- Ask ONE focused question at a time
-- Be conversational and encouraging, not interrogating
-- Dig deeper when answers are vague ("tell me more about...", "what specifically...")
-- Help them think through implications they might not have considered
-- Focus on WHAT and WHY before HOW (technical details come last)
-- For apps/websites: ASK about design preferences before finishing (style, colors, apps they like as inspiration)
+WHAT TO FIND OUT:
+- What are they making? (app, website, printable, guide, etc.)
+- Who is it for?
+- What problem does it solve or what does it help people do?
+- What are the main parts or features?
 
-WHEN THEY ASK FOR YOUR INPUT (e.g., "what do you think?", "any suggestions?", "help me brainstorm"):
-- ALWAYS offer 3-5 concrete suggestions based on what you know about their idea
-- Explain briefly why each suggestion might work for their use case
-- Then ask which ones resonate or if they have other ideas
-- Be a collaborative partner, not just an interviewer
+IF THEY ASK FOR YOUR IDEAS:
+- Give them 2-3 simple suggestions
+- Ask which sounds right to them
 
-WHEN THEY SAY "I don't know" or seem stuck:
-- Offer options: "Based on what you've described, you could..."
-- Give examples from similar projects
-- Help them discover what they want through suggestions
+IF THEY SAY "I don't know":
+- Offer a couple options: "It could be something like X, or maybe Y - which sounds closer?"
+- Help them figure it out, don't just wait for them to know
 
-NEVER:
+DON'T:
+- Use jargon like "users", "target audience", "value proposition", "monetization"
 - Ask multiple questions at once
-- Ignore their questions - if they ask you something, answer it!
-- Move on without acknowledging what they said
-- Be passive when they want your expertise
+- Give long responses
+- Sound like a business consultant
 
-Your response should be natural and conversational, like a helpful colleague who brings ideas to the table."""
+Talk like you're helping a friend figure out their idea over coffee."""
 
     # Type-specific analysis prompts
     ANALYSIS_PROMPTS = {
@@ -212,8 +293,10 @@ Respond with a JSON object containing:
 
 IMPORTANT:
 - The next_question MUST be different from all questions already asked.
+- CRITICAL: If product format is unclear (digital vs physical, app vs web vs printable), ASK ABOUT THIS FIRST before other questions.
 - For apps/websites, ASK about design preferences (style, colors, inspiration) if not yet discussed.
 - If readiness >= 80, set next_question to empty string.
+- Do NOT mark readiness >= 80 until product format is clear.
 
 RESPOND ONLY WITH THE JSON OBJECT.""",
 
@@ -414,10 +497,12 @@ Readiness scoring guidelines:
 - 85-100: Ready for planning
 
 IMPORTANT RULES:
-1. If the user has clearly stated WHAT they want to build and WHO it's for, that's already 60-70% ready
-2. Simple, straightforward ideas should reach 80+ quickly - don't over-complicate
-3. The next_question MUST be different from all questions already asked
-4. If we have enough info (readiness >= 80), set next_question to empty string
+1. CRITICAL: If product FORMAT is unclear (digital vs physical, app vs web vs printable), this MUST be the next_question. Do not proceed without knowing this.
+2. If the user has clearly stated WHAT they want to build, WHO it's for, and WHAT FORMAT, that's 60-70% ready
+3. Simple, straightforward ideas should reach 80+ quickly - don't over-complicate
+4. The next_question MUST be different from all questions already asked
+5. If we have enough info (readiness >= 80), set next_question to empty string
+6. Do NOT set readiness >= 80 until product format is known
 
 RESPOND ONLY WITH THE JSON OBJECT, no other text."""
 
@@ -427,6 +512,7 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
         openai_model: str = "gpt-4o-mini",
         ollama_url: str = "http://localhost:11434",
         ollama_model: str = "llama3",
+        project_identity: Optional[Dict[str, Any]] = None,  # Canonical product type from form
     ):
         # OpenAI config (preferred)
         self.openai_api_key = openai_api_key
@@ -446,6 +532,136 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
         self._project_type_confirmed: bool = False
         # Track which provider we're using
         self._using_openai = bool(openai_api_key)
+        # Canonical project identity from user's explicit selection
+        self._project_identity = project_identity
+        if project_identity:
+            # Pre-populate brief with known product type
+            self.brief.project_category = project_identity.get("product_type", "")
+            self._project_type_confirmed = True  # Don't ask - we already know!
+
+    # Type-specific opening questions
+    # Friendly openers in plain language - no jargon
+    TYPE_SPECIFIC_OPENERS = {
+        "printable": """Nice! I love helping people create printables.
+
+So tell me more about what you're picturing. Is this a planner, a journal, worksheets, something else? And what's it helping people do - stay organized, track something, learn something new?
+
+Paint me a picture of who's going to use this and what problem it solves for them.""",
+
+        "document": """Cool! Let's figure out what you want to create.
+
+Is this like a guide, an ebook, a workbook, or something else? And who's it for - what do you want them to walk away knowing or being able to do?
+
+Tell me more about what you're thinking.""",
+
+        "web": """Awesome! Let's talk about what you want to build.
+
+What's the main thing people will come to your site to do? And who are these people - what problem are you solving for them?
+
+Walk me through what you're imagining.""",
+
+        "app": """Cool! Let's figure out what you want this app to do.
+
+When someone pulls out their phone and opens your app, what are they trying to do? Is it something they'd do every day, once in a while, or just when they need it?
+
+Tell me more about what you're picturing.""",
+    }
+
+    # Type-specific topics to explore (plain language)
+    TYPE_SPECIFIC_TOPICS = {
+        "printable": {
+            1: "what kind of printable this is and what it helps people do",
+            2: "who's going to use this and what their day-to-day life is like",
+            3: "what sections or pages it should have",
+            4: "how it should look - size, style, colors",
+            5: "how people will actually use it - when, how often, where",
+        },
+        "document": {
+            1: "what this guide or ebook is about and what people will learn",
+            2: "who's going to read this and what they're struggling with",
+            3: "what the main sections or chapters should cover",
+            4: "the format - is it a quick read, a detailed guide, a workbook with exercises",
+            5: "what makes this different from other stuff on the topic",
+        },
+        "web": {
+            1: "what the main thing people will do on this site",
+            2: "who's going to use it and what problem it solves for them",
+            3: "what features it needs to have when it first launches",
+            4: "how people will find it and what makes them come back",
+            5: "whether it needs accounts, payments, or other features",
+        },
+        "app": {
+            1: "what the app does and when someone would open it",
+            2: "who's going to use it and what phones they have",
+            3: "what the main screens should be",
+            4: "whether it needs to work offline or connect to other things",
+            5: "what would make people use it regularly",
+        },
+    }
+
+    # Friendly system prompts - talk like a helpful friend, not a consultant
+    TYPE_SPECIFIC_SYSTEM_PROMPTS = {
+        "printable": """You're helping someone figure out what printable they want to create - like a planner, journal, or worksheet.
+
+Talk like a friendly person who's helped create a lot of these before. Use plain, everyday language. No business jargon.
+
+YOUR JOB:
+- Help them get clear on what they're making and who it's for
+- Ask about the practical stuff: What sections should it have? How will people use it day to day?
+- If they're unsure, offer simple suggestions: "A lot of planners have a spot for goals at the top - would that be helpful?"
+- Think about real life: Will they print this at home? How much time do they have to fill it out?
+
+KEEP IT SIMPLE:
+- Short responses, 2-3 sentences usually
+- One question at a time
+- If they give a short answer, ask a follow-up: "Tell me more about that"
+- Use words like "you" and "they" not "users" or "target audience" """,
+
+        "document": """You're helping someone figure out what guide or ebook they want to write.
+
+Talk like a friendly person helping them think it through. Plain language, no marketing speak.
+
+YOUR JOB:
+- Help them get clear on what they're writing and who it's for
+- Ask what readers will learn or be able to do after reading it
+- If they're unsure about structure, offer simple ideas: "Some guides start with the basics, then go deeper - would that work?"
+- Think about their reader: What do they already know? What's confusing them?
+
+KEEP IT SIMPLE:
+- Short responses
+- One question at a time
+- No words like "transformation" or "value proposition" - just talk normally""",
+
+        "web": """You're helping someone figure out what website or web app they want to build.
+
+Talk like a friend who knows about websites. Plain language, no tech jargon unless they use it first.
+
+YOUR JOB:
+- Help them get clear on what the site does and who it's for
+- Ask about the main thing people will do on the site
+- If they mention lots of features, help them focus: "If you could only build one thing first, what would it be?"
+- Think practically: Do people need to log in? Will they come back regularly or just once?
+
+KEEP IT SIMPLE:
+- Short responses
+- One question at a time
+- Say "website" not "platform", "people" not "users" """,
+
+        "app": """You're helping someone figure out what phone app they want to build.
+
+Talk like a friend who knows about apps. Plain language, not technical.
+
+YOUR JOB:
+- Help them get clear on what the app does and who it's for
+- Ask when someone would open this app - what are they trying to do in that moment?
+- If they have lots of ideas, help them focus: "What's the one main thing the app needs to do?"
+- Think about real phone use: Is this something people do every day? While waiting in line? At home?
+
+KEEP IT SIMPLE:
+- Short responses
+- One question at a time
+- Say "phone" not "mobile device", "people" not "users" """,
+    }
 
     async def start(self, initial_idea: str = "") -> str:
         """Start the conversation, optionally with an initial idea."""
@@ -457,7 +673,45 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
                 timestamp=datetime.now().isoformat(),
             ))
 
-            # Detect idea type from initial input
+            # Check if we have a locked project_identity (user already chose product type)
+            if self._project_identity and self._project_identity.get("locked"):
+                product_type = self._project_identity.get("product_type", "")
+                product_name = self._project_identity.get("product_type_name", product_type.title())
+
+                # Set the brief with known type
+                self.brief.project_category = product_type
+                self._project_type_confirmed = True
+                self._type_confirmed = True
+                self._detected_type = IdeaType.PRODUCT
+                self.brief.idea_type = "product"
+                self.brief.idea_type_confidence = 1.0
+
+                # Generate a response that actually acknowledges what they said
+                system_prompt = self.TYPE_SPECIFIC_SYSTEM_PROMPTS.get(product_type, self.SYSTEM_PROMPT)
+
+                first_response_prompt = f"""Someone just told you their idea: "{initial_idea}"
+
+They want to create a {product_name.lower()}.
+
+Write a friendly first response that:
+1. Shows you understood what they said (don't repeat it back word for word, just acknowledge it naturally)
+2. Asks ONE follow-up question to learn more
+
+Keep it short - 2-3 sentences max. Sound like a friend, not a consultant. No jargon."""
+
+                response = await self._call_llm(first_response_prompt, system=system_prompt)
+
+                # Clean up response if needed
+                response = response.strip()
+
+                self.messages.append(ConversationMessage(
+                    role="assistant",
+                    content=response,
+                    timestamp=datetime.now().isoformat(),
+                ))
+                return response
+
+            # No project_identity - use detection (legacy flow)
             detected_type, confidence = self._idea_type_detector.detect(initial_idea)
             self._detected_type = detected_type
             self.brief.idea_type = detected_type.value
@@ -548,22 +802,27 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
             # Update brief from analysis
             self._update_brief(analysis)
 
-            # FORCE MINIMUM PROGRESS: Each exchange adds at least 15% readiness
-            # This prevents the LLM from keeping us stuck at 50%
-            min_readiness = min(user_messages * 15, 100)  # 15% per exchange, max 100
-            if self.brief.readiness_score < min_readiness:
-                print(f"[SmartConversation] Forcing minimum readiness: {self.brief.readiness_score}% -> {min_readiness}%")
-                self.brief.readiness_score = min_readiness
+            # Detect which topics have been covered
+            topics_covered = await self._detect_topics_covered()
+            self.brief.topics_covered.update(topics_covered)
+
+            # Calculate readiness based on topic coverage
+            covered, total, coverage_pct = self.brief.get_topics_coverage()
+
+            # Readiness = topic coverage (main driver)
+            # Give a small boost per message to avoid getting stuck
+            msg_bonus = min(user_messages * 5, 20)  # Up to 20% bonus for engagement
+            self.brief.readiness_score = min(coverage_pct + msg_bonus, 100)
 
             # Log progress
-            print(f"[SmartConversation] Exchange #{user_messages}, Readiness: {self.brief.readiness_score}%, "
-                  f"Missing: {analysis.get('missing_elements', [])}")
+            print(f"[SmartConversation] Exchange #{user_messages}, Topics: {covered}/{total} ({coverage_pct}%), "
+                  f"Readiness: {self.brief.readiness_score}%")
 
-            # HARD CAP: After 5 exchanges, we're done (75% minimum from formula above)
-            if user_messages >= 5:
-                print(f"[SmartConversation] COMPLETE after {user_messages} exchanges!")
+            # Check if all required topics are covered (or max 12 exchanges as safety valve)
+            if coverage_pct >= 100 or user_messages >= 12:
+                print(f"[SmartConversation] COMPLETE - all topics covered!")
                 self.is_complete = True
-                self.brief.readiness_score = max(self.brief.readiness_score, 85)
+                self.brief.readiness_score = max(self.brief.readiness_score, 90)
                 summary = self._generate_summary()
                 self.messages.append(ConversationMessage(
                     role="assistant",
@@ -742,6 +1001,53 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
                 questions.extend([q.strip() for q in found if len(q.strip()) > 10])
         return questions
 
+    async def _detect_topics_covered(self) -> Dict[str, bool]:
+        """Analyze conversation to detect which required topics have been discussed."""
+        required = self.brief.get_required_topics()
+        if not required:
+            return {}
+
+        conversation_text = "\n".join([
+            f"{m.role.upper()}: {m.content}"
+            for m in self.messages
+        ])
+
+        # Build topic list for the prompt
+        topics_list = "\n".join([f"- {key}: {desc}" for key, desc in required.items()])
+
+        prompt = f"""Look at this conversation and determine which topics have been discussed.
+
+CONVERSATION:
+{conversation_text}
+
+TOPICS TO CHECK:
+{topics_list}
+
+For each topic, mark it as true if the conversation has meaningfully discussed it (not just mentioned in passing).
+
+Return a JSON object with each topic key and true/false:
+{{{", ".join([f'"{k}": true/false' for k in required.keys()])}}}
+
+Only return the JSON object, nothing else."""
+
+        try:
+            response = await self._call_llm(
+                prompt,
+                system="You analyze conversations and return JSON. Only output valid JSON."
+            )
+
+            # Parse response
+            response = response.strip()
+            if response.startswith("```"):
+                response = response.split("```")[1]
+                if response.startswith("json"):
+                    response = response[4:]
+
+            return json.loads(response)
+        except Exception as e:
+            print(f"[SmartConversation] Topic detection failed: {e}")
+            return {}
+
     def _get_topics_covered(self) -> List[str]:
         """Determine which conversation topics have been covered."""
         covered = []
@@ -771,9 +1077,13 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
             for m in self.messages[-10:]  # Last 10 messages for context
         ])
 
-        # Get appropriate system prompt based on detected type
-        idea_type_key = self.brief.idea_type if self.brief.idea_type else "unknown"
-        system_prompt = self.SYSTEM_PROMPTS.get(idea_type_key, self.SYSTEM_PROMPTS["unknown"])
+        # Get appropriate system prompt - prefer type-specific prompts when product type is locked
+        if self._project_identity and self._project_identity.get("locked"):
+            product_type = self._project_identity.get("product_type", "")
+            system_prompt = self.TYPE_SPECIFIC_SYSTEM_PROMPTS.get(product_type, self.SYSTEM_PROMPT)
+        else:
+            idea_type_key = self.brief.idea_type if self.brief.idea_type else "unknown"
+            system_prompt = self.SYSTEM_PROMPTS.get(idea_type_key, self.SYSTEM_PROMPTS["unknown"])
 
         # Check if user is asking for suggestions/input
         last_user_msg = ""
@@ -797,81 +1107,71 @@ RESPOND ONLY WITH THE JSON OBJECT, no other text."""
         if self.brief.description:
             known_context += f"\n- Description: {self.brief.description[:150]}"
         if self.brief.target_users:
-            known_context += f"\n- Target users: {self.brief.target_users}"
+            known_context += f"\n- Who it's for: {self.brief.target_users}"
         if self.brief.core_features:
-            known_context += f"\n- Features: {', '.join(self.brief.core_features[:3])}"
+            known_context += f"\n- Key parts: {', '.join(self.brief.core_features[:3])}"
         if self.brief.problem_statement:
-            known_context += f"\n- Problem: {self.brief.problem_statement[:100]}"
+            known_context += f"\n- What it helps with: {self.brief.problem_statement[:100]}"
 
-        # Track topics already covered
-        topics_covered = self._get_topics_covered()
-        if topics_covered:
-            known_context += f"\n\n## Topics already covered (DO NOT ask about these again):\n- " + "\n- ".join(topics_covered)
+        # Show topic progress
+        covered, total, coverage_pct = self.brief.get_topics_coverage()
+        uncovered_topics = self.brief.get_uncovered_topics()
+
+        if self.brief.topics_covered:
+            covered_list = [k for k, v in self.brief.topics_covered.items() if v]
+            if covered_list:
+                known_context += f"\n\n## Topics we've covered ({covered}/{total}):\n- " + "\n- ".join(covered_list)
+
+        if uncovered_topics:
+            known_context += f"\n\n## Topics we still need to discuss:\n- " + "\n- ".join([desc for _, desc in uncovered_topics])
 
         # Track questions already asked
         questions_asked = self._extract_questions_asked()
         if questions_asked:
-            # Show last few questions to avoid repetition
             recent_questions = questions_asked[-5:]
-            known_context += f"\n\n## Questions already asked (DO NOT repeat or rephrase these):\n- " + "\n- ".join(recent_questions)
+            known_context += f"\n\n## Questions already asked (don't repeat):\n- " + "\n- ".join(recent_questions)
 
-        # Define topic progression - each exchange focuses on a NEW topic
-        topics_by_exchange = {
-            1: "the core idea and what problem it solves",
-            2: "who will use this and why they need it",
-            3: "the main features or components",
-            4: "scope and priorities (MVP vs full version)",
-            5: "any technical preferences or constraints",
-        }
-
-        # Skip topics that are already covered
-        current_topic = None
-        for ex_num in range(exchange_number, 6):
-            topic = topics_by_exchange.get(ex_num, "")
-            # Check if this topic overlaps with covered topics
-            topic_covered = False
-            for covered in topics_covered:
-                if any(word in covered.lower() for word in topic.lower().split()[:3]):
-                    topic_covered = True
-                    break
-            if not topic_covered:
-                current_topic = topic
-                break
-
-        if not current_topic:
-            current_topic = "confirming understanding and wrapping up"
+        # Get the next uncovered topic to focus on
+        if uncovered_topics:
+            next_topic_key, next_topic_desc = uncovered_topics[0]
+            current_topic = next_topic_desc
+        else:
+            current_topic = "wrapping up - we've covered everything"
 
         if asking_for_input:
-            # User wants suggestions - be collaborative!
-            prompt = f"""The user is asking for YOUR input/suggestions. This is your chance to be helpful!
+            # User wants suggestions
+            prompt = f"""They're asking for your ideas or suggestions. Give them 2-3 simple options.
 
 Previous messages:
 {conversation_text}
 {known_context}
 
-IMPORTANT: The user asked for your suggestions. You MUST:
-1. Offer 3-5 specific, concrete suggestions based on what you know about their project
-2. Briefly explain why each suggestion could work for their use case
-3. Ask which ones resonate with them (or if they have other ideas)
+Give 2-3 short suggestions based on what they've told you. Keep it simple - one sentence each. Then ask which sounds right.
 
-Be a collaborative partner! Share your expertise. Don't just ask another question."""
+Talk like a friend, not a consultant. No jargon."""
         else:
-            # Normal conversation - focus on the current topic for this exchange
-            prompt = f"""Continue this conversation naturally. This is exchange #{exchange_number}.
+            # Regular conversation flow
+            prompt = f"""Keep the conversation going naturally.
 
 Previous messages:
 {conversation_text}
 {known_context}
 
-YOUR TASK FOR THIS EXCHANGE: Focus on {current_topic}
+FOCUS ON: {current_topic}
 
-CRITICAL RULES:
-1. NEVER ask about topics listed in "Topics already covered" - we have that info
-2. NEVER repeat or rephrase questions listed in "Questions already asked"
-3. Ask ONE new question about {current_topic}
-4. Acknowledge what they just said before asking your question
-5. Keep it conversational and brief (2-3 sentences max)
-6. If we have enough info, say so and summarize instead of asking more questions"""
+HOW TO RESPOND:
+- React to what they just said (don't just say "great!" - actually respond to it)
+- Ask ONE follow-up question about {current_topic}
+- Keep it short - 2-3 sentences max
+- If they gave a short answer, ask them to tell you more
+- If they seem unsure, give them a couple options to pick from
+
+TALK LIKE A FRIEND:
+- Say "you" and "people" not "users"
+- No jargon like "target audience" or "use case"
+- Short, casual sentences
+
+DON'T ask about things in "Topics already covered" - we know those already."""
 
         return await self._call_llm(prompt, system=system_prompt)
 
@@ -979,12 +1279,21 @@ This is ready for Sketch to create a detailed plan. Click "{type_labels['action'
             "confirmed": self._type_confirmed,
         } if config else None
 
+        # Get topic coverage
+        covered, total, coverage_pct = self.brief.get_topics_coverage()
+        required_topics = self.brief.get_required_topics()
+
+        # Include required topics in brief for template
+        brief_dict = self.brief.to_dict()
+        brief_dict["required_topics"] = required_topics
+        brief_dict["topics_coverage_pct"] = coverage_pct
+
         if self.is_complete:
             return {
                 "complete": True,
                 "stage": "complete",
                 "summary": self._generate_summary(),
-                "brief": self.brief.to_dict(),
+                "brief": brief_dict,
                 "idea_type": type_info,
             }
 
@@ -999,7 +1308,7 @@ This is ready for Sketch to create a detailed plan. Click "{type_labels['action'
             "stage": "conversation",
             "question": last_assistant or "Tell me about your idea...",
             "readiness_score": self.brief.readiness_score,
-            "brief": self.brief.to_dict(),
+            "brief": brief_dict,
             "idea_type": type_info,
         }
 
@@ -1013,6 +1322,7 @@ This is ready for Sketch to create a detailed plan. Click "{type_labels['action'
             "messages": self.get_messages(),
             "brief": self.brief.to_dict(),
             "is_complete": self.is_complete,
+            "project_identity": self._project_identity,
         }
 
     @classmethod
@@ -1023,13 +1333,18 @@ This is ready for Sketch to create a detailed plan. Click "{type_labels['action'
         openai_model: str = "gpt-4o-mini",
         ollama_url: str = "http://localhost:11434",
         ollama_model: str = "llama3",
+        project_identity: Dict[str, Any] = None,
     ) -> "SmartIdeaConversation":
         """Deserialize conversation state."""
+        # Use passed project_identity OR restore from serialized data
+        identity = project_identity or data.get("project_identity")
+
         conv = cls(
             openai_api_key=openai_api_key,
             openai_model=openai_model,
             ollama_url=ollama_url,
             ollama_model=ollama_model,
+            project_identity=identity,
         )
 
         # Restore messages

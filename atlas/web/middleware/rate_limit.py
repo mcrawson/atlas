@@ -18,11 +18,11 @@ class RateLimitConfig:
     """Configuration for rate limiting."""
 
     # Requests per window
-    requests_per_minute: int = 60
-    requests_per_hour: int = 1000
+    requests_per_minute: int = 120
+    requests_per_hour: int = 3000
 
     # Burst allowance (extra requests allowed in short bursts)
-    burst_size: int = 10
+    burst_size: int = 30
 
     # Paths to exclude from rate limiting
     excluded_paths: list[str] = field(default_factory=lambda: [
@@ -31,6 +31,8 @@ class RateLimitConfig:
         "/api/redoc",
         "/api/openapi.json",
         "/static",
+        "/projects",  # Exclude project pages during development
+        "/ws",        # Exclude WebSocket connections
     ])
 
     # Paths with stricter limits (expensive operations)

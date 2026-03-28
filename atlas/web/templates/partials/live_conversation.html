@@ -1,0 +1,818 @@
+<!-- Live Agent Conversation - WebSocket powered with streaming and user participation -->
+<div id="live-conversation" class="live-conversation">
+    <div class="conv-header">
+        <div class="conv-title">
+            <span class="conv-icon">💬</span>
+            <h3>Agent Conversation</h3>
+            <span id="connection-status" class="status-badge status-disconnected">Disconnected</span>
+        </div>
+        <div class="conv-controls">
+            <button type="button" class="btn btn-sm" onclick="toggleAutoScroll()">
+                <span id="autoscroll-icon">🔽</span> Auto-scroll
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div id="build-progress" class="build-progress" style="display: none;">
+        <div class="progress-header">
+            <span id="progress-phase">Phase</span>
+            <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div id="progress-action" class="progress-action">Starting...</div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages-container" class="messages-container">
+        <div id="messages" class="messages">
+            <!-- Messages will be inserted here -->
+            <div class="message message-system">
+                <div class="message-content">
+                    Waiting for connection...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Input Area -->
+    <div id="user-input-area" class="user-input-area">
+        <textarea
+            id="user-message"
+            placeholder="Join the conversation... (Press Enter to send)"
+            rows="2"
+            onkeydown="handleUserInputKeydown(event)"
+        ></textarea>
+        <button type="button" class="btn btn-primary btn-send" onclick="sendUserMessage()">
+            Send
+        </button>
+    </div>
+
+    <!-- Actions -->
+    <div class="conv-actions">
+        <button type="button"
+                id="start-build-btn"
+                class="btn btn-success"
+                onclick="startBuild()">
+            🚀 Start Agent Build
+        </button>
+        <button type="button"
+                class="btn btn-secondary"
+                onclick="reconnect()">
+            🔄 Reconnect
+        </button>
+    </div>
+</div>
+
+<style>
+.live-conversation {
+    background: #0d0d12;
+    border-radius: 8px;
+    padding: 20px;
+    color: #e0e0e0;
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 700px;
+}
+
+.conv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 16px;
+}
+
+.conv-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.conv-icon {
+    font-size: 24px;
+}
+
+.conv-title h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #fff;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.status-connected {
+    background: rgba(0, 255, 65, 0.2);
+    color: #00ff41;
+}
+
+.status-disconnected {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
+.status-connecting {
+    background: rgba(255, 200, 0, 0.2);
+    color: #ffc800;
+}
+
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #a0a0a0;
+    cursor: pointer;
+}
+
+.btn-sm:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Progress Bar */
+.build-progress {
+    background: rgba(0, 170, 255, 0.1);
+    border: 1px solid rgba(0, 170, 255, 0.2);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+#progress-phase {
+    color: #00aaff;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+#progress-percent {
+    color: #808080;
+}
+
+.progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00aaff, #00ff41);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.progress-action {
+    font-size: 11px;
+    color: #808080;
+    margin-top: 6px;
+}
+
+/* Messages */
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.messages {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 8px;
+}
+
+.message {
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message-system {
+    background: rgba(100, 100, 100, 0.1);
+    border-left-color: #808080;
+}
+
+.message-discussion {
+    background: rgba(0, 170, 255, 0.1);
+    border-left-color: #00aaff;
+}
+
+.message-decision {
+    background: rgba(0, 255, 65, 0.1);
+    border-left-color: #00ff41;
+}
+
+.message-progress {
+    background: rgba(156, 39, 176, 0.1);
+    border-left-color: #9c27b0;
+}
+
+.message-qc_report {
+    background: rgba(255, 87, 34, 0.1);
+    border-left-color: #ff5722;
+}
+
+.message-handoff {
+    background: rgba(103, 58, 183, 0.1);
+    border-left-color: #673ab7;
+}
+
+.message-deliverable {
+    background: rgba(76, 175, 80, 0.1);
+    border-left-color: #4caf50;
+}
+
+.message-user {
+    background: rgba(255, 193, 7, 0.1);
+    border-left-color: #ffc107;
+}
+
+.message-interruption {
+    background: rgba(255, 87, 34, 0.15);
+    border-left-color: #ff9800;
+}
+
+.message-concern {
+    background: rgba(244, 67, 54, 0.1);
+    border-left-color: #f44336;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.sender {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.sender-director { color: #00aaff; }
+.sender-planner { color: #2196f3; }
+.sender-qc { color: #ff5722; }
+.sender-user { color: #ffc107; }
+.sender-expert_printable,
+.sender-expert_document,
+.sender-expert_web,
+.sender-expert_app { color: #ce93d8; }
+.sender-builder_printable,
+.sender-builder_document,
+.sender-builder_web,
+.sender-builder_app { color: #4caf50; }
+
+.sender-icon {
+    font-size: 16px;
+}
+
+.message-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(255, 255, 255, 0.1);
+    color: #808080;
+}
+
+.timestamp {
+    font-size: 11px;
+    color: #606060;
+    margin-left: auto;
+}
+
+.message-content {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #c0c0c0;
+    white-space: pre-wrap;
+}
+
+/* Streaming message */
+.message-streaming .message-content {
+    border-right: 2px solid #00aaff;
+    animation: cursor-blink 1s infinite;
+}
+
+@keyframes cursor-blink {
+    0%, 100% { border-right-color: #00aaff; }
+    50% { border-right-color: transparent; }
+}
+
+/* User Input Area */
+.user-input-area {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+.user-input-area textarea {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 10px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 13px;
+    resize: none;
+}
+
+.user-input-area textarea:focus {
+    outline: none;
+    border-color: #00aaff;
+}
+
+.user-input-area textarea::placeholder {
+    color: #606060;
+}
+
+.btn-send {
+    background: #00aaff;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn-send:hover {
+    background: #33bbff;
+}
+
+/* Actions */
+.conv-actions {
+    display: flex;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #00ff41, #00cc33);
+    color: #000;
+}
+
+.btn-success:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+}
+
+.btn-success:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0a0;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Scrollbar */
+.messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #a0a0a0;
+    animation: fadeIn 0.2s ease;
+}
+
+.typing-indicator .sender-icon {
+    font-size: 14px;
+}
+
+.typing-indicator .typing-name {
+    color: #00aaff;
+    font-weight: 500;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    margin-left: 4px;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    background: #808080;
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+}
+</style>
+
+<script>
+// WebSocket connection
+let socket = null;
+let autoScroll = true;
+let projectId = {{ project_id }};
+
+// Track active typing indicators and streaming messages
+let activeTyping = {};
+let streamingMessages = {};
+
+// Agent icons
+const agentIcons = {
+    'director': '🎬',
+    'planner': '📋',
+    'qc': '✅',
+    'user': '👤',
+    'expert_printable': '🧠',
+    'expert_document': '🧠',
+    'expert_web': '🧠',
+    'expert_app': '🧠',
+    'builder_printable': '🎨',
+    'builder_document': '📚',
+    'builder_web': '🌐',
+    'builder_app': '📱',
+    'system': '🔔'
+};
+
+function connect() {
+    const statusEl = document.getElementById('connection-status');
+    statusEl.textContent = 'Connecting...';
+    statusEl.className = 'status-badge status-connecting';
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/projects/${projectId}/conversation`;
+
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = function() {
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'status-badge status-connected';
+        addMessage({
+            sender: 'system',
+            content: 'Connected to agent conversation stream',
+            message_type: 'system'
+        });
+    };
+
+    socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleMessage(data);
+    };
+
+    socket.onclose = function() {
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = 'status-badge status-disconnected';
+        // Clear typing indicators on disconnect
+        Object.keys(activeTyping).forEach(agent => hideTypingIndicator(agent));
+    };
+
+    socket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+        statusEl.textContent = 'Error';
+        statusEl.className = 'status-badge status-disconnected';
+    };
+}
+
+function reconnect() {
+    if (socket) {
+        socket.close();
+    }
+    connect();
+}
+
+function handleMessage(data) {
+    switch(data.type) {
+        case 'agent_message':
+            // Finalize any streaming message for this agent
+            finalizeStreamingMessage(data.sender);
+            addMessage(data);
+            break;
+        case 'status_update':
+            updateProgress(data);
+            break;
+        case 'deliverable':
+            addDeliverable(data);
+            break;
+        case 'typing':
+            showTypingIndicator(data.agent);
+            break;
+        case 'typing_stop':
+            hideTypingIndicator(data.agent);
+            break;
+        case 'text_chunk':
+            appendTextChunk(data.agent, data.text);
+            break;
+        case 'connected':
+            console.log('Connection confirmed');
+            break;
+        case 'ping':
+            socket.send(JSON.stringify({type: 'pong'}));
+            break;
+        case 'error':
+            addMessage({
+                sender: 'system',
+                content: `Error: ${data.message}`,
+                message_type: 'system'
+            });
+            break;
+    }
+}
+
+function showTypingIndicator(agent) {
+    if (activeTyping[agent]) return;
+
+    const messagesEl = document.getElementById('messages');
+    const indicator = document.createElement('div');
+    indicator.id = `typing-${agent}`;
+    indicator.className = 'typing-indicator';
+
+    const icon = agentIcons[agent] || '🤖';
+    indicator.innerHTML = `
+        <span class="sender-icon">${icon}</span>
+        <span class="typing-name">${formatSender(agent)}</span>
+        <span>is typing</span>
+        <div class="typing-dots">
+            <span></span><span></span><span></span>
+        </div>
+    `;
+
+    messagesEl.appendChild(indicator);
+    activeTyping[agent] = indicator;
+    scrollToBottom();
+}
+
+function hideTypingIndicator(agent) {
+    if (activeTyping[agent]) {
+        activeTyping[agent].remove();
+        delete activeTyping[agent];
+    }
+}
+
+function appendTextChunk(agent, text) {
+    // Hide typing indicator when text starts streaming
+    hideTypingIndicator(agent);
+
+    // Get or create streaming message element
+    let msgEl = streamingMessages[agent];
+
+    if (!msgEl) {
+        msgEl = createStreamingMessage(agent);
+        streamingMessages[agent] = msgEl;
+    }
+
+    // Append text
+    const contentEl = msgEl.querySelector('.message-content');
+    contentEl.textContent += text;
+    scrollToBottom();
+}
+
+function createStreamingMessage(agent) {
+    const messagesEl = document.getElementById('messages');
+    const messageEl = document.createElement('div');
+    messageEl.id = `streaming-${agent}`;
+    messageEl.className = 'message message-discussion message-streaming';
+
+    const icon = agentIcons[agent] || '🤖';
+    const timestamp = new Date().toLocaleTimeString();
+
+    messageEl.innerHTML = `
+        <div class="message-header">
+            <span class="sender-icon">${icon}</span>
+            <span class="sender sender-${agent}">${formatSender(agent)}</span>
+            <span class="message-type-badge">streaming</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <div class="message-content"></div>
+    `;
+
+    messagesEl.appendChild(messageEl);
+    return messageEl;
+}
+
+function finalizeStreamingMessage(agent) {
+    const msgEl = streamingMessages[agent];
+    if (msgEl) {
+        msgEl.classList.remove('message-streaming');
+        const badge = msgEl.querySelector('.message-type-badge');
+        if (badge) badge.textContent = 'discussion';
+        delete streamingMessages[agent];
+    }
+}
+
+function addMessage(msg) {
+    const messagesEl = document.getElementById('messages');
+    const container = document.getElementById('messages-container');
+
+    // Remove "waiting" message if present
+    const waitingMsg = messagesEl.querySelector('.message-content:only-child');
+    if (waitingMsg && waitingMsg.textContent.includes('Waiting')) {
+        waitingMsg.parentElement.remove();
+    }
+
+    const messageEl = document.createElement('div');
+    messageEl.className = `message message-${msg.message_type || 'discussion'}`;
+
+    const icon = agentIcons[msg.sender] || '🤖';
+    const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+
+    messageEl.innerHTML = `
+        <div class="message-header">
+            <span class="sender-icon">${icon}</span>
+            <span class="sender sender-${msg.sender}">${formatSender(msg.sender)}</span>
+            <span class="message-type-badge">${msg.message_type || 'message'}</span>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <div class="message-content">${escapeHtml(msg.content)}</div>
+    `;
+
+    messagesEl.appendChild(messageEl);
+
+    if (autoScroll) {
+        scrollToBottom();
+    }
+}
+
+function scrollToBottom() {
+    const container = document.getElementById('messages-container');
+    container.scrollTop = container.scrollHeight;
+}
+
+function formatSender(sender) {
+    if (!sender) return 'Unknown';
+    return sender
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateProgress(status) {
+    const progressEl = document.getElementById('build-progress');
+    progressEl.style.display = 'block';
+
+    document.getElementById('progress-phase').textContent = status.phase;
+    document.getElementById('progress-percent').textContent = status.progress + '%';
+    document.getElementById('progress-fill').style.width = status.progress + '%';
+    document.getElementById('progress-action').textContent = status.current_action;
+}
+
+function addDeliverable(data) {
+    addMessage({
+        sender: 'system',
+        content: `📦 Deliverable ready: ${data.name}\n\nPreview: ${data.preview_url}`,
+        message_type: 'deliverable'
+    });
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    document.getElementById('autoscroll-icon').textContent = autoScroll ? '🔽' : '⏸️';
+}
+
+// User message handling
+function handleUserInputKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendUserMessage();
+    }
+}
+
+function sendUserMessage() {
+    const textarea = document.getElementById('user-message');
+    const content = textarea.value.trim();
+
+    if (!content) return;
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        addMessage({
+            sender: 'system',
+            content: 'Not connected. Please reconnect and try again.',
+            message_type: 'system'
+        });
+        return;
+    }
+
+    // Send to server
+    socket.send(JSON.stringify({
+        type: 'user_message',
+        content: content
+    }));
+
+    // Clear input
+    textarea.value = '';
+}
+
+async function startBuild() {
+    const btn = document.getElementById('start-build-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Building...';
+
+    try {
+        const response = await fetch(`/projects/${projectId}/start-director`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to start build');
+        }
+
+        const result = await response.json();
+        console.log('Build started:', result);
+
+    } catch (error) {
+        console.error('Error starting build:', error);
+        addMessage({
+            sender: 'system',
+            content: `Error: ${error.message}`,
+            message_type: 'system'
+        });
+        btn.disabled = false;
+        btn.textContent = '🚀 Start Agent Build';
+    }
+}
+
+// Connect - handle both initial page load and HTMX dynamic loading
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        connect();
+    });
+} else {
+    // DOM already loaded (HTMX dynamic insert)
+    connect();
+}
+</script>

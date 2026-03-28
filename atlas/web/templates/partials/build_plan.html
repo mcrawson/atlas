@@ -1,0 +1,551 @@
+<!-- Build Plan Display Partial -->
+<div id="build-plan" class="build-plan">
+    {% if plan %}
+    <div class="plan-header">
+        <div class="plan-title">
+            <h2>{{ plan.project_name or 'Build Plan' }}</h2>
+            <span class="product-type-badge">{{ plan.product_type | upper }}</span>
+        </div>
+        <p class="plan-summary">{{ plan.summary }}</p>
+    </div>
+
+    <!-- Time Estimate -->
+    {% if plan.total_estimated_time %}
+    <div class="time-estimate">
+        <span class="time-icon">👤</span>
+        <span>Human Equivalent: <strong>{{ plan.total_estimated_time }}</strong></span>
+        <span class="time-note">(what this would take a developer to build manually)</span>
+    </div>
+    {% endif %}
+
+    <!-- Phases -->
+    <div class="plan-section">
+        <h3>Build Phases ({{ plan.phases | length }})</h3>
+        <div class="phases-timeline">
+            {% for phase in plan.phases %}
+            <div class="phase-item {% if phase.qc_checkpoint %}has-qc{% endif %}">
+                <div class="phase-marker">
+                    <span class="phase-number">{{ loop.index }}</span>
+                    {% if phase.qc_checkpoint %}
+                    <span class="qc-marker" title="QC Checkpoint">✅</span>
+                    {% endif %}
+                </div>
+                <div class="phase-content">
+                    <div class="phase-header">
+                        <h4>{{ phase.name }}</h4>
+                        {% if phase.estimated_time %}
+                        <span class="phase-time" title="Human equivalent time">👤 {{ phase.estimated_time }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="phase-description">{{ phase.description }}</p>
+                    {% if phase.deliverables %}
+                    <div class="phase-deliverables">
+                        <strong>Deliverables:</strong>
+                        <ul>
+                            {% for deliverable in phase.deliverables %}
+                            <li>{{ deliverable }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    {% if phase.dependencies %}
+                    <div class="phase-dependencies">
+                        <span>Depends on: {{ phase.dependencies | join(', ') }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Success Criteria -->
+    {% if plan.success_criteria %}
+    <div class="plan-section">
+        <h3>Success Criteria</h3>
+        <ul class="criteria-list">
+            {% for criterion in plan.success_criteria %}
+            <li>
+                <span class="criterion-check">☐</span>
+                {{ criterion }}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Risks -->
+    {% if plan.risks %}
+    <div class="plan-section risks-section">
+        <h3>Risks & Mitigations</h3>
+        <div class="risks-list">
+            {% for risk in plan.risks %}
+            <div class="risk-item">
+                <div class="risk-header">
+                    <span class="risk-icon">⚠️</span>
+                    <span class="risk-text">{{ risk.risk }}</span>
+                </div>
+                {% if risk.mitigation %}
+                <div class="risk-mitigation">
+                    <strong>Mitigation:</strong> {{ risk.mitigation }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tools Needed -->
+    {% if plan.tools_needed %}
+    <div class="plan-section">
+        <h3>Tools & Technologies</h3>
+        <div class="tools-list">
+            {% for tool in plan.tools_needed %}
+            <span class="tool-badge">{{ tool }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Notes -->
+    {% if plan.notes %}
+    <div class="plan-section">
+        <h3>Notes</h3>
+        <p class="plan-notes">{{ plan.notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="plan-actions">
+        <form action="/projects/{{ project_id }}/approve-plan" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-success">
+                ✓ Approve Plan & Start Build
+            </button>
+        </form>
+        <button type="button"
+                class="btn btn-qc"
+                hx-post="/projects/{{ project_id }}/qc-plan"
+                hx-target="#plan-qc-report-container"
+                hx-swap="innerHTML"
+                hx-indicator="#qc-indicator">
+            ✅ Run QC Check
+        </button>
+        <span id="qc-indicator" class="htmx-indicator">Checking...</span>
+    </div>
+
+    <!-- QC Report Container (inside plan) -->
+    <div id="plan-qc-report-container"></div>
+
+    {% else %}
+    <div class="plan-empty">
+        <span class="empty-icon">📋</span>
+        <h3>No Build Plan Yet</h3>
+        <p>The Planner will create a build plan based on the Business Brief.</p>
+        <button type="button"
+                class="btn btn-primary"
+                hx-post="/projects/{{ project_id }}/start-planning"
+                hx-target="#build-plan"
+                hx-swap="outerHTML"
+                hx-indicator="#planning-indicator">
+            📋 Create Build Plan
+        </button>
+        <span id="planning-indicator" class="htmx-indicator">Planning...</span>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.build-plan {
+    background: #0d0d12;
+    border-radius: 8px;
+    padding: 24px;
+    color: #e0e0e0;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.plan-header {
+    margin-bottom: 24px;
+}
+
+.plan-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.plan-title h2 {
+    margin: 0;
+    font-size: 22px;
+    color: #fff;
+}
+
+.product-type-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    background: rgba(33, 150, 243, 0.2);
+    color: #64b5f6;
+}
+
+.plan-summary {
+    font-size: 14px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.time-estimate {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(0, 170, 255, 0.1);
+    border: 1px solid rgba(0, 170, 255, 0.2);
+    border-radius: 6px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    color: #a0a0a0;
+}
+
+.time-estimate strong {
+    color: #00aaff;
+}
+
+.time-note {
+    font-size: 12px;
+    color: #666;
+    margin-left: 8px;
+}
+
+.plan-section {
+    margin-bottom: 24px;
+}
+
+.plan-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Phases Timeline */
+.phases-timeline {
+    position: relative;
+}
+
+.phase-item {
+    display: flex;
+    gap: 16px;
+    padding-bottom: 24px;
+    position: relative;
+}
+
+.phase-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 40px;
+    bottom: 0;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.phase-item.has-qc:not(:last-child)::before {
+    background: linear-gradient(to bottom, rgba(0, 255, 65, 0.3), rgba(255, 255, 255, 0.1));
+}
+
+.phase-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 40px;
+}
+
+.phase-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(33, 150, 243, 0.2);
+    border: 2px solid #2196f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: #64b5f6;
+}
+
+.has-qc .phase-number {
+    background: rgba(0, 255, 65, 0.1);
+    border-color: #00ff41;
+    color: #00ff41;
+}
+
+.qc-marker {
+    font-size: 14px;
+}
+
+.phase-content {
+    flex: 1;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.phase-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.phase-header h4 {
+    margin: 0;
+    font-size: 15px;
+    color: #e0e0e0;
+}
+
+.phase-time {
+    font-size: 12px;
+    color: #808080;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.phase-description {
+    font-size: 13px;
+    color: #a0a0a0;
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+}
+
+.phase-deliverables {
+    margin-bottom: 8px;
+}
+
+.phase-deliverables strong {
+    font-size: 12px;
+    color: #808080;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.phase-deliverables ul {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.phase-deliverables li {
+    font-size: 12px;
+    color: #00ff41;
+    padding: 2px 0;
+}
+
+.phase-dependencies {
+    font-size: 11px;
+    color: #808080;
+}
+
+/* Success Criteria */
+.criteria-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.criteria-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 13px;
+    color: #a0a0a0;
+}
+
+.criterion-check {
+    color: #808080;
+}
+
+/* Risks */
+.risks-section {
+    background: rgba(255, 100, 0, 0.05);
+    border: 1px solid rgba(255, 100, 0, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.risks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.risk-item {
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.risk-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.risk-text {
+    font-size: 13px;
+    color: #ffaa66;
+}
+
+.risk-mitigation {
+    font-size: 12px;
+    color: #a0a0a0;
+    padding-left: 24px;
+}
+
+/* Tools */
+.tools-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tool-badge {
+    padding: 6px 12px;
+    background: rgba(156, 39, 176, 0.2);
+    border: 1px solid rgba(156, 39, 176, 0.3);
+    border-radius: 16px;
+    font-size: 12px;
+    color: #ce93d8;
+}
+
+/* Notes */
+.plan-notes {
+    font-size: 13px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Actions */
+.plan-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.plan-actions .btn {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #00ff41, #00cc33);
+    color: #000;
+}
+
+.btn-success:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+}
+
+.btn-qc {
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    color: #fff;
+}
+
+.btn-qc:hover {
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
+}
+
+/* Empty State */
+.plan-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.plan-empty .empty-icon {
+    font-size: 48px;
+    opacity: 0.5;
+}
+
+.plan-empty h3 {
+    color: #808080;
+    margin: 16px 0 8px;
+}
+
+.plan-empty p {
+    color: #606060;
+    margin-bottom: 24px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2196f3, #1976d2);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 20px rgba(33, 150, 243, 0.4);
+}
+
+.htmx-indicator {
+    display: none;
+    margin-left: 12px;
+    color: #00aaff;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+</style>
+
+<script>
+// Fallback for QC button if HTMX doesn't work on dynamically loaded content
+document.querySelectorAll('.btn-qc').forEach(btn => {
+    btn.addEventListener('click', async function(e) {
+        const projectId = '{{ project_id }}';
+        const container = document.getElementById('plan-qc-report-container');
+        const indicator = document.getElementById('qc-indicator');
+
+        if (indicator) indicator.style.display = 'inline';
+        this.disabled = true;
+
+        try {
+            const response = await fetch(`/projects/${projectId}/qc-plan`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+            const html = await response.text();
+            if (container) container.innerHTML = html;
+        } catch (err) {
+            console.error('QC check failed:', err);
+            if (container) container.innerHTML = '<div class="error">QC check failed. Please try again.</div>';
+        } finally {
+            if (indicator) indicator.style.display = 'none';
+            this.disabled = false;
+        }
+    });
+});
+</script>

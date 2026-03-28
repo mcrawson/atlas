@@ -137,7 +137,13 @@ class ResearchAugmenter:
 
         Returns list of (query, category) tuples.
         """
-        text_lower = text.lower()
+        # Include context values in the text we scan for patterns
+        combined_text = text
+        if context:
+            for key, value in context.items():
+                if isinstance(value, str):
+                    combined_text += f" {value}"
+        text_lower = combined_text.lower()
         context = context or {}
 
         # Get current year for query templates
@@ -179,7 +185,15 @@ class ResearchAugmenter:
         max_results: int = 3,
     ) -> ResearchResult:
         """Execute a single research query."""
-        return await self.searcher.search(query, category, max_results)
+        try:
+            return await self.searcher.search(query, category, max_results)
+        except Exception as e:
+            return ResearchResult(
+                query=query,
+                category=category,
+                results=[],
+                error=str(e),
+            )
 
     async def research_multiple(
         self,

@@ -3532,6 +3532,74 @@ select {
     margin-top: 1rem;
 }
 
+/* Product Type Selector */
+.product-type-selector {
+    margin-top: 1.5rem;
+}
+
+.product-type-selector > label {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+}
+
+.type-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+}
+
+.type-option input[type="radio"] {
+    display: none;
+}
+
+.type-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    background: var(--bg-card);
+    border: 2px solid var(--border-default);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.type-card:hover {
+    border-color: var(--accent-green-muted);
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.type-option input[type="radio"]:checked + .type-card {
+    border-color: var(--accent-green);
+    background: rgba(0, 255, 65, 0.1);
+}
+
+.type-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.type-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.type-desc {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+@media (max-width: 600px) {
+    .type-options {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 /* ==================== Features Grid ==================== */
 .features-grid {
     display: grid;

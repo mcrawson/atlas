@@ -82,22 +82,22 @@ PRODUCT_INTEGRATIONS = {
         "publish": ["etsy", "gumroad"],
         "needs_cover": True,
     },
-    "physical_planner": {
+    "printable_planner": {
         "design": ["canva"],
         "publish": ["etsy", "gumroad"],
         "needs_cover": True,
     },
-    "physical_cards": {
+    "printable_cards": {
         "design": ["canva"],
         "publish": ["etsy", "gumroad"],
         "needs_cover": False,
     },
-    "physical_worksheet": {
+    "printable_worksheet": {
         "design": ["canva"],
         "publish": ["etsy", "gumroad"],
         "needs_cover": False,
     },
-    "physical_journal": {
+    "printable_journal": {
         "design": ["canva"],
         "publish": ["etsy", "gumroad", "amazon_kdp"],
         "needs_cover": True,

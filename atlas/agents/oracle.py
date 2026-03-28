@@ -146,7 +146,7 @@ TYPE_VERIFICATION = {
 - [ ] Credentials handled securely
 """,
 
-    ProjectCategory.PHYSICAL: """
+    ProjectCategory.PRINTABLE: """
 ## Physical Product Verification
 
 ### Print Quality

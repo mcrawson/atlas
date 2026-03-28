@@ -40,6 +40,20 @@ class ValidationResult:
     def warning_count(self) -> int:
         return sum(1 for i in self.issues if i.severity == "warning")
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "passed": self.passed,
+            "score": self.score,
+            "issues": [
+                {"severity": i.severity, "message": i.message, "file": i.file, "line": i.line}
+                for i in self.issues
+            ],
+            "summary": self.summary,
+            "error_count": self.error_count,
+            "warning_count": self.warning_count,
+        }
+
 
 class CodeValidator:
     """Validates code files for quality and runnability."""

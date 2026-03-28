@@ -1,0 +1,296 @@
+<!-- Agent Conversation Log Partial -->
+<div id="conversation-log" class="conversation-log">
+    <div class="log-header">
+        <h3>Agent Conversation</h3>
+        <span class="participant-count">{{ conversation.participants | length }} participants</span>
+    </div>
+
+    {% if expert %}
+    <div class="expert-banner">
+        <span class="expert-icon">🧠</span>
+        <div class="expert-info">
+            <strong>{{ expert.name }}</strong>
+            <span class="expert-expertise">{{ expert.expertise }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="messages-container">
+        {% if conversation.messages %}
+        {% for msg in conversation.messages %}
+        <div class="message message-{{ msg.message_type }}">
+            <div class="message-header">
+                <span class="sender sender-{{ msg.sender }}">
+                    {% if msg.sender == 'system' %}🔔
+                    {% elif msg.sender == 'qc' %}✅
+                    {% elif msg.sender == 'planner' %}📋
+                    {% elif 'expert' in msg.sender %}🧠
+                    {% else %}🤖
+                    {% endif %}
+                    {{ msg.sender | title }}
+                </span>
+                {% if msg.recipient %}
+                <span class="recipient">→ {{ msg.recipient | title }}</span>
+                {% endif %}
+                <span class="message-type-badge type-{{ msg.message_type }}">{{ msg.message_type }}</span>
+                <span class="timestamp">{{ msg.timestamp[:16] if msg.timestamp else '' }}</span>
+            </div>
+            <div class="message-content">
+                {{ msg.content | safe }}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="no-messages">
+            <p>No messages yet. Conversation will appear here once agents start working.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="log-footer">
+        <button type="button"
+                class="btn btn-refresh"
+                hx-get="/projects/{{ project_id }}/conversation"
+                hx-target="#conversation-log"
+                hx-swap="outerHTML">
+            🔄 Refresh
+        </button>
+    </div>
+</div>
+
+<style>
+.conversation-log {
+    background: #0d0d12;
+    border-radius: 8px;
+    padding: 20px;
+    color: #e0e0e0;
+    font-family: 'Inter', system-ui, sans-serif;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 16px;
+}
+
+.log-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #fff;
+}
+
+.participant-count {
+    font-size: 12px;
+    color: #808080;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.expert-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.2), rgba(103, 58, 183, 0.1));
+    border: 1px solid rgba(156, 39, 176, 0.3);
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+.expert-icon {
+    font-size: 24px;
+}
+
+.expert-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.expert-info strong {
+    color: #ce93d8;
+    font-size: 14px;
+}
+
+.expert-expertise {
+    font-size: 12px;
+    color: #a0a0a0;
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 8px;
+}
+
+.message {
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid;
+}
+
+.message-system {
+    background: rgba(100, 100, 100, 0.1);
+    border-left-color: #808080;
+}
+
+.message-brief {
+    background: rgba(0, 170, 255, 0.1);
+    border-left-color: #00aaff;
+}
+
+.message-update {
+    background: rgba(0, 255, 65, 0.05);
+    border-left-color: #00ff41;
+}
+
+.message-question {
+    background: rgba(255, 200, 0, 0.1);
+    border-left-color: #ffc800;
+}
+
+.message-answer {
+    background: rgba(0, 200, 150, 0.1);
+    border-left-color: #00c896;
+}
+
+.message-handoff {
+    background: rgba(156, 39, 176, 0.1);
+    border-left-color: #9c27b0;
+}
+
+.message-decision {
+    background: rgba(33, 150, 243, 0.1);
+    border-left-color: #2196f3;
+}
+
+.message-qc_report {
+    background: rgba(255, 87, 34, 0.1);
+    border-left-color: #ff5722;
+}
+
+.message-concern {
+    background: rgba(255, 100, 100, 0.1);
+    border-left-color: #ff6464;
+}
+
+.message-resolution {
+    background: rgba(76, 175, 80, 0.1);
+    border-left-color: #4caf50;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.sender {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.sender-system { color: #808080; }
+.sender-qc { color: #ff5722; }
+.sender-planner { color: #2196f3; }
+.sender-expert_printable,
+.sender-expert_document,
+.sender-expert_web,
+.sender-expert_app { color: #ce93d8; }
+
+.recipient {
+    font-size: 12px;
+    color: #808080;
+}
+
+.message-type-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.type-system { background: #404040; color: #a0a0a0; }
+.type-brief { background: #00567a; color: #66d4ff; }
+.type-update { background: #005500; color: #66ff66; }
+.type-question { background: #665500; color: #ffdd66; }
+.type-answer { background: #006655; color: #66ffdd; }
+.type-handoff { background: #550066; color: #dd66ff; }
+.type-decision { background: #004488; color: #66aaff; }
+.type-qc_report { background: #663300; color: #ffaa66; }
+.type-concern { background: #660022; color: #ff6688; }
+.type-resolution { background: #336600; color: #99ff66; }
+
+.timestamp {
+    font-size: 11px;
+    color: #606060;
+    margin-left: auto;
+}
+
+.message-content {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #c0c0c0;
+    white-space: pre-wrap;
+}
+
+.no-messages {
+    text-align: center;
+    padding: 40px;
+    color: #606060;
+}
+
+.log-footer {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 16px;
+}
+
+.btn-refresh {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0a0;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.btn-refresh:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+}
+
+/* Scrollbar styling */
+.messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+</style>

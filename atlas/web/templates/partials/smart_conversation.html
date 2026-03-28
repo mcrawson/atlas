@@ -1,20 +1,26 @@
 <!-- OOB Swap: Update clarity bar when conversation updates -->
 {% set brief = current_question.get('brief', {}) %}
-{% set readiness = brief.get('readiness_score', 0) %}
+{% set topics_covered = brief.get('topics_covered', {}) %}
+{% set required_topics = brief.get('required_topics', {}) %}
+{% set covered_count = topics_covered.values()|select|list|length %}
+{% set total_count = required_topics|length if required_topics else 7 %}
+{% set coverage_pct = ((covered_count / total_count) * 100)|int if total_count > 0 else 0 %}
+{% set ready_for_analysis = coverage_pct >= 80 %}
+
 <div id="clarity-bar" hx-swap-oob="true" class="clarity-card">
     <div class="clarity-header">
-        <span class="clarity-label">Idea Clarity</span>
-        <span class="clarity-score">{{ readiness }}%</span>
+        <span class="clarity-label">Topics Covered</span>
+        <span class="clarity-score">{{ covered_count }}/{{ total_count }}</span>
     </div>
     <div class="clarity-bar">
-        <div class="clarity-fill {% if readiness >= 80 %}ready{% elif readiness >= 50 %}good{% elif readiness >= 30 %}partial{% endif %}"
-             style="width: {{ readiness }}%"></div>
+        <div class="clarity-fill {% if coverage_pct >= 80 %}ready{% elif coverage_pct >= 50 %}good{% elif coverage_pct >= 30 %}partial{% endif %}"
+             style="width: {{ coverage_pct }}%"></div>
     </div>
     <p class="clarity-hint">
-        {% if readiness < 30 %}Let's explore your idea further...
-        {% elif readiness < 50 %}Getting clearer, need more details
-        {% elif readiness < 80 %}Almost there! A few more clarifications...
-        {% else %}Ready for planning!{% endif %}
+        {% if coverage_pct < 30 %}Let's explore your idea more...
+        {% elif coverage_pct < 50 %}Good progress! Still more to discuss.
+        {% elif coverage_pct < 80 %}Almost there - a few more details needed.
+        {% else %}Ready for a thorough analysis!{% endif %}
     </p>
 </div>
 
@@ -76,15 +82,19 @@
             </div>
         </form>
 
-        <!-- Skip to Planning (show after 4+ messages) -->
-        {% if messages|length >= 4 %}
-        <div class="skip-planning">
-            <p>Have enough details?</p>
-            <form action="/projects/{{ project.id }}/skip-to-planning" method="post">
-                <button type="submit" class="btn btn-secondary btn-small">
-                    Skip to Planning →
+        <!-- Show Analysis button only when 80%+ topics covered -->
+        {% if ready_for_analysis %}
+        <div class="skip-planning ready">
+            <p>✓ We've covered the important topics</p>
+            <form action="/projects/{{ project.id }}/start-analysis" method="post">
+                <button type="submit" class="btn btn-primary btn-small">
+                    Create Business Plan →
                 </button>
             </form>
+        </div>
+        {% elif messages|length >= 6 %}
+        <div class="skip-planning not-ready">
+            <p>{{ covered_count }}/{{ total_count }} topics covered - keep going for a better plan</p>
         </div>
         {% endif %}
     </div>
@@ -138,27 +148,14 @@
             {% endif %}
         </div>
 
-        <!-- Start Planning Button -->
-        <form action="/projects/{{ project.id }}/start-planning" method="post" class="planning-form">
-            <input type="hidden" name="description" value="{{ brief.get('description', '') }}">
-            <input type="hidden" name="problem" value="{{ brief.get('problem_statement', '') }}">
-            <input type="hidden" name="features" value="{{ brief.get('core_features', [])|join('\n') }}">
-            <input type="hidden" name="technical" value="{{ brief.get('technical_requirements', '') }}">
-
-            {% set type_actions = {
-                'product': ('Start Building', '📐'),
-                'process': ('Start Designing', '⚙️'),
-                'research': ('Start Research', '🔍'),
-                'concept': ('Start Exploring', '💡'),
-                'decision': ('Start Analysis', '⚖️'),
-                'document': ('Start Writing', '📝')
-            } %}
-            {% set action = type_actions.get(brief.get('idea_type', ''), ('Start Planning', '💡')) %}
+        <!-- Start Business Analysis Button -->
+        <form action="/projects/{{ project.id }}/start-analysis" method="post" class="planning-form">
             <button type="submit" class="btn btn-primary btn-large">
-                <span>{{ action[0] }}</span>
-                <span class="btn-icon">{{ action[1] }}</span>
+                <span>Start Business Analysis</span>
+                <span class="btn-icon">📊</span>
             </button>
         </form>
+        <p class="analysis-hint">The Analyst will create a Business Brief with market analysis and Go/No-Go recommendation.</p>
 
         <!-- Option to continue refining -->
         <div class="refine-option">
@@ -507,6 +504,12 @@
 
 .skip-planning .btn {
     white-space: nowrap;
+}
+
+.analysis-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
 }
 </style>
 

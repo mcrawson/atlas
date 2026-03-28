@@ -174,10 +174,10 @@ class BuildPreviewGenerator:
         """Determine the best preview type based on code content."""
         languages = {cb.language for cb in code_blocks}
 
-        # Check context for physical product category
+        # Check context for printable product category
         if context:
             project_category = context.get("project_category", "")
-            if project_category == "physical":
+            if project_category == "printable":
                 return PreviewType.PRINTABLE
 
         # Check for printable content (HTML with @page rules or print-specific CSS)
@@ -236,6 +236,43 @@ class BuildPreviewGenerator:
                 js_content += cb.code + "\n"
 
         # Build complete HTML document for iframe
+        # Add responsive base styles AFTER user CSS so they can be overridden if needed
+        responsive_overrides = """
+        /* Responsive overrides for mobile preview */
+        html, body {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+        img, video, iframe, embed, object {
+            max-width: 100% !important;
+            height: auto !important;
+        }
+        /* Make common fixed-width patterns responsive */
+        .container, .wrapper, .content, main, section, article, header, footer, nav {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        /* Responsive grid fallback */
+        .grid, .row, .flex-container {
+            flex-wrap: wrap !important;
+        }
+        /* Responsive tables */
+        table {
+            max-width: 100% !important;
+            display: block !important;
+            overflow-x: auto !important;
+        }
+        /* Mobile-first text sizing */
+        @media (max-width: 480px) {
+            body { font-size: 14px !important; }
+            h1 { font-size: 1.75rem !important; }
+            h2 { font-size: 1.5rem !important; }
+            h3 { font-size: 1.25rem !important; }
+            .btn, button { padding: 0.75rem 1rem !important; min-height: 44px !important; }
+        }
+        """
+
         preview_html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -250,6 +287,7 @@ class BuildPreviewGenerator:
             padding: 1rem;
         }}
         {css_content}
+        {responsive_overrides}
     </style>
 </head>
 <body>
@@ -393,7 +431,7 @@ class BuildPreviewGenerator:
 <body>
     <div class="print-preview-container">
         <div class="print-header">
-            <h3>🖨️ Print Preview - Physical Product</h3>
+            <h3>🖨️ Print Preview - Printable Product</h3>
             <div class="print-actions">
                 <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
             </div>

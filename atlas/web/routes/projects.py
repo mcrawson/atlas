@@ -37,97 +37,14 @@ def _get_openai_key() -> str:
         return None
 
 
-def _create_conversation() -> SmartIdeaConversation:
+def _create_conversation(project_identity: dict = None) -> SmartIdeaConversation:
     """Create a SmartIdeaConversation with the best available LLM."""
     openai_key = _get_openai_key()
     return SmartIdeaConversation(
         openai_api_key=openai_key,
         openai_model="gpt-4o-mini",  # Fast and cheap for conversations
+        project_identity=project_identity,  # Pass canonical product type
     )
-
-
-async def _maybe_create_canva_design(
-    project,
-    routing_decision,
-    mason_output: str,
-    project_manager,
-) -> dict | None:
-    """Auto-trigger Canva design creation for visual products.
-
-    Returns Canva metadata dict if design was created, None otherwise.
-    """
-    from atlas.standards import get_integrations_for_product
-
-    # Get project type from metadata
-    project_type = project.metadata.get("project_type", "unknown") if project.metadata else "unknown"
-    integrations = get_integrations_for_product(project_type)
-
-    if "canva" not in integrations.get("design", []):
-        logger.debug(f"[Canva] Product type '{project_type}' doesn't need Canva")
-        return None
-
-    # Check for Canva credentials (OAuth or direct API key)
-    canva_client_id = os.environ.get("CANVA_CLIENT_ID")
-    canva_client_secret = os.environ.get("CANVA_CLIENT_SECRET")
-    canva_key = os.environ.get("CANVA_API_KEY")
-
-    if not canva_key and not (canva_client_id and canva_client_secret):
-        logger.info("[Canva] No Canva credentials configured - skipping auto-design")
-        return {"status": "skipped", "reason": "CANVA_CLIENT_ID/SECRET or CANVA_API_KEY not configured"}
-
-    try:
-        # Extract HTML from build output
-        from atlas.utils.pdf_generator import PDFGenerator
-        from atlas.integrations.platforms.canva import CanvaIntegration
-
-        pdf_gen = PDFGenerator()
-        html_files = pdf_gen.extract_html_from_build(mason_output)
-
-        if not html_files:
-            logger.info("[Canva] No HTML pages found in build output")
-            return {"status": "skipped", "reason": "No HTML content to convert"}
-
-        # Create Canva integration with available credentials
-        canva = CanvaIntegration({
-            "api_key": canva_key,
-            "client_id": canva_client_id,
-            "client_secret": canva_client_secret,
-        })
-
-        if not await canva.authenticate():
-            logger.warning("[Canva] Failed to authenticate")
-            return {"status": "error", "reason": "Authentication failed"}
-
-        # Create the design
-        design_title = f"{project.name} - Design"
-        logger.info(f"[Canva] Creating design from {len(html_files)} HTML files...")
-
-        try:
-            design = await canva.create_planner_from_html(
-                html_files,
-                title=design_title,
-            )
-        except Exception as create_error:
-            logger.error(f"[Canva] create_planner_from_html error: {create_error}")
-            return {"status": "error", "reason": f"Design creation error: {str(create_error)}"}
-
-        if design:
-            logger.info(f"[Canva] Created design: {design.get('id')}")
-            return {
-                "status": "created",
-                "design_id": design.get("id"),
-                "edit_url": design.get("edit_url"),
-                "view_url": design.get("view_url"),
-                "page_count": design.get("page_count"),
-                "created_at": datetime.now().isoformat(),
-            }
-        else:
-            logger.error("[Canva] create_planner_from_html returned None")
-            return {"status": "error", "reason": "Design creation returned empty result"}
-
-    except Exception as e:
-        logger.error(f"[Canva] Error creating design: {e}")
-        return {"status": "error", "reason": str(e)}
 
 
 @router.get("", response_class=HTMLResponse)
@@ -157,7 +74,7 @@ async def list_projects(request: Request):
 
 
 @router.post("/new-idea", response_class=HTMLResponse)
-async def create_from_idea(request: Request, idea: str = Form(...)):
+async def create_from_idea(request: Request, idea: str = Form(...), product_type: str = Form("app")):
     """Create a new project from an idea."""
     project_manager = request.app.state.project_manager
 
@@ -166,15 +83,28 @@ async def create_from_idea(request: Request, idea: str = Form(...)):
 
     # Detect project type from the idea
     detector = ProjectTypeDetector()
-    project_type, project_category, confidence = detector.detect(idea)
-    type_config = detector.get_config(project_type)
+    project_type_detected, project_category, confidence = detector.detect(idea)
+    type_config = detector.get_config(project_type_detected)
 
     # Build metadata with project type info
+    # Create canonical project_identity - single source of truth for what we're building
+    from datetime import datetime
+    type_names = {"printable": "Printable", "document": "Document", "web": "Web App", "app": "Mobile App"}
+
     metadata = {
         "phase": "idea",
-        "project_type": project_type.value,
+        "project_type": project_type_detected.value,
         "project_category": project_category.value,
         "project_type_confidence": confidence,
+        # CANONICAL PROJECT IDENTITY - single source of truth
+        "project_identity": {
+            "product_type": product_type,  # printable, document, web, app
+            "product_type_name": type_names.get(product_type, product_type.title()),
+            "source": "user_explicit",  # user_explicit, analyst_inferred, conversation
+            "confirmed": True,  # User explicitly chose this
+            "locked": True,  # Agents cannot change this
+            "set_at": datetime.now().isoformat(),
+        },
     }
 
     # Add type-specific config if available
@@ -260,10 +190,13 @@ async def idea_conversation_respond(
     conv_data = metadata.get("smart_conversation", {})
 
     openai_key = _get_openai_key()
+    project_identity = metadata.get("project_identity")
     if conv_data:
-        conversation = SmartIdeaConversation.from_dict(conv_data, openai_api_key=openai_key)
+        conversation = SmartIdeaConversation.from_dict(
+            conv_data, openai_api_key=openai_key, project_identity=project_identity
+        )
     else:
-        conversation = _create_conversation()
+        conversation = _create_conversation(project_identity=project_identity)
         # Start with initial idea if available
         if project.description:
             await conversation.start(project.description)
@@ -346,10 +279,13 @@ async def get_idea_conversation(request: Request, project_id: int):
     conv_data = metadata.get("smart_conversation", {})
 
     openai_key = _get_openai_key()
+    project_identity = metadata.get("project_identity")
     if conv_data:
-        conversation = SmartIdeaConversation.from_dict(conv_data, openai_api_key=openai_key)
+        conversation = SmartIdeaConversation.from_dict(
+            conv_data, openai_api_key=openai_key, project_identity=project_identity
+        )
     else:
-        conversation = _create_conversation()
+        conversation = _create_conversation(project_identity=project_identity)
         # Start conversation with AI
         await conversation.start(project.description or "")
         # Save initial state with idea type
@@ -388,10 +324,13 @@ async def skip_to_planning(request: Request, project_id: int):
     # Get conversation data and extract what we have
     metadata = project.metadata.copy() if project.metadata else {}
     conv_data = metadata.get("smart_conversation", {})
+    project_identity = metadata.get("project_identity")
 
     if conv_data:
         openai_key = _get_openai_key()
-        conversation = SmartIdeaConversation.from_dict(conv_data, openai_api_key=openai_key)
+        conversation = SmartIdeaConversation.from_dict(
+            conv_data, openai_api_key=openai_key, project_identity=project_identity
+        )
 
         # Force complete and generate brief from what we have
         conversation.is_complete = True
@@ -447,6 +386,1030 @@ async def skip_to_planning(request: Request, project_id: int):
 
     # Redirect to project page (will show planning UI)
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+# ==========================================
+# ATLAS 3.0 - Business Analysis Routes
+# ==========================================
+
+@router.post("/{project_id}/start-analysis", response_class=HTMLResponse)
+async def start_business_analysis(request: Request, project_id: int):
+    """Start business analysis - Analyst creates comprehensive Business Brief.
+
+    This is the ATLAS 3.0 flow: Idea Chat -> Business Analysis -> Planning
+    """
+    from atlas.agents.analyst import AnalystAgent, BusinessBrief
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Get the idea from conversation or description
+    idea = project.description or ""
+    idea_type = None
+    conversation_brief = {}
+
+    if metadata.get("smart_conversation"):
+        conv_data = metadata["smart_conversation"]
+        if conv_data.get("brief"):
+            conversation_brief = conv_data["brief"]
+            idea = conversation_brief.get("description", idea)
+        # Get the detected idea type (printable, document, web, app)
+        if conv_data.get("current_question", {}).get("idea_type"):
+            idea_type = conv_data["current_question"]["idea_type"]
+
+    # Also check top-level idea_type
+    if not idea_type and metadata.get("idea_type"):
+        idea_type = metadata["idea_type"]
+
+    # Build rich context for the Analyst
+    context = metadata.get("context", {})
+
+    # Pass project_identity as THE source of truth
+    project_identity = metadata.get("project_identity")
+    if project_identity:
+        # Canonical identity - agents MUST respect this
+        context["project_identity"] = project_identity
+        context["product_type"] = project_identity["product_type"]
+        context["product_type_name"] = project_identity["product_type_name"]
+        idea = f"[PRODUCT TYPE: {project_identity['product_type_name']} - {project_identity['product_type'].upper()}]\n\n{idea}"
+    elif idea_type:
+        # Fallback for older projects without project_identity
+        context["product_type"] = idea_type.get("type", "unknown")
+        context["product_type_name"] = idea_type.get("name", "Product")
+        idea = f"[PRODUCT TYPE: {idea_type.get('name', 'Unknown')} - {idea_type.get('type', 'unknown').upper()}]\n\n{idea}"
+
+    # Add conversation brief details - including topic coverage for confidence scoring
+    if conversation_brief:
+        context["brief"] = conversation_brief  # Pass full brief including topics_covered
+        if conversation_brief.get("core_features"):
+            context["core_features"] = conversation_brief["core_features"]
+        if conversation_brief.get("target_users"):
+            context["target_users"] = conversation_brief["target_users"]
+        if conversation_brief.get("problem_statement"):
+            context["problem_statement"] = conversation_brief["problem_statement"]
+        if conversation_brief.get("description"):
+            context["description"] = conversation_brief["description"]
+
+    # Update phase to analyzing
+    metadata["phase"] = "analyzing"
+    await project_manager.update_project(project_id, metadata=metadata)
+
+    try:
+        # Create and run Analyst
+        analyst = AnalystAgent(
+            router=request.app.state.router,
+            memory=request.app.state.memory,
+            providers=request.app.state.providers
+        )
+
+        # Run the analysis
+        output = await analyst.process(idea, context=context)
+
+        if output.artifacts and "brief" in output.artifacts:
+            brief_data = output.artifacts["brief"]
+            metadata["business_brief"] = brief_data
+            metadata["phase"] = "brief_review"
+
+            await project_manager.update_project(project_id, metadata=metadata)
+
+            # Return the business brief partial
+            return templates.TemplateResponse(
+                "partials/business_brief.html",
+                {
+                    "request": request,
+                    "project_id": project_id,
+                    "brief": brief_data,
+                }
+            )
+        else:
+            # Analysis failed
+            metadata["phase"] = "idea"
+            metadata["analysis_error"] = output.content
+            await project_manager.update_project(project_id, metadata=metadata)
+
+            return templates.TemplateResponse(
+                "partials/error.html",
+                {
+                    "request": request,
+                    "error": f"Analysis failed: {output.content}",
+                }
+            )
+
+    except Exception as e:
+        logger.error(f"Business analysis failed for project {project_id}: {e}")
+        metadata["phase"] = "idea"
+        metadata["analysis_error"] = str(e)
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {
+                "request": request,
+                "error": f"Analysis failed: {str(e)}",
+            }
+        )
+
+
+@router.get("/{project_id}/business-brief", response_class=HTMLResponse)
+async def get_business_brief(request: Request, project_id: int):
+    """Get the current business brief for a project."""
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata or {}
+    brief = metadata.get("business_brief")
+
+    return templates.TemplateResponse(
+        "partials/business_brief.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "brief": brief,
+        }
+    )
+
+
+@router.post("/{project_id}/approve-brief", response_class=HTMLResponse)
+async def approve_business_brief(request: Request, project_id: int):
+    """Approve the business brief and proceed to planning.
+
+    This also determines which builder to use based on product_type.
+    """
+    from atlas.agents.builders import get_builder_for_type
+
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Mark brief as approved
+    if metadata.get("business_brief"):
+        metadata["business_brief"]["approved"] = True
+        metadata["business_brief"]["approved_at"] = datetime.now().isoformat()
+
+        # Use project_identity as THE source of truth for builder routing
+        project_identity = metadata.get("project_identity", {})
+        if project_identity.get("product_type"):
+            product_type = project_identity["product_type"].lower()
+        else:
+            # Fallback to business_brief for older projects
+            product_type = metadata["business_brief"].get("product_type", "").lower()
+
+        # Map general types to builder types
+        builder_type_map = {
+            "printable": "printable_builder",
+            "document": "document_builder",
+            "web": "web_builder",
+            "app": "app_builder",
+        }
+
+        builder_type = builder_type_map.get(product_type, "web_builder")  # Default to web
+
+        # Store builder info for later phases
+        metadata["assigned_builder"] = {
+            "type": builder_type,
+            "product_type": product_type,
+            "source": "project_identity" if project_identity.get("product_type") else "business_brief",
+            "assigned_at": datetime.now().isoformat(),
+        }
+
+        # Log the assignment
+        logger.info(f"[Kickoff] Project {project_id}: product_type={product_type} -> builder={builder_type} (source: {metadata['assigned_builder']['source']})")
+
+    # Trigger Round Table V2 kickoff
+    try:
+        from atlas.agents.roundtable_v2 import get_roundtable_v2
+
+        roundtable = get_roundtable_v2(
+            router=request.app.state.router,
+            memory=getattr(request.app.state, 'memory', None),
+            providers=getattr(request.app.state, 'providers', {}),
+        )
+
+        idea = project.description or metadata.get("idea", "")
+        session = await roundtable.kickoff(project_id, metadata["business_brief"], idea)
+
+        # Store Round Table session in metadata
+        metadata["roundtable"] = session.to_dict()
+
+        # Log specialists spawned
+        specialist_names = [s.name for s in session.specialists] if session.specialists else []
+        logger.info(f"[Kickoff] Round Table V2 complete. Specialists: {specialist_names}")
+        logger.info(f"[Kickoff] Deliverables: {len(session.deliverables)}, Timeline phases: {len(session.timeline)}")
+
+    except Exception as e:
+        logger.error(f"[Kickoff] Round Table V2 failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # Continue anyway - Round Table is enhancement, not blocker
+
+    # Move to planning phase
+    metadata["phase"] = "plan"
+
+    await project_manager.update_project(project_id, metadata=metadata)
+
+    # Redirect to project page to start planning
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/kickoff")
+async def run_kickoff(request: Request, project_id: int):
+    """Run the Kickoff agent to create project plan.
+
+    Validates Brief approval and creates a KickoffPlan with:
+    - Project scope (in/out)
+    - Tech stack selection
+    - Build phases with QC checkpoints
+    - Handoff instructions for Architect
+
+    Returns JSON with kickoff plan or error.
+    """
+    from atlas.agents.kickoff import KickoffAgent
+
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Get the Business Brief
+    brief = metadata.get("business_brief", {})
+    if not brief:
+        raise HTTPException(status_code=400, detail="No Business Brief found. Run analyst first.")
+
+    # Check recommendation
+    recommendation = brief.get("recommendation", "")
+    if recommendation != "go":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": f"Brief not approved for kickoff (recommendation: {recommendation})",
+                "recommendation": recommendation,
+                "hint": "Approve the brief first or override the recommendation",
+            }
+        )
+
+    # Initialize Kickoff agent
+    kickoff_agent = KickoffAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+
+    # Build context
+    context = {
+        "brief": brief,
+        "project_identity": metadata.get("project_identity", {}),
+    }
+
+    # Run kickoff
+    try:
+        kickoff_output = await kickoff_agent.process(
+            task=project.description or brief.get("product_name", "Project"),
+            context=context,
+        )
+
+        # Check if blocked
+        if kickoff_output.artifacts.get("blocked"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": kickoff_output.content,
+                    "blocked": True,
+                }
+            )
+
+        # Store kickoff plan in metadata
+        metadata["kickoff_plan"] = kickoff_output.artifacts.get("kickoff_plan", {})
+        metadata["kickoff_plan"]["created_at"] = datetime.now().isoformat()
+        metadata["phase"] = "kickoff_complete"
+
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        return JSONResponse(content={
+            "success": True,
+            "kickoff_plan": metadata["kickoff_plan"],
+            "summary": kickoff_output.content,
+            "next_agent": kickoff_output.next_agent,
+        })
+
+    except Exception as e:
+        logger.error(f"[Kickoff] Error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Kickoff failed: {str(e)}")
+
+
+@router.post("/{project_id}/override-brief", response_class=HTMLResponse)
+async def override_business_brief(request: Request, project_id: int):
+    """Override a no-go or needs-research recommendation and proceed anyway.
+
+    User is overriding the recommendation but we still assign the builder.
+    """
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Mark brief as overridden
+    if metadata.get("business_brief"):
+        metadata["business_brief"]["overridden"] = True
+        metadata["business_brief"]["overridden_at"] = datetime.now().isoformat()
+        metadata["business_brief"]["original_recommendation"] = metadata["business_brief"].get("recommendation")
+
+        # Use project_identity as THE source of truth for builder routing
+        project_identity = metadata.get("project_identity", {})
+        if project_identity.get("product_type"):
+            product_type = project_identity["product_type"].lower()
+        else:
+            # Fallback to business_brief for older projects
+            product_type = metadata["business_brief"].get("product_type", "").lower()
+
+        builder_type_map = {
+            "printable": "printable_builder",
+            "document": "document_builder",
+            "web": "web_builder",
+            "app": "app_builder",
+        }
+        builder_type = builder_type_map.get(product_type, "web_builder")
+
+        metadata["assigned_builder"] = {
+            "type": builder_type,
+            "product_type": product_type,
+            "source": "project_identity" if project_identity.get("product_type") else "business_brief",
+            "assigned_at": datetime.now().isoformat(),
+            "overridden": True,  # Flag that recommendation was overridden
+        }
+
+        logger.info(f"[Kickoff] Project {project_id} (overridden): product_type={product_type} -> builder={builder_type} (source: {metadata['assigned_builder']['source']})")
+
+    # Trigger Round Table V2 kickoff even for overridden briefs
+    try:
+        from atlas.agents.roundtable_v2 import get_roundtable_v2
+
+        roundtable = get_roundtable_v2(
+            router=request.app.state.router,
+            memory=getattr(request.app.state, 'memory', None),
+            providers=getattr(request.app.state, 'providers', {}),
+        )
+
+        idea = project.description or metadata.get("idea", "")
+        session = await roundtable.kickoff(project_id, metadata["business_brief"], idea)
+
+        # Store Round Table session in metadata
+        metadata["roundtable"] = session.to_dict()
+
+        specialist_names = [s.name for s in session.specialists] if session.specialists else []
+        logger.info(f"[Kickoff] Round Table V2 (overridden) complete. Specialists: {specialist_names}")
+
+    except Exception as e:
+        logger.error(f"[Kickoff] Round Table V2 failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+    # Move to planning phase
+    metadata["phase"] = "plan"
+
+    await project_manager.update_project(project_id, metadata=metadata)
+
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/run-qc", response_class=HTMLResponse)
+async def run_qc_check(request: Request, project_id: int):
+    """Run QC check on the business brief before approval.
+
+    QC Flow:
+    - Attempt 1: Warning + fix notes -> return to agent
+    - Attempt 2: Still broken -> BLOCK -> escalate to user
+    """
+    from atlas.agents.qc import QCAgent
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    brief_data = metadata.get("business_brief", {})
+
+    if not brief_data:
+        raise HTTPException(status_code=400, detail="No business brief to check")
+
+    # Determine attempt number based on previous QC
+    previous_qc = metadata.get("qc_report", {})
+    if previous_qc and previous_qc.get("verdict") == "needs_revision":
+        # This is a retry after issues were found
+        attempt = previous_qc.get("attempt", 1) + 1
+    else:
+        attempt = 1
+
+    # Initialize QC agent with router and providers for LLM evaluation
+    qc_agent = QCAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+    idea = project.description or metadata.get("idea", "")
+
+    try:
+        qc_report = await qc_agent.check_business_brief(brief_data, idea, attempt=attempt)
+
+        # Store QC report in metadata
+        metadata["qc_report"] = qc_report.to_dict()
+        metadata["qc_report"]["run_at"] = datetime.now().isoformat()
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        # Return QC report partial
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "brief",
+                "qc_endpoint": f"/projects/{project_id}/run-qc",
+                "qc_container": "#qc-report-container",
+                "qc_report": qc_report.to_dict(),
+            }
+        )
+    except Exception as e:
+        logger.error(f"QC check failed: {e}")
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "brief",
+                "qc_endpoint": f"/projects/{project_id}/run-qc",
+                "qc_container": "#qc-report-container",
+                "qc_report": {
+                    "verdict": "error",
+                    "verdict_reason": f"QC check failed: {str(e)}",
+                    "checks_passed": [],
+                    "issues": [],
+                },
+            }
+        )
+
+
+@router.get("/{project_id}/qc-report", response_class=HTMLResponse)
+async def get_qc_report(request: Request, project_id: int):
+    """Get the current QC report for a project."""
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    qc_report = metadata.get("qc_report")
+
+    return templates.TemplateResponse(
+        "partials/qc_report.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "qc_report": qc_report,
+        }
+    )
+
+
+@router.post("/{project_id}/qc-plan", response_class=HTMLResponse)
+async def run_qc_plan(request: Request, project_id: int):
+    """Run QC check on the build plan."""
+    from atlas.agents.qc import QCAgent
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    build_plan = metadata.get("build_plan", {})
+
+    if not build_plan:
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "plan",
+                "qc_endpoint": f"/projects/{project_id}/qc-plan",
+                "qc_container": "#plan-qc-report-container",
+                "qc_report": {
+                    "verdict": "error",
+                    "summary": "No build plan to check. Generate a build plan first.",
+                    "checks_passed": [],
+                    "issues": [],
+                },
+            }
+        )
+
+    # Initialize QC agent
+    qc_agent = QCAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+
+    try:
+        # Get the brief for context
+        brief_data = metadata.get("business_brief", {})
+
+        # Check the build plan
+        qc_report = await qc_agent.check_plan(build_plan, brief_data, attempt=1)
+
+        # Store QC report
+        metadata["plan_qc_report"] = qc_report.to_dict()
+        metadata["plan_qc_report"]["run_at"] = datetime.now().isoformat()
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "plan",
+                "qc_endpoint": f"/projects/{project_id}/qc-plan",
+                "qc_container": "#plan-qc-report-container",
+                "qc_report": qc_report.to_dict(),
+            }
+        )
+    except Exception as e:
+        logger.error(f"QC plan check failed: {e}")
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "plan",
+                "qc_endpoint": f"/projects/{project_id}/qc-plan",
+                "qc_container": "#plan-qc-report-container",
+                "qc_report": {
+                    "verdict": "error",
+                    "summary": f"QC check failed: {str(e)}",
+                    "checks_passed": [],
+                    "issues": [],
+                },
+            }
+        )
+
+
+@router.post("/{project_id}/qc-build", response_class=HTMLResponse)
+async def run_qc_build(request: Request, project_id: int):
+    """Run QC check on the build output."""
+    from atlas.agents.qc import QCAgent
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    build = metadata.get("build", {})
+
+    # Check if there's actual build output
+    has_output = build.get("output") or build.get("agent_output", {}).get("content")
+    if not has_output:
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "build",
+                "qc_endpoint": f"/projects/{project_id}/qc-build",
+                "qc_container": "#build-qc-report-container",
+                "qc_report": {
+                    "verdict": "error",
+                    "summary": "No build output to check. Complete the build first.",
+                    "checks_passed": [],
+                    "issues": [],
+                },
+            }
+        )
+
+    # Initialize QC agent
+    qc_agent = QCAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+
+    try:
+        # Get the brief for context
+        brief_data = metadata.get("business_brief", {})
+        if not brief_data:
+            brief_data = metadata.get("smart_conversation", {}).get("brief", {})
+
+        # Check revision count - be more lenient after multiple attempts
+        revision_count = build.get("revision_count", 0)
+
+        # Check the build output - pass the entire build dict
+        qc_report = await qc_agent.check_build(build, brief_data, attempt=1)
+        qc_dict = qc_report.to_dict()
+
+        # After 3+ revisions, be more lenient
+        if revision_count >= 3:
+            issues = qc_dict.get("issues", [])
+            critical_issues = [i for i in issues if isinstance(i, dict) and i.get("severity") == "critical"]
+
+            if not critical_issues:
+                # No critical issues after 3 revisions - pass with notes
+                qc_dict["verdict"] = "pass_with_notes"
+                qc_dict["verdict_reason"] = f"Passed after {revision_count} revisions. Minor improvements could still be made, but the product is sellable."
+                qc_dict["revision_count"] = revision_count
+            elif revision_count >= 5:
+                # After 5 revisions, just pass and note the remaining issues
+                qc_dict["verdict"] = "pass_with_notes"
+                qc_dict["verdict_reason"] = f"Approved after {revision_count} revision attempts. Some issues remain but further iteration may not be productive. Consider manual review."
+                qc_dict["revision_count"] = revision_count
+
+        # Store QC report
+        metadata["build_qc_report"] = qc_dict
+        metadata["build_qc_report"]["run_at"] = datetime.now().isoformat()
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "build",
+                "qc_endpoint": f"/projects/{project_id}/qc-build",
+                "qc_container": "#build-qc-report-container",
+                "qc_report": qc_dict,
+            }
+        )
+    except Exception as e:
+        logger.error(f"QC build check failed: {e}")
+        return templates.TemplateResponse(
+            "partials/qc_report.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "qc_type": "build",
+                "qc_endpoint": f"/projects/{project_id}/qc-build",
+                "qc_container": "#build-qc-report-container",
+                "qc_report": {
+                    "verdict": "error",
+                    "summary": f"QC check failed: {str(e)}",
+                    "checks_passed": [],
+                    "issues": [],
+                },
+            }
+        )
+
+
+@router.get("/{project_id}/conversation", response_class=HTMLResponse)
+async def get_conversation_log(request: Request, project_id: int):
+    """Get the agent conversation log for a project."""
+    from atlas.agents.roundtable_v2 import get_roundtable_v2 as get_roundtable
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Get conversation from Round Table V2 or metadata
+    roundtable = get_roundtable()
+    session = roundtable.get_session(project_id)
+    specialists = []
+
+    if session:
+        conversation = session.conversation.to_dict()
+        # V2 has specialists (list), convert to expert format for backward compat
+        specialists = [s.to_dict() for s in session.specialists] if session.specialists else []
+        expert = specialists[0] if specialists else None
+    else:
+        # Fall back to stored data
+        rt_data = metadata.get("roundtable", {})
+        conversation = rt_data.get("conversation", {"messages": [], "participants": []})
+        # V2 stores specialists, V1 stores custom_expert
+        specialists = rt_data.get("specialists", [])
+        expert = specialists[0] if specialists else rt_data.get("custom_expert")
+
+    return templates.TemplateResponse(
+        "partials/conversation_log.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "conversation": conversation,
+            "expert": expert,
+            "specialists": specialists,
+            "project_name": project.name,
+        }
+    )
+
+
+@router.get("/{project_id}/roundtable", response_class=HTMLResponse)
+async def get_roundtable_status(request: Request, project_id: int):
+    """Get Round Table status and participants."""
+    from atlas.agents.roundtable_v2 import get_roundtable_v2 as get_roundtable
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    roundtable = get_roundtable()
+    session = roundtable.get_session(project_id)
+
+    if session:
+        rt_data = session.to_dict()
+    else:
+        rt_data = metadata.get("roundtable", {})
+
+    return templates.TemplateResponse(
+        "partials/roundtable_status.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "roundtable": rt_data,
+            "project_name": project.name,
+        }
+    )
+
+
+@router.post("/{project_id}/start-planning", response_class=HTMLResponse)
+async def start_planning(request: Request, project_id: int):
+    """Start the planning phase - Planner creates build plan."""
+    from atlas.agents.planner import PlannerAgent
+    from atlas.agents.roundtable_v2 import get_roundtable_v2 as get_roundtable
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    brief = metadata.get("business_brief", {})
+
+    if not brief:
+        raise HTTPException(status_code=400, detail="No Business Brief found")
+
+    # Get Round Table context
+    roundtable = get_roundtable()
+    session = roundtable.get_session(project_id)
+    context = {
+        "brief": brief,
+    }
+
+    # Pass project_identity as THE source of truth
+    if metadata.get("project_identity"):
+        context["project_identity"] = metadata["project_identity"]
+
+    if session:
+        context["conversation"] = session.conversation.format_for_context()
+
+    # Create planner and generate plan
+    planner = PlannerAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        project_id=project_id,
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+
+    try:
+        result = await planner.process("Create build plan from Brief", context=context)
+
+        # Store plan in metadata
+        if result.artifacts.get("plan"):
+            metadata["build_plan"] = result.artifacts["plan"]
+            metadata["phase"] = "plan_review"
+            await project_manager.update_project(project_id, metadata=metadata)
+
+        # Return plan display
+        return templates.TemplateResponse(
+            "partials/build_plan.html",
+            {
+                "request": request,
+                "project_id": project_id,
+                "plan": result.artifacts.get("plan", {}),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Planning failed: {e}")
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {
+                "request": request,
+                "error": f"Planning failed: {str(e)}",
+            }
+        )
+
+
+@router.post("/{project_id}/re-analyze", response_class=HTMLResponse)
+async def re_analyze_idea(request: Request, project_id: int, additional_context: str = Form("")):
+    """Re-run business analysis with additional context."""
+    from atlas.agents.analyst import AnalystAgent
+
+    templates = request.app.state.templates
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Get the idea and product type
+    idea = project.description or ""
+    idea_type = None
+    conversation_brief = {}
+
+    if metadata.get("smart_conversation"):
+        conv_data = metadata["smart_conversation"]
+        if conv_data.get("brief"):
+            conversation_brief = conv_data["brief"]
+            idea = conversation_brief.get("description", idea)
+        if conv_data.get("current_question", {}).get("idea_type"):
+            idea_type = conv_data["current_question"]["idea_type"]
+
+    if not idea_type and metadata.get("idea_type"):
+        idea_type = metadata["idea_type"]
+
+    # Build context with project_identity as source of truth
+    context = metadata.get("context", {})
+
+    # Pass project_identity as THE source of truth
+    project_identity = metadata.get("project_identity")
+    if project_identity:
+        context["project_identity"] = project_identity
+        context["product_type"] = project_identity["product_type"]
+        context["product_type_name"] = project_identity["product_type_name"]
+        idea = f"[PRODUCT TYPE: {project_identity['product_type_name']} - {project_identity['product_type'].upper()}]\n\n{idea}"
+    elif idea_type:
+        # Fallback for older projects
+        context["product_type"] = idea_type.get("type", "unknown")
+        context["product_type_name"] = idea_type.get("name", "Product")
+        idea = f"[PRODUCT TYPE: {idea_type.get('name', 'Unknown')} - {idea_type.get('type', 'unknown').upper()}]\n\n{idea}"
+
+    if conversation_brief:
+        if conversation_brief.get("core_features"):
+            context["core_features"] = conversation_brief["core_features"]
+        if conversation_brief.get("target_audience"):
+            context["target_audience"] = conversation_brief["target_audience"]
+
+    if additional_context:
+        context["additional_research"] = additional_context
+        # Also add it directly to the idea for better visibility to analyst
+        idea = f"{idea}\n\nADDITIONAL CONTEXT FROM USER:\n{additional_context}"
+
+    # Update phase
+    metadata["phase"] = "analyzing"
+    await project_manager.update_project(project_id, metadata=metadata)
+
+    try:
+        analyst = AnalystAgent(
+            router=request.app.state.router,
+            memory=request.app.state.memory,
+            providers=request.app.state.providers
+        )
+
+        output = await analyst.process(idea, context=context)
+
+        if output.artifacts and "brief" in output.artifacts:
+            brief_data = output.artifacts["brief"]
+            metadata["business_brief"] = brief_data
+            metadata["phase"] = "brief_review"
+
+            # Clear old QC report since we have a new brief
+            if "qc_report" in metadata:
+                del metadata["qc_report"]
+
+            # Track tokens
+            tokens = metadata.get("tokens", {"total": 0, "by_agent": {}})
+            analyst_tokens = output.tokens_used
+            tokens["total"] += analyst_tokens
+            tokens["by_agent"]["analyst"] = tokens.get("by_agent", {}).get("analyst", 0) + analyst_tokens
+            metadata["tokens"] = tokens
+
+            await project_manager.update_project(project_id, metadata=metadata)
+
+            # Redirect to project page to show updated brief
+            return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+        else:
+            metadata["phase"] = "brief_review"  # Stay in review with previous brief
+            metadata["reanalysis_error"] = output.content
+            await project_manager.update_project(project_id, metadata=metadata)
+
+            # Redirect back - error will be shown via metadata
+            return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    except Exception as e:
+        logger.error(f"Re-analysis failed for project {project_id}: {e}")
+        metadata["phase"] = "brief_review"
+        metadata["reanalysis_error"] = str(e)
+        await project_manager.update_project(project_id, metadata=metadata)
+
+        # Redirect back - error will be shown via metadata
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/revise-idea", response_class=HTMLResponse)
+async def revise_idea(request: Request, project_id: int):
+    """Go back to idea conversation to revise the concept."""
+    project_manager = request.app.state.project_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+
+    # Reset to idea phase
+    metadata["phase"] = "idea"
+
+    # Clear the existing conversation completion state so user can continue
+    if metadata.get("smart_conversation"):
+        metadata["smart_conversation"]["is_complete"] = False
+
+    await project_manager.update_project(project_id, metadata=metadata)
+
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+# ==========================================
+# End ATLAS 3.0 Business Analysis Routes
+# ==========================================
 
 
 @router.post("/{project_id}/start-planning", response_class=HTMLResponse)
@@ -881,7 +1844,7 @@ async def start_sprint_meeting(request: Request, project_id: int):
 
 
 @router.post("/{project_id}/approve-plan", response_class=HTMLResponse)
-async def approve_plan(request: Request, project_id: int):
+async def approve_plan(request: Request, project_id: int, build_type: str = Form("static_html")):
     """Approve the spec and move to build phase - execute tasks from spec."""
     project_manager = request.app.state.project_manager
     agent_manager = request.app.state.agent_manager
@@ -901,13 +1864,21 @@ async def approve_plan(request: Request, project_id: int):
     context = new_metadata.get("context", {})
     tasks = spec.get("tasks", [])
 
-    # Add project type info to context for agents
+    # Add project_identity as THE source of truth
+    if new_metadata.get("project_identity"):
+        context["project_identity"] = new_metadata["project_identity"]
+
+    # Add project type info to context for agents (legacy support)
     context["project_type"] = new_metadata.get("project_type")
     context["project_category"] = new_metadata.get("project_category")
     context["project_type_config"] = new_metadata.get("project_type_config")
 
     # Add spec to context for Mason to reference
     context["spec"] = spec
+
+    # Add build_type from user selection to context for Mason
+    context["build_type"] = build_type
+    logger.info(f"[Build] User selected build_type: {build_type}")
 
     # Add team chat summary if available (resolved concerns)
     if "team_chat" in new_metadata:
@@ -946,6 +1917,11 @@ async def approve_plan(request: Request, project_id: int):
     # If we have an agent manager, run the Mason with spec-driven tasks
     if agent_manager:
         try:
+            # Initialize variables that may be used later
+            mason_tokens = 0
+            regeneration_attempts = 0
+            regeneration_history = []
+
             # Build context from spec for the Mason
             spec_content = _format_spec_for_review(spec)
             requirements = spec.get("requirements", [])
@@ -1041,6 +2017,7 @@ Build the solution step by step, working through each task."""
                 validation_result = validate_code(assembled_files, mason_output.content)
                 regeneration_attempts = 0
                 regeneration_history = []
+                mason_tokens = 0  # Template-based, no LLM tokens used
 
             else:
                 # Standard Mason build for non-planner products
@@ -1194,16 +2171,6 @@ Try again with COMPLETE, SELLABLE content:
                 project_id=str(project_id)
             )
             new_metadata["build"]["training_example_id"] = example_id
-
-            # Auto-trigger Canva for visual products
-            canva_result = await _maybe_create_canva_design(
-                project=project,
-                routing_decision=routing_decision,
-                mason_output=mason_output.content,
-                project_manager=project_manager,
-            )
-            if canva_result:
-                new_metadata["canva"] = canva_result
 
             new_metadata["tokens"] = tokens
             new_metadata["phase"] = "build_review"  # Move to review phase
@@ -1916,10 +2883,16 @@ async def revise_with_feedback(
 
     if agent == "architect":
         # Re-run Architect with feedback
+        from atlas.standards import CORE_PRINCIPLE
+
         plan = new_metadata.get("plan", {})
         original_plan = plan.get("raw_plan", "")
 
-        revision_prompt = f"""The user has reviewed your plan and wants changes:
+        revision_prompt = f"""The user has reviewed your plan and wants changes.
+
+{CORE_PRINCIPLE}
+
+REMEMBER: The plan must lead to a SELLABLE product. Every task, every requirement must be designed to produce something customers will pay for.
 
 ORIGINAL PLAN:
 {original_plan}
@@ -1927,7 +2900,7 @@ ORIGINAL PLAN:
 USER FEEDBACK - Please address these specific requests:
 {feedback}
 
-Please revise the plan to address the user's feedback. Keep what works, change what they asked for."""
+Revise the plan to address the feedback while maintaining sellability. Keep what works, improve what they asked for."""
 
         if agent_manager:
             try:
@@ -1963,11 +2936,23 @@ Please revise the plan to address the user's feedback. Keep what works, change w
 
     elif agent == "mason":
         # Re-run Mason with feedback
+        from atlas.standards import CORE_PRINCIPLE
+
         build = new_metadata.get("build", {})
         original_build = build.get("output", "")
         plan = new_metadata.get("plan", {})
 
-        revision_prompt = f"""The user has reviewed your implementation and wants changes:
+        revision_prompt = f"""The user has reviewed your implementation and wants changes.
+
+{CORE_PRINCIPLE}
+
+CRITICAL REMINDER:
+- Every revision must maintain or IMPROVE sellability
+- No shortcuts, no placeholders, no "repeat for X" abbreviations
+- The revised output must be IMMEDIATELY sellable
+- If it's a planner: every page must be complete with real content
+- If it's an app: it must be fully functional
+- If it's code: it must run without errors
 
 ORIGINAL IMPLEMENTATION:
 {original_build}
@@ -1975,7 +2960,7 @@ ORIGINAL IMPLEMENTATION:
 USER FEEDBACK - Please address these specific requests:
 {feedback}
 
-Please revise the implementation to address the user's feedback. Keep what works, change what they asked for."""
+Revise the implementation to address the feedback while maintaining SELLABLE quality. Keep what works, improve what they asked for."""
 
         if agent_manager:
             try:
@@ -2028,6 +3013,522 @@ Please revise the implementation to address the user's feedback. Keep what works
 
     # Default: just go back
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/apply-qc-fixes", response_class=HTMLResponse)
+async def apply_qc_fixes(
+    request: Request,
+    project_id: int,
+    qc_type: str = Form("build"),
+    selected_fixes: list[str] = Form(default=[]),
+):
+    """Apply user-selected QC fixes by sending feedback to the appropriate agent."""
+    from atlas.standards import CORE_PRINCIPLE
+
+    project_manager = request.app.state.project_manager
+    agent_manager = request.app.state.agent_manager
+
+    if not project_manager:
+        raise HTTPException(status_code=500, detail="Project manager not initialized")
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    metadata = project.metadata.copy() if project.metadata else {}
+    context = metadata.get("context", {})
+    tokens = metadata.get("tokens", {"total": 0, "by_agent": {}})
+
+    # Get the QC report based on type
+    if qc_type == "build":
+        qc_report = metadata.get("build_qc_report", {})
+        agent = "mason"
+    elif qc_type == "plan":
+        qc_report = metadata.get("plan_qc_report", {})
+        agent = "architect"
+    elif qc_type == "brief":
+        qc_report = metadata.get("qc_report", {})
+        agent = "analyst"
+    else:
+        qc_report = metadata.get("build_qc_report", {})
+        agent = "mason"
+
+    if not qc_report:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    # Get all issues from QC report
+    all_issues = qc_report.get("issues", [])
+    verdict_reason = qc_report.get("verdict_reason", "")
+
+    # Filter to only selected issues
+    selected_indices = [int(idx) for idx in selected_fixes if idx.isdigit()]
+    selected_issues = [all_issues[i] for i in selected_indices if i < len(all_issues)]
+
+    if not selected_issues:
+        # No fixes selected, just redirect back
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    # Build feedback from ONLY the selected issues
+    issues_text = ""
+    for issue in selected_issues:
+        desc = issue.get('description', str(issue)) if isinstance(issue, dict) else str(issue)
+        fix = issue.get('fix', '') if isinstance(issue, dict) else ''
+        severity = issue.get('severity', 'warning') if isinstance(issue, dict) else 'warning'
+
+        issues_text += f"\n[{severity.upper()}] {desc}"
+        if fix:
+            issues_text += f"\n   → FIX: {fix}"
+        issues_text += "\n"
+
+    feedback = f"""The user has reviewed QC results and selected {len(selected_issues)} issue(s) to fix:
+
+{CORE_PRINCIPLE}
+
+SELECTED ISSUES TO FIX:
+{issues_text}
+
+You MUST address ALL of the selected issues above. Make the specific changes requested.
+The revised output must be SELLABLE and match the Business Brief."""
+
+    # Track that this was a user-selected fix from QC
+    if "revision_history" not in metadata:
+        metadata["revision_history"] = []
+
+    metadata["revision_history"].append({
+        "agent": agent,
+        "feedback": f"[QC FIX - {len(selected_issues)} issues selected] {issues_text[:300]}...",
+        "timestamp": datetime.now().isoformat(),
+        "source": "qc_selected_fix",
+        "issues_fixed": len(selected_issues),
+    })
+
+    # Apply fixes based on agent type
+    if agent == "mason" and agent_manager:
+        build = metadata.get("build", {})
+        original_build = build.get("output", "")
+        plan = metadata.get("plan", {})
+
+        revision_prompt = f"""QC has evaluated your work and found issues. You must fix them now.
+
+{feedback}
+
+ORIGINAL IMPLEMENTATION:
+{original_build}
+
+Revise the implementation to fix ALL QC issues while maintaining SELLABLE quality."""
+
+        try:
+            from atlas.agents.base import AgentOutput
+            architect_plan = plan.get('raw_plan', '')
+            architect_output = AgentOutput(content=architect_plan) if architect_plan else None
+
+            mason_output = await agent_manager.mason.process(
+                revision_prompt,
+                context,
+                previous_output=architect_output
+            )
+
+            if mason_output.content:
+                mason_tokens = mason_output.tokens_used
+                tokens["total"] += mason_tokens
+                tokens["by_agent"]["mason"] = tokens.get("by_agent", {}).get("mason", 0) + mason_tokens
+
+                # Extract and assemble files from the new output
+                from ..utils import parse_code_blocks
+                from atlas.assembly.code_assembler import assemble_code
+                from atlas.assembly.validator import validate_code
+                from atlas.assembly.html_expander import expand_document_html
+
+                extracted_files = parse_code_blocks(mason_output.content)
+                assembly_result = assemble_code(extracted_files)
+                assembled_files = assembly_result.files
+                assembled_files = expand_document_html(assembled_files)
+                validation_result = validate_code(assembled_files, mason_output.content)
+
+                # Generate build preview
+                preview_generator = BuildPreviewGenerator()
+                build_preview = preview_generator.generate_preview(
+                    mason_output.content,
+                    project_context=context
+                )
+
+                build["output"] = mason_output.content
+                build["files"] = extracted_files
+                build["extracted_files"] = extracted_files
+                build["assembled_files"] = assembled_files
+                build["assembly"] = {
+                    "issues_fixed": assembly_result.issues_fixed,
+                    "remaining_issues": assembly_result.remaining_issues,
+                }
+                build["validation"] = validation_result.to_dict()
+                build["is_runnable"] = assembly_result.is_runnable
+                build["preview"] = build_preview.to_dict()
+                build["agent_output"] = {
+                    "content": mason_output.content,
+                    "reasoning": mason_output.reasoning,
+                    "tokens_used": mason_tokens,
+                    "prompt_tokens": mason_output.prompt_tokens,
+                    "completion_tokens": mason_output.completion_tokens,
+                    "provider": mason_output.metadata.get("provider", "unknown"),
+                    "revised": True,
+                    "revision_source": "qc_auto_fix",
+                }
+                build["revision_count"] = build.get("revision_count", 0) + 1
+
+                metadata["build"] = build
+                metadata["tokens"] = tokens
+
+                # Clear the old QC report so user knows to re-run
+                metadata["build_qc_report"]["applied"] = True
+
+        except Exception as e:
+            metadata["build"]["revision_error"] = str(e)
+            logger.error(f"QC auto-fix failed: {e}")
+
+    elif agent == "architect" and agent_manager:
+        plan = metadata.get("plan", {})
+        original_plan = plan.get("raw_plan", "")
+
+        revision_prompt = f"""QC has evaluated your plan and found issues. You must fix them now.
+
+{feedback}
+
+ORIGINAL PLAN:
+{original_plan}
+
+Revise the plan to fix ALL QC issues while maintaining sellability."""
+
+        try:
+            architect_output = await agent_manager.architect.process(revision_prompt, context)
+
+            if architect_output.content:
+                architect_tokens = architect_output.tokens_used
+                tokens["total"] += architect_tokens
+                tokens["by_agent"]["architect"] = tokens.get("by_agent", {}).get("architect", 0) + architect_tokens
+
+                plan["raw_plan"] = architect_output.content
+                plan["agent_output"] = {
+                    "content": architect_output.content,
+                    "reasoning": architect_output.reasoning,
+                    "tokens_used": architect_tokens,
+                    "prompt_tokens": architect_output.prompt_tokens,
+                    "completion_tokens": architect_output.completion_tokens,
+                    "provider": architect_output.metadata.get("provider", "unknown"),
+                    "revised": True,
+                    "revision_source": "qc_auto_fix",
+                }
+                plan["revision_count"] = plan.get("revision_count", 0) + 1
+
+                metadata["plan"] = plan
+                metadata["tokens"] = tokens
+
+                # Clear the old QC report
+                metadata["plan_qc_report"]["applied"] = True
+
+        except Exception as e:
+            metadata["plan"]["revision_error"] = str(e)
+            logger.error(f"QC auto-fix failed: {e}")
+
+    elif agent == "analyst":
+        # Fix Business Brief issues by re-running analyst with feedback
+        from atlas.agents.analyst import AnalystAgent
+
+        original_brief = metadata.get("business_brief", {})
+        idea = project.description or metadata.get("idea", "")
+
+        # Get idea type info if available
+        idea_type = None
+        if metadata.get("smart_conversation"):
+            conv_data = metadata["smart_conversation"]
+            if conv_data.get("brief"):
+                conversation_brief = conv_data["brief"]
+                idea = conversation_brief.get("description", idea)
+            if conv_data.get("current_question", {}).get("idea_type"):
+                idea_type = conv_data["current_question"]["idea_type"]
+
+        if not idea_type and metadata.get("idea_type"):
+            idea_type = metadata["idea_type"]
+
+        # Build context with QC feedback
+        if idea_type:
+            context["product_type"] = idea_type.get("type", "unknown")
+            context["product_type_name"] = idea_type.get("name", "Product")
+            idea = f"[PRODUCT TYPE: {idea_type.get('name', 'Unknown')} - {idea_type.get('type', 'unknown').upper()}]\n\n{idea}"
+
+        # Add QC feedback as revision instructions
+        context["qc_feedback"] = feedback
+        context["original_brief"] = original_brief
+
+        revision_prompt = f"""You previously created a Business Brief that QC found issues with.
+
+ORIGINAL BRIEF:
+{original_brief.get('executive_summary', '')}
+
+QC FEEDBACK - FIX THESE ISSUES:
+{issues_text}
+
+Re-analyze the idea and create an IMPROVED Business Brief that addresses ALL the QC issues above.
+The revised brief must be more thorough, accurate, and sellable.
+
+IDEA TO ANALYZE:
+{idea}
+"""
+
+        try:
+            analyst = AnalystAgent(
+                router=request.app.state.router,
+                memory=request.app.state.memory,
+                providers=request.app.state.providers
+            )
+
+            output = await analyst.process(revision_prompt, context=context)
+
+            if output.artifacts and "brief" in output.artifacts:
+                brief_data = output.artifacts["brief"]
+
+                # Track tokens
+                analyst_tokens = output.tokens_used
+                tokens["total"] += analyst_tokens
+                tokens["by_agent"]["analyst"] = tokens.get("by_agent", {}).get("analyst", 0) + analyst_tokens
+
+                # Update metadata
+                metadata["business_brief"] = brief_data
+                metadata["tokens"] = tokens
+
+                # Mark old QC report as applied
+                if "qc_report" in metadata:
+                    metadata["qc_report"]["applied"] = True
+
+                # Track revision
+                brief_data["revision_count"] = original_brief.get("revision_count", 0) + 1
+                brief_data["revision_source"] = "qc_fix"
+
+                logger.info(f"[QC Fix] Analyst revised Business Brief for project {project_id}")
+
+        except Exception as e:
+            metadata["brief_revision_error"] = str(e)
+            logger.error(f"QC auto-fix for analyst failed: {e}")
+
+    await project_manager.update_project(project_id, metadata=metadata)
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/{project_id}/auto-fix-qc")
+async def auto_fix_qc(
+    request: Request,
+    project_id: int,
+    qc_type: str = Form("build"),
+    max_attempts: int = Form(5),
+):
+    """Automatically apply all QC fixes in a loop until pass or max attempts.
+
+    This endpoint:
+    1. Runs QC check
+    2. If needs_revision, applies ALL fixes
+    3. Repeats until pass/pass_with_notes or max_attempts reached
+    4. Returns JSON with final status
+    """
+    from atlas.agents.qc import QCAgent
+
+    project_manager = request.app.state.project_manager
+    agent_manager = request.app.state.agent_manager
+
+    if not project_manager:
+        return JSONResponse({"error": "Project manager not initialized"}, status_code=500)
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        return JSONResponse({"error": "Project not found"}, status_code=404)
+
+    # Initialize QC agent
+    qc_agent = QCAgent(
+        router=request.app.state.router,
+        memory=getattr(request.app.state, 'memory', None),
+        providers=getattr(request.app.state, 'providers', {}),
+    )
+
+    results = {
+        "project_id": project_id,
+        "attempts": [],
+        "final_verdict": None,
+        "success": False,
+        "stopped_reason": None,
+    }
+
+    previous_issues = set()  # Track issues to detect loops
+
+    for attempt in range(1, max_attempts + 1):
+        # Get fresh project data
+        project = await project_manager.get_project(project_id)
+        metadata = project.metadata.copy() if project.metadata else {}
+
+        # Run QC check
+        if qc_type == "build":
+            build = metadata.get("build", {})
+            brief = metadata.get("business_brief", {})
+            qc_report = await qc_agent.check_build(build, brief, attempt=1)
+        else:
+            # For now, only support build QC auto-fix
+            return JSONResponse({"error": f"Auto-fix not supported for qc_type: {qc_type}"}, status_code=400)
+
+        qc_dict = qc_report.to_dict()
+        verdict = qc_dict.get("verdict", "unknown")
+
+        attempt_result = {
+            "attempt": attempt,
+            "verdict": verdict,
+            "alignment": qc_dict.get("alignment_score", 0),
+            "sellability": qc_dict.get("sellability_score", 0),
+            "quality": qc_dict.get("quality_score", 0),
+            "issues_count": len(qc_dict.get("issues", [])),
+        }
+        results["attempts"].append(attempt_result)
+
+        # Check if we passed
+        if verdict in ["pass", "pass_with_notes"]:
+            results["final_verdict"] = verdict
+            results["success"] = True
+            results["stopped_reason"] = "QC passed"
+
+            # Save the passing QC report
+            metadata["build_qc_report"] = qc_dict
+            await project_manager.update_project(project_id, metadata=metadata)
+            break
+
+        # Check for issue loops (same issues appearing repeatedly)
+        current_issues = frozenset(
+            issue.get("description", str(issue))[:100]
+            for issue in qc_dict.get("issues", [])
+        )
+
+        if current_issues == previous_issues:
+            results["final_verdict"] = verdict
+            results["stopped_reason"] = "Same issues detected - cannot fix further"
+            metadata["build_qc_report"] = qc_dict
+            await project_manager.update_project(project_id, metadata=metadata)
+            break
+
+        previous_issues = current_issues
+
+        # Apply ALL fixes
+        all_issues = qc_dict.get("issues", [])
+        if not all_issues:
+            results["final_verdict"] = verdict
+            results["stopped_reason"] = "No issues to fix"
+            break
+
+        # Build feedback from all issues
+        from atlas.standards import CORE_PRINCIPLE
+
+        issues_text = ""
+        for issue in all_issues:
+            desc = issue.get('description', str(issue)) if isinstance(issue, dict) else str(issue)
+            fix = issue.get('fix', '') if isinstance(issue, dict) else ''
+            severity = issue.get('severity', 'warning') if isinstance(issue, dict) else 'warning'
+            issues_text += f"\n[{severity.upper()}] {desc}"
+            if fix:
+                issues_text += f"\n   → FIX: {fix}"
+            issues_text += "\n"
+
+        feedback = f"""QC Auto-Fix Attempt {attempt}/{max_attempts}
+
+{CORE_PRINCIPLE}
+
+ALL ISSUES TO FIX:
+{issues_text}
+
+You MUST address ALL issues above. Make the specific changes requested.
+The revised output must be SELLABLE and match the Business Brief."""
+
+        # Apply fixes (similar to apply_qc_fixes but inline)
+        build = metadata.get("build", {})
+        original_build = build.get("output", "")
+        plan = metadata.get("plan", {})
+        context = metadata.get("context", {})
+        tokens = metadata.get("tokens", {"total": 0, "by_agent": {}})
+
+        revision_prompt = f"""QC has evaluated your work and found issues. You must fix them now.
+
+{feedback}
+
+ORIGINAL IMPLEMENTATION:
+{original_build}
+
+Revise the implementation to fix ALL QC issues while maintaining SELLABLE quality."""
+
+        try:
+            from atlas.agents.base import AgentOutput
+            architect_plan = plan.get('raw_plan', '')
+            architect_output = AgentOutput(content=architect_plan) if architect_plan else None
+
+            mason_output = await agent_manager.mason.process(
+                revision_prompt,
+                context,
+                previous_output=architect_output
+            )
+
+            if mason_output.content:
+                mason_tokens = mason_output.tokens_used
+                tokens["total"] += mason_tokens
+                tokens["by_agent"]["mason"] = tokens.get("by_agent", {}).get("mason", 0) + mason_tokens
+
+                # Extract and assemble files
+                from ..utils import parse_code_blocks
+                from atlas.assembly.code_assembler import assemble_code
+                from atlas.assembly.validator import validate_code
+                from atlas.assembly.html_expander import expand_document_html
+
+                extracted_files = parse_code_blocks(mason_output.content)
+                assembly_result = assemble_code(extracted_files)
+                assembled_files = assembly_result.files
+                assembled_files = expand_document_html(assembled_files)
+                validation_result = validate_code(assembled_files, mason_output.content)
+
+                # Generate build preview
+                preview_generator = BuildPreviewGenerator()
+                build_preview = preview_generator.generate_preview(
+                    mason_output.content,
+                    project_context=context
+                )
+
+                build["output"] = mason_output.content
+                build["files"] = extracted_files
+                build["extracted_files"] = extracted_files
+                build["assembled_files"] = assembled_files
+                build["assembly"] = {
+                    "issues_fixed": assembly_result.issues_fixed,
+                    "remaining_issues": assembly_result.remaining_issues,
+                }
+                build["validation"] = validation_result.to_dict()
+                build["is_runnable"] = assembly_result.is_runnable
+                build["preview"] = build_preview.to_dict()
+                build["agent_output"] = {
+                    "content": mason_output.content,
+                    "tokens_used": mason_tokens,
+                    "provider": mason_output.metadata.get("provider", "unknown"),
+                    "revised": True,
+                    "revision_source": "qc_auto_fix",
+                    "auto_fix_attempt": attempt,
+                }
+                build["revision_count"] = build.get("revision_count", 0) + 1
+
+                metadata["build"] = build
+                metadata["tokens"] = tokens
+                metadata["build_qc_report"] = qc_dict
+
+                await project_manager.update_project(project_id, metadata=metadata)
+
+        except Exception as e:
+            logger.error(f"Auto-fix attempt {attempt} failed: {e}")
+            results["stopped_reason"] = f"Error during fix: {str(e)}"
+            break
+
+    # If we exhausted attempts without passing
+    if not results["success"] and not results["stopped_reason"]:
+        results["stopped_reason"] = f"Max attempts ({max_attempts}) reached"
+        results["final_verdict"] = results["attempts"][-1]["verdict"] if results["attempts"] else "unknown"
+
+    return JSONResponse(results)
 
 
 @router.post("/{project_id}/complete", response_class=HTMLResponse)
@@ -2757,13 +4258,6 @@ PLATFORMS = {
     },
 
     # ==================== Design & Creative ====================
-    "canva": {
-        "name": "Canva Apps",
-        "icon": "🎨",
-        "category": "creative",
-        "knowledge_id": "canva-app-deployment",
-        "env_vars": [],
-    },
     "figma": {
         "name": "Figma Plugins",
         "icon": "🎯",
@@ -4123,236 +5617,84 @@ async def reset_team_chat(request: Request, project_id: int):
     return JSONResponse({"success": True, "message": "Team conversation reset"})
 
 
-# ================================================
-# CANVA EXPORT ROUTES
-# ================================================
+# ============================================================================
+# Director Agent - Real-time Agent Conversation (Phase 4)
+# ============================================================================
 
-@router.get("/{project_id}/canva/status")
-async def canva_status(request: Request, project_id: int):
-    """Check if Canva integration is configured."""
-    import os
+@router.post("/{project_id}/start-director")
+async def start_director_build(request: Request, project_id: int):
+    """Start the Director agent to orchestrate the build.
+
+    This kicks off the real-time agent conversation where:
+    - Director analyzes the goal
+    - Spawns appropriate team of agents
+    - Agents discuss and build in real-time
+    - Progress is streamed via WebSocket
+    """
+    import asyncio
+    from atlas.agents.director import DirectorAgent
+    from atlas.agents.analyst import BusinessBrief
 
     project_manager = request.app.state.project_manager
     if not project_manager:
-        return JSONResponse({
-            "configured": False,
-            "error": "Project manager not initialized"
-        }, status_code=500)
+        return JSONResponse({"error": "Project manager not available"}, status_code=500)
 
     project = await project_manager.get_project(project_id)
     if not project:
-        return JSONResponse({
-            "configured": False,
-            "error": "Project not found"
-        }, status_code=404)
+        return JSONResponse({"error": "Project not found"}, status_code=404)
 
-    # Check for Canva API key
-    canva_key = os.environ.get("CANVA_API_KEY")
+    # Get business brief if available
+    metadata = project.metadata or {}
+    brief = None
+
+    brief_data = metadata.get("business_brief")
+    if brief_data:
+        try:
+            # Filter to only valid BusinessBrief fields
+            import dataclasses
+            valid_fields = {f.name for f in dataclasses.fields(BusinessBrief)}
+            filtered_data = {k: v for k, v in brief_data.items() if k in valid_fields}
+            brief = BusinessBrief(**filtered_data)
+        except Exception as e:
+            logger.warning(f"Could not parse business brief: {e}")
+
+    # Create and run director in background
+    async def run_director():
+        try:
+            director = DirectorAgent(project)
+            result = await director.run(brief=brief)
+            logger.info(f"Director completed for project {project_id}: {result}")
+
+            # Update project metadata with result
+            new_metadata = dict(metadata)
+            new_metadata["director_result"] = result
+            new_metadata["phase"] = "review" if result.get("success") else "error"
+            await project_manager.update_project(project_id, metadata=new_metadata)
+
+        except Exception as e:
+            logger.exception(f"Director error for project {project_id}: {e}")
+
+    # Start in background
+    asyncio.create_task(run_director())
 
     return JSONResponse({
-        "configured": bool(canva_key),
-        "has_build_output": bool(project.metadata.get("build", {}).get("output")),
+        "success": True,
+        "message": "Director started. Watch the conversation via WebSocket.",
+        "websocket_url": f"/ws/projects/{project_id}/conversation"
     })
 
 
-@router.post("/{project_id}/canva/create-planner")
-async def create_canva_planner(request: Request, project_id: int):
-    """Export planner pages to Canva as a multi-page design.
+@router.get("/{project_id}/conversation-view", response_class=HTMLResponse)
+async def get_conversation_view(request: Request, project_id: int):
+    """Get the live conversation partial for a project."""
+    templates = request.app.state.templates
 
-    This endpoint:
-    1. Extracts HTML from the build output
-    2. Renders each page to a PNG image
-    3. Uploads images to Canva as assets
-    4. Creates a multi-page design
-    5. Returns the edit URL
-    """
-    import os
-
-    project_manager = request.app.state.project_manager
-    if not project_manager:
-        return JSONResponse({
-            "success": False,
-            "error": "Project manager not initialized"
-        }, status_code=500)
-
-    project = await project_manager.get_project(project_id)
-    if not project:
-        return JSONResponse({
-            "success": False,
-            "error": "Project not found"
-        }, status_code=404)
-
-    # Check for Canva API key
-    canva_key = os.environ.get("CANVA_API_KEY")
-    if not canva_key:
-        return JSONResponse({
-            "success": False,
-            "error": "CANVA_API_KEY environment variable not set"
-        }, status_code=400)
-
-    # Get build output
-    build = project.metadata.get("build", {})
-    output = build.get("output", "")
-
-    if not output:
-        return JSONResponse({
-            "success": False,
-            "error": "No build output available. Build the project first."
-        }, status_code=400)
-
-    try:
-        # Extract HTML from build output
-        from atlas.utils.pdf_generator import PDFGenerator
-        pdf_gen = PDFGenerator()
-        html_files = pdf_gen.extract_html_from_build(output)
-
-        if not html_files:
-            return JSONResponse({
-                "success": False,
-                "error": "No HTML pages found in build output"
-            }, status_code=400)
-
-        # Create Canva integration and design
-        from atlas.integrations.platforms.canva import CanvaIntegration
-
-        canva = CanvaIntegration({"api_key": canva_key})
-
-        # Authenticate
-        if not await canva.authenticate():
-            return JSONResponse({
-                "success": False,
-                "error": "Failed to authenticate with Canva"
-            }, status_code=401)
-
-        # Create the planner design
-        design_title = f"{project.name} - Planner"
-        design = await canva.create_planner_from_html(
-            html_files,
-            title=design_title,
-        )
-
-        if not design:
-            return JSONResponse({
-                "success": False,
-                "error": "Failed to create Canva design"
-            }, status_code=500)
-
-        # Update project metadata with Canva info
-        new_metadata = project.metadata.copy() if project.metadata else {}
-        if "canva" not in new_metadata:
-            new_metadata["canva"] = {}
-        new_metadata["canva"]["planner"] = {
-            "design_id": design.get("id"),
-            "edit_url": design.get("edit_url"),
-            "view_url": design.get("view_url"),
-            "page_count": design.get("page_count"),
-            "created_at": datetime.now().isoformat(),
+    return templates.TemplateResponse(
+        "partials/live_conversation.html",
+        {
+            "request": request,
+            "project_id": project_id,
         }
-
-        await project_manager.update_project(project_id, metadata=new_metadata)
-
-        return JSONResponse({
-            "success": True,
-            "design_id": design.get("id"),
-            "edit_url": design.get("edit_url"),
-            "view_url": design.get("view_url"),
-            "page_count": design.get("page_count"),
-            "message": f"Created Canva design with {design.get('page_count')} pages"
-        })
-
-    except ImportError as e:
-        logger.error(f"Missing dependency for Canva export: {e}")
-        return JSONResponse({
-            "success": False,
-            "error": f"Missing dependency: {e}. Install with: pip install playwright && playwright install chromium"
-        }, status_code=500)
-
-    except Exception as e:
-        logger.exception(f"Error creating Canva planner: {e}")
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
+    )
 
 
-@router.get("/canva/authorize")
-async def canva_authorize(request: Request):
-    """Start Canva OAuth flow - redirects user to Canva to authorize."""
-    from pathlib import Path
-    from atlas.integrations.platforms.canva import CanvaIntegration
-
-    canva = CanvaIntegration()
-    if not canva.client_id:
-        return JSONResponse({
-            "error": "CANVA_CLIENT_ID not configured"
-        }, status_code=400)
-
-    # Build redirect URI - must use 127.0.0.1 for Canva
-    redirect_uri = "http://127.0.0.1:8000/projects/canva/callback"
-    auth_url, code_verifier = canva.get_authorization_url(redirect_uri)
-
-    # Save code_verifier for the callback
-    verifier_file = Path.home() / ".canva_verifier"
-    verifier_file.write_text(code_verifier)
-    verifier_file.chmod(0o600)
-
-    return RedirectResponse(url=auth_url)
-
-
-@router.get("/canva/callback")
-async def canva_callback(request: Request, code: str = None, error: str = None):
-    """Handle Canva OAuth callback."""
-    from pathlib import Path
-    from atlas.integrations.platforms.canva import CanvaIntegration
-
-    if error:
-        return HTMLResponse(f"""
-        <html><body>
-        <h1>Canva Authorization Failed</h1>
-        <p>Error: {error}</p>
-        <a href="/projects">Back to Projects</a>
-        </body></html>
-        """)
-
-    if not code:
-        return HTMLResponse("""
-        <html><body>
-        <h1>Canva Authorization Failed</h1>
-        <p>No authorization code received.</p>
-        <a href="/projects">Back to Projects</a>
-        </body></html>
-        """)
-
-    # Load saved code_verifier
-    verifier_file = Path.home() / ".canva_verifier"
-    if not verifier_file.exists():
-        return HTMLResponse("""
-        <html><body>
-        <h1>Canva Authorization Failed</h1>
-        <p>Code verifier not found. Please start the authorization again.</p>
-        <a href="/projects/canva/authorize">Try Again</a>
-        </body></html>
-        """)
-
-    code_verifier = verifier_file.read_text().strip()
-    verifier_file.unlink()  # Delete after use
-
-    canva = CanvaIntegration()
-    redirect_uri = "http://127.0.0.1:8000/projects/canva/callback"
-
-    if await canva.exchange_code_for_token(code, code_verifier, redirect_uri):
-        return HTMLResponse("""
-        <html><body>
-        <h1>Canva Connected Successfully!</h1>
-        <p>ATLAS can now create designs in your Canva account.</p>
-        <a href="/projects">Back to Projects</a>
-        </body></html>
-        """)
-    else:
-        return HTMLResponse("""
-        <html><body>
-        <h1>Canva Authorization Failed</h1>
-        <p>Could not exchange authorization code for token.</p>
-        <a href="/projects">Back to Projects</a>
-        </body></html>
-        """)

@@ -26,6 +26,8 @@ from .oracle import OracleAgent
 from .finisher import FinisherAgent
 from .launch import LaunchAgent
 from .hype import HypeAgent
+from .qc import QCAgent, QCVerdict
+from .kickoff import KickoffAgent
 
 
 class WorkflowMode(Enum):
@@ -40,6 +42,10 @@ class WorkflowMode(Enum):
     FULL_POLISH = "full_polish"  # Sketch -> Tinker -> Oracle -> Finisher (ready to sell)
     FULL_CAMPAIGN = "full_campaign"  # Sketch -> Tinker -> Oracle -> Finisher -> Launch -> Hype
     PROMOTE_ONLY = "promote_only"  # Hype only (for existing products)
+
+    # New: QC-integrated modes
+    WITH_KICKOFF = "with_kickoff"  # Kickoff -> Architect -> Mason -> QC -> Oracle
+    QC_BUILD = "qc_build"  # Mason -> QC (with retry loop)
 
     # Update modes - for modifying existing products
     UPDATE = "update"          # Update existing product (auto-detect update type)
@@ -104,6 +110,8 @@ class AgentManager:
         self.finisher = FinisherAgent(router, memory, **agent_kwargs)
         self.launch = LaunchAgent(router, memory, **agent_kwargs)
         self.hype = HypeAgent(router, memory, **agent_kwargs)
+        self.qc = QCAgent(router, memory, **agent_kwargs)
+        self.kickoff = KickoffAgent(router, memory, **agent_kwargs)
 
         # File writer for saving generated code
         self.file_writer = FileWriter(base_dir=output_dir)
@@ -116,7 +124,7 @@ class AgentManager:
         self._completion_callbacks: list[Callable] = []
 
         # Register status callbacks from agents
-        for agent in [self.architect, self.mason, self.oracle, self.finisher, self.launch, self.hype]:
+        for agent in [self.architect, self.mason, self.oracle, self.finisher, self.launch, self.hype, self.qc, self.kickoff]:
             agent.register_callback(self._on_agent_status_change)
 
     def register_event_callback(self, callback: Callable[[WorkflowEvent], None]):
@@ -271,7 +279,128 @@ class AgentManager:
             "finisher": self.finisher.get_status_dict(),
             "launch": self.launch.get_status_dict(),
             "hype": self.hype.get_status_dict(),
+            "qc": self.qc.get_status_dict(),
+            "kickoff": self.kickoff.get_status_dict(),
         }
+
+    async def _execute_mason_with_qc(
+        self,
+        task: str,
+        context: dict,
+        previous_output: Optional[AgentOutput],
+        brief: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute Mason with QC validation and retry loop.
+
+        QC Flow:
+        - Attempt 1: If NEEDS_REVISION, add feedback and retry Mason
+        - Attempt 2: If still NEEDS_REVISION, mark as BLOCKED
+        - PASS or PASS_WITH_NOTES: Proceed to next agent
+
+        Args:
+            task: The build task
+            context: Workflow context
+            previous_output: Output from previous agent (Architect)
+            brief: The Business Brief for QC validation
+
+        Returns:
+            Dictionary with mason and qc outputs, plus any retry outputs
+        """
+        outputs: dict[str, AgentOutput] = {}
+        max_attempts = 2
+
+        for attempt in range(1, max_attempts + 1):
+            # Mason builds
+            self._emit_event(WorkflowEvent(
+                event_type="agent_start",
+                agent_name="mason",
+                data={"task": task, "phase": "building", "qc_attempt": attempt}
+            ))
+
+            # On retry, include QC feedback in context
+            mason_context = context.copy()
+            if attempt > 1 and "qc_feedback" in context:
+                mason_context["revision_instructions"] = context["qc_feedback"]
+
+            mason_output = await self.mason.process(task, mason_context, previous_output)
+            outputs[f"mason_{attempt}"] = mason_output
+
+            self._emit_event(WorkflowEvent(
+                event_type="agent_complete",
+                agent_name="mason",
+                data={"task": task, "phase": "building", "qc_attempt": attempt}
+            ))
+
+            if mason_output.status == AgentStatus.ERROR:
+                outputs["mason"] = mason_output
+                break
+
+            # QC validates the build
+            self._emit_event(WorkflowEvent(
+                event_type="agent_start",
+                agent_name="qc",
+                data={"task": task, "phase": "quality_check", "qc_attempt": attempt}
+            ))
+
+            # Build the output dict for QC
+            build_output = {
+                "content": mason_output.content,
+                "artifacts": mason_output.artifacts,
+                "files": mason_output.artifacts.get("files", {}),
+            }
+
+            qc_report = await self.qc.check_build(
+                output=build_output,
+                brief=brief,
+                attempt=attempt,
+            )
+            outputs[f"qc_{attempt}"] = AgentOutput(
+                content=qc_report.verdict_reason,
+                artifacts=qc_report.to_dict(),
+                metadata={
+                    "verdict": qc_report.verdict.value,
+                    "can_proceed": qc_report.can_proceed,
+                    "should_block": qc_report.should_block,
+                    "attempt": attempt,
+                },
+            )
+
+            self._emit_event(WorkflowEvent(
+                event_type="agent_complete",
+                agent_name="qc",
+                data={
+                    "task": task,
+                    "phase": "quality_check",
+                    "qc_attempt": attempt,
+                    "verdict": qc_report.verdict.value,
+                    "can_proceed": qc_report.can_proceed,
+                }
+            ))
+
+            # Check verdict
+            if qc_report.can_proceed:  # PASS or PASS_WITH_NOTES
+                outputs["mason"] = mason_output
+                outputs["qc"] = outputs[f"qc_{attempt}"]
+                logger.info(f"[QC] Build passed on attempt {attempt}: {qc_report.verdict.value}")
+                break
+
+            if qc_report.should_block:  # Still failed on attempt 2
+                outputs["mason"] = mason_output
+                outputs["qc"] = outputs[f"qc_{attempt}"]
+                outputs["blocked"] = AgentOutput(
+                    content="Build blocked by QC after maximum attempts",
+                    artifacts={"reason": "QC_BLOCKED", "attempts": attempt},
+                    metadata={"blocked": True},
+                )
+                logger.warning(f"[QC] Build blocked after {attempt} attempts")
+                break
+
+            # NEEDS_REVISION - add feedback for retry
+            if attempt < max_attempts:
+                context["qc_feedback"] = qc_report.fix_instructions
+                logger.info(f"[QC] Attempt {attempt} needs revision, retrying...")
+
+        return outputs
 
     async def execute_workflow(
         self,
@@ -320,6 +449,12 @@ class AgentManager:
             elif mode == WorkflowMode.PROMOTE_ONLY:
                 outputs = await self._execute_promote_only(task, context)
 
+            # QC-integrated modes
+            elif mode == WorkflowMode.WITH_KICKOFF:
+                outputs = await self._execute_with_kickoff(task, context)
+            elif mode == WorkflowMode.QC_BUILD:
+                outputs = await self._execute_qc_build(task, context)
+
             # Update modes
             elif mode == WorkflowMode.UPDATE:
                 outputs = await self._execute_update(task, context, UpdateType.MINOR)
@@ -342,6 +477,11 @@ class AgentManager:
             if "finisher" in outputs:
                 final_verdict = outputs["finisher"].artifacts.get("verdict", "N/A")
                 needs_revision = final_verdict == "NEEDS_POLISH"
+            elif "qc" in outputs:
+                # QC-based workflow
+                qc_output = outputs["qc"]
+                final_verdict = qc_output.metadata.get("verdict", "N/A")
+                needs_revision = not qc_output.metadata.get("can_proceed", True)
             elif "oracle" in outputs:
                 final_verdict = outputs["oracle"].metadata.get("verdict", "N/A")
                 needs_revision = outputs["oracle"].metadata.get("needs_revision", False)
@@ -1191,6 +1331,147 @@ Files to modify: {', '.join(spec_task.files_to_modify) if spec_task.files_to_mod
                 },
                 metadata={"type": "changelog"},
             )
+
+        return outputs
+
+    async def _execute_with_kickoff(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute workflow with Kickoff and QC: Kickoff -> Architect -> Mason -> QC -> Oracle.
+
+        This workflow:
+        1. Runs Kickoff to validate Brief and create project plan
+        2. Runs Architect with Kickoff context
+        3. Runs Mason with QC validation loop
+        4. Runs Oracle for final verification
+        """
+        outputs = {}
+
+        # Get Brief from context
+        brief = context.get("brief", {})
+        if not brief:
+            return {
+                "error": AgentOutput(
+                    content="No Business Brief provided",
+                    status=AgentStatus.ERROR,
+                    metadata={"error": "Missing brief"},
+                )
+            }
+
+        # Phase 1: Kickoff validates and plans
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="kickoff",
+            data={"task": task, "phase": "kickoff"}
+        ))
+
+        kickoff_output = await self.kickoff.process(task, context)
+        outputs["kickoff"] = kickoff_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="kickoff",
+            data={"task": task, "phase": "kickoff"}
+        ))
+
+        # Check if Kickoff blocked (Brief not approved)
+        if kickoff_output.artifacts.get("blocked"):
+            return outputs
+
+        if kickoff_output.status == AgentStatus.ERROR:
+            return outputs
+
+        # Add Kickoff plan to context for downstream agents
+        context["kickoff_plan"] = kickoff_output.artifacts.get("kickoff_plan", {})
+
+        # Phase 2: Architect plans with Kickoff context
+        self._emit_event(WorkflowEvent(
+            event_type="agent_start",
+            agent_name="architect",
+            data={"task": task, "phase": "planning"}
+        ))
+
+        architect_output = await self.architect.process(task, context, kickoff_output)
+        outputs["architect"] = architect_output
+
+        self._emit_event(WorkflowEvent(
+            event_type="agent_complete",
+            agent_name="architect",
+            data={"task": task, "phase": "planning"}
+        ))
+
+        if architect_output.status == AgentStatus.ERROR:
+            return outputs
+
+        # Phase 3: Mason builds with QC validation loop
+        mason_qc_outputs = await self._execute_mason_with_qc(
+            task=task,
+            context=context,
+            previous_output=architect_output,
+            brief=brief,
+        )
+        outputs.update(mason_qc_outputs)
+
+        # Check if blocked by QC
+        if mason_qc_outputs.get("blocked"):
+            return outputs
+
+        # Phase 4: Oracle final verification
+        mason_output = mason_qc_outputs.get("mason")
+        if mason_output and mason_output.status != AgentStatus.ERROR:
+            self._emit_event(WorkflowEvent(
+                event_type="agent_start",
+                agent_name="oracle",
+                data={"task": task, "phase": "verifying"}
+            ))
+
+            oracle_output = await self.oracle.process(task, context, mason_output)
+            outputs["oracle"] = oracle_output
+
+            self._emit_event(WorkflowEvent(
+                event_type="agent_complete",
+                agent_name="oracle",
+                data={
+                    "task": task,
+                    "phase": "verifying",
+                    "verdict": oracle_output.metadata.get("verdict", "UNKNOWN")
+                }
+            ))
+
+        return outputs
+
+    async def _execute_qc_build(
+        self,
+        task: str,
+        context: dict,
+    ) -> dict[str, AgentOutput]:
+        """Execute Mason with QC validation only (no planning).
+
+        Use this for simple builds that need QC validation.
+        Requires 'brief' in context for QC to validate against.
+        """
+        outputs = {}
+
+        brief = context.get("brief", {})
+        if not brief:
+            return {
+                "error": AgentOutput(
+                    content="No Business Brief provided for QC validation",
+                    status=AgentStatus.ERROR,
+                    metadata={"error": "Missing brief"},
+                )
+            }
+
+        # Run Mason with QC loop
+        mason_qc_outputs = await self._execute_mason_with_qc(
+            task=task,
+            context=context,
+            previous_output=None,
+            brief=brief,
+        )
+        outputs.update(mason_qc_outputs)
 
         return outputs
 

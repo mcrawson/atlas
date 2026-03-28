@@ -15,14 +15,40 @@ class ProjectStatus(Enum):
 
 
 class TaskStatus(Enum):
-    """Status of a task within a project."""
+    """Status of a task within a project.
+
+    ATLAS 3.0 workflow stages:
+    1. IDEA_CHAT - Discussing the idea
+    2. ANALYZING - Analyst creating Business Brief
+    3. BRIEF_REVIEW - User reviewing Business Brief (Go/No-Go)
+    4. ROUND_TABLE - Agents aligning on the work
+    5. MOCKUP - Creating visual preview
+    6. MOCKUP_REVIEW - User reviewing mockup
+    7. BUILDING - Specialized builder creating product
+    8. QC - Quality control checking output
+    9. BUILD_REVIEW - User reviewing final product
+    10. DEPLOYING - Pushing to marketplace
+    11. COMPLETED - Done
+    """
+    # New ATLAS 3.0 workflow
     PENDING = "pending"
-    PLANNING = "planning"  # Architect is working
-    BUILDING = "building"  # Mason is working
-    VERIFYING = "verifying"  # Oracle is working
-    REVISION = "revision"  # Back to Mason after Oracle rejection
+    IDEA_CHAT = "idea_chat"        # Discussing the idea
+    ANALYZING = "analyzing"        # Analyst creating Business Brief
+    BRIEF_REVIEW = "brief_review"  # User reviewing Business Brief
+    ROUND_TABLE = "round_table"    # Agents aligning
+    MOCKUP = "mockup"              # Creating visual preview
+    MOCKUP_REVIEW = "mockup_review"  # User reviewing mockup
+    BUILDING = "building"          # Builder creating product
+    QC = "qc"                      # Quality control
+    BUILD_REVIEW = "build_review"  # User reviewing final product
+    DEPLOYING = "deploying"        # Pushing to marketplace
     COMPLETED = "completed"
     FAILED = "failed"
+
+    # Legacy statuses (for backwards compatibility)
+    PLANNING = "planning"          # Maps to ANALYZING
+    VERIFYING = "verifying"        # Maps to QC
+    REVISION = "revision"          # Back to building after QC issues
 
 
 @dataclass
@@ -153,7 +179,20 @@ class ProjectTask:
     @property
     def is_active(self) -> bool:
         """Check if task is currently being worked on."""
-        return self.status in (TaskStatus.PLANNING, TaskStatus.BUILDING, TaskStatus.VERIFYING, TaskStatus.REVISION)
+        active_statuses = (
+            TaskStatus.IDEA_CHAT,
+            TaskStatus.ANALYZING,
+            TaskStatus.ROUND_TABLE,
+            TaskStatus.MOCKUP,
+            TaskStatus.BUILDING,
+            TaskStatus.QC,
+            TaskStatus.DEPLOYING,
+            TaskStatus.REVISION,
+            # Legacy
+            TaskStatus.PLANNING,
+            TaskStatus.VERIFYING,
+        )
+        return self.status in active_statuses
 
 
 @dataclass

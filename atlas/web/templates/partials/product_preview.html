@@ -2,8 +2,9 @@
 <!-- Shows what customers will see: App Store listings, book covers, website screenshots -->
 
 {% set brief = project.metadata.get('smart_conversation', {}).get('brief', {}) %}
-{% set project_type = brief.get('project_type', '') %}
-{% set project_category = brief.get('project_category', '') %}
+{# project_type and project_category are stored at metadata root, not inside brief #}
+{% set project_type = project.metadata.get('project_type', '') or brief.get('project_type', '') %}
+{% set project_category = project.metadata.get('project_category', '') or brief.get('project_category', '') %}
 {% set build = project.metadata.get('build', {}) %}
 {% set preview_data = project.metadata.get('product_preview', {}) %}
 
@@ -12,6 +13,10 @@
         <span class="preview-badge">👁️ Customer Preview</span>
         <h3>What Your Customers Will See</h3>
     </div>
+
+    {# Get build output for app screens #}
+    {% set build_output = build.get('output', '') %}
+    {% set assembled_files = build.get('assembled_files', {}) %}
 
     <div class="product-preview-content">
         {% if project_category == 'app' %}
@@ -22,6 +27,37 @@
                     <div class="device-screen">
                         {% if preview_data.get('screenshot') %}
                         <img src="{{ preview_data.screenshot }}" alt="App Screenshot" />
+                        {% elif assembled_files %}
+                        <!-- Show actual app screens from build -->
+                        <div class="app-screens-preview">
+                            <div class="screen-header">
+                                <span class="screen-title">{{ project.name }}</span>
+                            </div>
+                            <div class="screen-tabs">
+                                {% for filename in assembled_files.keys() %}
+                                {% if 'Screen' in filename or 'screen' in filename or 'widget' in filename or 'page' in filename %}
+                                <div class="screen-tab">
+                                    {{ filename | replace('lib/screens/', '') | replace('lib/widgets/', '') | replace('Screen', '') | replace('_screen', '') | replace('.dart', '') | replace('.js', '') | replace('.tsx', '') | replace('_', ' ') | title }}
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            <div class="screen-content-preview">
+                                <div class="preview-card"></div>
+                                <div class="preview-list">
+                                    <div class="preview-item"></div>
+                                    <div class="preview-item"></div>
+                                    <div class="preview-item"></div>
+                                </div>
+                            </div>
+                            <div class="screen-nav">
+                                {% for filename in assembled_files.keys() %}
+                                {% if 'Screen' in filename or 'screen' in filename or 'widget' in filename or 'page' in filename %}
+                                <span class="nav-icon">●</span>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
                         {% else %}
                         <div class="placeholder-screen">
                             <div class="placeholder-header"></div>
@@ -61,6 +97,23 @@
                     </div>
                 </div>
                 <button class="store-button">GET</button>
+
+                <!-- App Screens List -->
+                {% if assembled_files %}
+                <div class="app-screens-list">
+                    <h5>App Screens</h5>
+                    <div class="screens-grid">
+                        {% for filename in assembled_files.keys() %}
+                        {% if 'Screen' in filename or 'screen' in filename or 'widget' in filename or 'page' in filename %}
+                        <div class="screen-badge">
+                            📱 {{ filename | replace('lib/screens/', '') | replace('lib/widgets/', '') | replace('Screen', '') | replace('_screen', '') | replace('.dart', '') | replace('.js', '') | replace('.tsx', '') | replace('_', ' ') | title }}
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="store-meta">
                     <div class="meta-item">
                         <span class="meta-label">Age</span>
@@ -270,6 +323,61 @@
             </div>
         </div>
 
+        {% elif project_category == 'printable' %}
+        <!-- Printable Product Preview (Planners, Journals, etc.) -->
+        <div class="printable-preview">
+            <div class="product-showcase">
+                <div class="planner-mockup">
+                    {% if preview_data.get('cover') %}
+                    <img src="{{ preview_data.cover }}" alt="Product Cover" class="planner-cover-img" />
+                    {% else %}
+                    <div class="planner-cover">
+                        <div class="cover-design">
+                            <div class="cover-pattern"></div>
+                            <div class="cover-title">{{ project.name }}</div>
+                            <div class="cover-year">{{ brief.get('year', '2026') }}</div>
+                        </div>
+                        <div class="planner-binding"></div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="product-details">
+                    <div class="marketplace-badge">
+                        <span class="badge-icon">🛒</span>
+                        <span>Marketplace Ready</span>
+                    </div>
+                    <h4 class="product-title">{{ project.name }}</h4>
+                    <p class="product-tagline">{{ brief.get('tagline', 'Your productivity companion') }}</p>
+
+                    <div class="product-specs">
+                        <div class="spec-item">
+                            <span class="spec-icon">📄</span>
+                            <span>{{ brief.get('page_count', '52') }} Pages</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-icon">📐</span>
+                            <span>{{ brief.get('size', 'A4/Letter') }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-icon">🖨️</span>
+                            <span>Print Ready PDF</span>
+                        </div>
+                    </div>
+
+                    <div class="sell-platforms">
+                        <span class="platform-label">Sell on:</span>
+                        <div class="platform-icons">
+                            <span class="platform" title="Etsy">🛍️</span>
+                            <span class="platform" title="Gumroad">💰</span>
+                            <span class="platform" title="Amazon KDP">📚</span>
+                            <span class="platform" title="Creative Market">🎨</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {% else %}
         <!-- Generic Preview -->
         <div class="generic-preview">
@@ -420,6 +528,122 @@
     background: rgba(255, 255, 255, 0.9);
     border-radius: 0 0 26px 26px;
     backdrop-filter: blur(10px);
+}
+
+/* App Screens Preview (from actual build) */
+.app-screens-preview {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    padding: 35px 10px 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.screen-header {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.screen-title {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.screen-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.screen-tab {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 9px;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+}
+
+.screen-content-preview {
+    flex: 1;
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preview-card {
+    height: 50px;
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.preview-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.preview-item {
+    height: 30px;
+    background: #f8f9fc;
+    border-radius: 6px;
+    border-left: 3px solid #667eea;
+}
+
+.screen-nav {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 0 0 20px 20px;
+}
+
+.nav-icon {
+    color: #667eea;
+    font-size: 8px;
+}
+
+/* App Screens List in Store Listing */
+.app-screens-list {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 8px;
+}
+
+.app-screens-list h5 {
+    font-size: 0.75rem;
+    color: #667eea;
+    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.screens-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.screen-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    background: #fff;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 12px;
+    color: #667eea;
 }
 
 /* Store Listing */
@@ -1086,6 +1310,184 @@
     font-family: var(--font-mono);
     font-size: 0.85rem;
     color: #333;
+}
+
+/* ============================================
+   Physical/Printable Product Preview
+   ============================================ */
+.printable-preview {
+    width: 100%;
+    max-width: 600px;
+}
+
+.product-showcase {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    background: linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 39, 48, 0.9) 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.planner-mockup {
+    flex-shrink: 0;
+}
+
+.planner-cover {
+    width: 160px;
+    height: 220px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px 12px 12px 4px;
+    position: relative;
+    box-shadow:
+        -4px 0 8px rgba(0, 0, 0, 0.3),
+        0 10px 30px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.planner-cover-img {
+    width: 160px;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 4px 12px 12px 4px;
+    box-shadow:
+        -4px 0 8px rgba(0, 0, 0, 0.3),
+        0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.cover-design {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+.cover-pattern {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 30%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 30%);
+    z-index: 0;
+}
+
+.cover-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.cover-year {
+    font-size: 2rem;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.9);
+    position: relative;
+    z-index: 1;
+}
+
+.planner-binding {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    background: linear-gradient(90deg,
+        rgba(0, 0, 0, 0.4) 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(0, 0, 0, 0.3) 100%);
+}
+
+.product-details {
+    flex: 1;
+}
+
+.marketplace-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    color: #10b981;
+    margin-bottom: 1rem;
+}
+
+.product-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.5rem 0;
+}
+
+.product-tagline {
+    color: #a0aec0;
+    font-size: 0.9rem;
+    margin: 0 0 1.25rem 0;
+}
+
+.product-specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.spec-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #cbd5e0;
+}
+
+.spec-icon {
+    font-size: 0.9rem;
+}
+
+.sell-platforms {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.platform-label {
+    font-size: 0.75rem;
+    color: #718096;
+}
+
+.platform-icons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.platform-icons .platform {
+    font-size: 1.25rem;
+    opacity: 0.7;
+    transition: opacity 0.2s, transform 0.2s;
+    cursor: default;
+}
+
+.platform-icons .platform:hover {
+    opacity: 1;
+    transform: scale(1.1);
 }
 
 /* ============================================

@@ -86,9 +86,10 @@ class ChangelogGenerator:
         changelog_section = self._extract_changelog_section(agent_output)
         if changelog_section:
             section_entries = self._parse_changelog_section(changelog_section)
-            entries.extend(section_entries)
             for e in section_entries:
-                seen_descriptions.add(e.description.lower())
+                if e.description.lower() not in seen_descriptions:
+                    entries.append(e)
+                    seen_descriptions.add(e.description.lower())
 
         # Look for "Files Modified" section for additional changes
         if "## Files Modified" in agent_output:
@@ -167,6 +168,9 @@ class ChangelogGenerator:
                 if issue_match:
                     issue_ref = issue_match.group(1)
                     desc = desc[:issue_match.start()].strip()
+
+                # Clean markdown formatting
+                desc = self._clean_description(desc)
 
                 entries.append(ChangelogEntry(
                     category=current_category,
