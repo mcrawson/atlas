@@ -1,7 +1,7 @@
 """Platform integrations for ATLAS.
 
 This module provides a unified interface for publishing to various platforms:
-- Design: Canva, Figma
+- Design: Figma
 - Documents: Google Docs
 - App Stores: Apple App Store, Google Play
 - Publishing: Amazon KDP
@@ -13,8 +13,8 @@ Usage:
     from atlas.integrations.platforms import get_platform, list_platforms
 
     # Get a specific platform
-    canva = get_platform("canva")
-    await canva.authenticate()
+    figma = get_platform("figma")
+    await figma.authenticate()
 
     # List all available platforms
     platforms = list_platforms()
@@ -38,7 +38,6 @@ from .base import (
     SubmissionStatus,
 )
 
-from .canva import CanvaIntegration
 from .google_docs import GoogleDocsIntegration
 from .figma import FigmaIntegration
 from .app_store import AppStoreIntegration
@@ -51,7 +50,6 @@ from .pypi import PyPIIntegration
 
 # Registry of all platform integrations
 PLATFORM_REGISTRY: dict[str, type[PlatformIntegration]] = {
-    "canva": CanvaIntegration,
     "google_docs": GoogleDocsIntegration,
     "figma": FigmaIntegration,
     "app_store": AppStoreIntegration,
@@ -262,7 +260,6 @@ __all__ = [
     "SubmissionResult",
     "SubmissionStatus",
     # Platform implementations
-    "CanvaIntegration",
     "GoogleDocsIntegration",
     "FigmaIntegration",
     "AppStoreIntegration",
