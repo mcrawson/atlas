@@ -614,10 +614,15 @@ async def approve_business_brief(request: Request, project_id: int):
         # Store Round Table session in metadata
         metadata["roundtable"] = session.to_dict()
 
+        # Store kickoff_plan at top level for easy access
+        if session.kickoff_plan:
+            metadata["kickoff_plan"] = session.kickoff_plan
+
         # Log specialists spawned
         specialist_names = [s.name for s in session.specialists] if session.specialists else []
         logger.info(f"[Kickoff] Round Table V2 complete. Specialists: {specialist_names}")
         logger.info(f"[Kickoff] Deliverables: {len(session.deliverables)}, Timeline phases: {len(session.timeline)}")
+        logger.info(f"[Kickoff] Tech stack: {session.kickoff_plan.get('tech_stack', {}).get('framework', 'N/A')}")
 
     except Exception as e:
         logger.error(f"[Kickoff] Round Table V2 failed: {e}")
@@ -634,97 +639,8 @@ async def approve_business_brief(request: Request, project_id: int):
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
 
 
-@router.post("/{project_id}/kickoff")
-async def run_kickoff(request: Request, project_id: int):
-    """Run the Kickoff agent to create project plan.
-
-    Validates Brief approval and creates a KickoffPlan with:
-    - Project scope (in/out)
-    - Tech stack selection
-    - Build phases with QC checkpoints
-    - Handoff instructions for Architect
-
-    Returns JSON with kickoff plan or error.
-    """
-    from atlas.agents.kickoff import KickoffAgent
-
-    project_manager = request.app.state.project_manager
-
-    if not project_manager:
-        raise HTTPException(status_code=500, detail="Project manager not initialized")
-
-    project = await project_manager.get_project(project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    metadata = project.metadata.copy() if project.metadata else {}
-
-    # Get the Business Brief
-    brief = metadata.get("business_brief", {})
-    if not brief:
-        raise HTTPException(status_code=400, detail="No Business Brief found. Run analyst first.")
-
-    # Check recommendation
-    recommendation = brief.get("recommendation", "")
-    if recommendation != "go":
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": f"Brief not approved for kickoff (recommendation: {recommendation})",
-                "recommendation": recommendation,
-                "hint": "Approve the brief first or override the recommendation",
-            }
-        )
-
-    # Initialize Kickoff agent
-    kickoff_agent = KickoffAgent(
-        router=request.app.state.router,
-        memory=getattr(request.app.state, 'memory', None),
-        providers=getattr(request.app.state, 'providers', {}),
-    )
-
-    # Build context
-    context = {
-        "brief": brief,
-        "project_identity": metadata.get("project_identity", {}),
-    }
-
-    # Run kickoff
-    try:
-        kickoff_output = await kickoff_agent.process(
-            task=project.description or brief.get("product_name", "Project"),
-            context=context,
-        )
-
-        # Check if blocked
-        if kickoff_output.artifacts.get("blocked"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": kickoff_output.content,
-                    "blocked": True,
-                }
-            )
-
-        # Store kickoff plan in metadata
-        metadata["kickoff_plan"] = kickoff_output.artifacts.get("kickoff_plan", {})
-        metadata["kickoff_plan"]["created_at"] = datetime.now().isoformat()
-        metadata["phase"] = "kickoff_complete"
-
-        await project_manager.update_project(project_id, metadata=metadata)
-
-        return JSONResponse(content={
-            "success": True,
-            "kickoff_plan": metadata["kickoff_plan"],
-            "summary": kickoff_output.content,
-            "next_agent": kickoff_output.next_agent,
-        })
-
-    except Exception as e:
-        logger.error(f"[Kickoff] Error: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Kickoff failed: {str(e)}")
+# NOTE: run_kickoff route removed - functionality merged into RoundTableV2.kickoff()
+# The kickoff_plan is now created as part of approve_business_brief flow
 
 
 @router.post("/{project_id}/override-brief", response_class=HTMLResponse)

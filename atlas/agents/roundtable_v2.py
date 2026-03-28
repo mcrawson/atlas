@@ -218,6 +218,9 @@ class RoundTableSession:
     deliverables: list[Deliverable] = field(default_factory=list)
     timeline: list[dict] = field(default_factory=list)
 
+    # Kickoff plan (merged from KickoffAgent)
+    kickoff_plan: dict = field(default_factory=dict)
+
     # Session metadata
     started_at: datetime = field(default_factory=datetime.now)
     status: str = "active"  # active, planning_complete, in_progress, complete
@@ -233,6 +236,7 @@ class RoundTableSession:
             "validated_pricing": self.validated_pricing,
             "deliverables": [d.to_dict() for d in self.deliverables],
             "timeline": self.timeline,
+            "kickoff_plan": self.kickoff_plan,
             "started_at": self.started_at.isoformat(),
             "status": self.status,
         }
@@ -298,6 +302,9 @@ class RoundTableV2:
 
         # Phase 5: Timeline
         await self._phase_create_timeline(session)
+
+        # Phase 6: Technical Planning (merged from KickoffAgent)
+        await self._phase_technical_planning(session, idea)
 
         # Wrap up
         session.status = "planning_complete"
@@ -577,12 +584,277 @@ class RoundTableV2:
             )
 
         conv.add("system", MessageType.DECISION,
-            "=== PLANNING COMPLETE ===\n\n"
+            "=== TIMELINE COMPLETE ===\n\n"
             f"Team: {len(session.specialists)} specialists\n"
             f"Deliverables: {len(session.deliverables)}\n"
-            f"Timeline: {len(timeline)} phases\n\n"
-            f"Mission: Build a SELLABLE product. Let's go!"
+            f"Timeline: {len(timeline)} phases"
         )
+
+    # =========================================================================
+    # Phase 6: Technical Planning (merged from KickoffAgent)
+    # =========================================================================
+
+    async def _phase_technical_planning(self, session: RoundTableSession, idea: str):
+        """Define scope, tech stack, and create kickoff plan."""
+        conv = session.conversation
+        brief = session.brief
+        product_type = brief.get("product_type", "").lower()
+
+        conv.add("system", MessageType.SYSTEM, "=== PHASE 6: TECHNICAL PLANNING ===")
+
+        conv.add("director", MessageType.DISCUSSION,
+            "Final step: Let's nail down the technical details. "
+            "What's in scope, what tech do we use, and what are the risks?"
+        )
+
+        # --- Scope Definition ---
+        scope = self._define_scope(brief, session.deliverables)
+
+        conv.add("planner", MessageType.PROPOSAL,
+            f"**Scope Definition:**\n"
+            f"✅ IN SCOPE: {', '.join(scope['in_scope'][:3])}\n"
+            f"❌ OUT OF SCOPE: {', '.join(scope['out_of_scope'][:3])}\n"
+            f"📋 ASSUMPTIONS: {', '.join(scope['assumptions'][:2])}"
+        )
+
+        # --- Tech Stack Selection ---
+        tech_stack = self._select_tech_stack(product_type, brief)
+
+        conv.add("planner", MessageType.PROPOSAL,
+            f"**Tech Stack:**\n"
+            f"- Framework: {tech_stack.get('framework', 'TBD')}\n"
+            f"- Styling: {tech_stack.get('styling', 'TBD')}\n"
+            f"- Build: {tech_stack.get('build', 'TBD')}\n"
+            f"*Reasoning:* {tech_stack.get('reasoning', 'Standard for product type')}"
+        )
+
+        # --- Priority Features ---
+        priority_features = self._identify_priorities(brief, session.validated_pain_points)
+
+        conv.add("director", MessageType.DECISION,
+            f"**Priority Order:**\n" +
+            "\n".join([f"{i+1}. {f}" for i, f in enumerate(priority_features[:5])])
+        )
+
+        # --- Risk Areas ---
+        risk_areas = self._identify_risks(brief, product_type)
+
+        if risk_areas:
+            conv.add("qc", MessageType.CONCERN,
+                f"**Risk Areas (need extra attention):**\n" +
+                "\n".join([f"⚠️ {r}" for r in risk_areas[:3]])
+            )
+
+        # --- QC Checkpoints ---
+        qc_checkpoints = self._define_qc_checkpoints(session.timeline)
+
+        conv.add("qc", MessageType.UPDATE,
+            f"**QC Checkpoints:**\n" +
+            "\n".join([f"🔍 {c}" for c in qc_checkpoints])
+        )
+
+        # --- Architect Instructions ---
+        architect_instructions = self._create_architect_instructions(
+            brief, scope, tech_stack, priority_features
+        )
+
+        conv.add("director", MessageType.HANDOFF,
+            f"**Instructions for Builder:**\n{architect_instructions}"
+        )
+
+        # --- Store Kickoff Plan ---
+        session.kickoff_plan = {
+            "project_name": brief.get("product_name", "Unknown"),
+            "product_type": product_type,
+            "scope": scope,
+            "tech_stack": tech_stack,
+            "priority_features": priority_features,
+            "risk_areas": risk_areas,
+            "qc_checkpoints": qc_checkpoints,
+            "architect_instructions": architect_instructions,
+            "created_at": datetime.now().isoformat(),
+        }
+
+        conv.add("system", MessageType.DECISION,
+            "=== KICKOFF COMPLETE ===\n\n"
+            f"Scope: {len(scope['in_scope'])} features in, {len(scope['out_of_scope'])} out\n"
+            f"Tech: {tech_stack.get('framework', 'TBD')}\n"
+            f"Priorities: {len(priority_features)} features ranked\n"
+            f"Risks: {len(risk_areas)} areas flagged\n\n"
+            f"Ready to build! 🚀"
+        )
+
+    def _define_scope(self, brief: dict, deliverables: list) -> dict:
+        """Define project scope based on brief and deliverables."""
+        in_scope = []
+        out_of_scope = []
+        assumptions = []
+
+        # Core features from brief
+        core_features = brief.get("core_features", [])
+        for f in core_features[:5]:
+            if isinstance(f, str):
+                in_scope.append(f)
+            elif isinstance(f, dict):
+                in_scope.append(f.get("name", str(f)))
+
+        # Add deliverable names
+        for d in deliverables:
+            if d.name not in in_scope:
+                in_scope.append(d.name)
+
+        # Common out-of-scope items
+        product_type = brief.get("product_type", "").lower()
+        if "app" in product_type:
+            out_of_scope.extend(["Backend server", "User authentication", "Cloud sync"])
+        elif "printable" in product_type:
+            out_of_scope.extend(["Physical printing", "Shipping", "Custom dimensions"])
+        else:
+            out_of_scope.extend(["Custom integrations", "Multi-language", "Advanced analytics"])
+
+        # Common assumptions
+        assumptions.extend([
+            "User has basic technical ability",
+            "English language only for MVP",
+            "Standard device/browser support",
+        ])
+
+        return {
+            "in_scope": in_scope,
+            "out_of_scope": out_of_scope,
+            "assumptions": assumptions,
+        }
+
+    def _select_tech_stack(self, product_type: str, brief: dict) -> dict:
+        """Select appropriate tech stack based on product type."""
+        stacks = {
+            "printable": {
+                "framework": "Static HTML/CSS",
+                "styling": "Print-optimized CSS",
+                "build": "Direct HTML",
+                "reasoning": "Print products need precise CSS control, no JS needed",
+            },
+            "planner": {
+                "framework": "Static HTML/CSS",
+                "styling": "Print CSS with page breaks",
+                "build": "HTML to PDF",
+                "reasoning": "Planners need exact page layouts for printing",
+            },
+            "document": {
+                "framework": "Markdown + CSS",
+                "styling": "Document CSS",
+                "build": "Markdown to PDF/HTML",
+                "reasoning": "Documents benefit from markdown simplicity",
+            },
+            "web": {
+                "framework": "Static HTML/CSS/JS",
+                "styling": "Tailwind CSS",
+                "build": "Static files",
+                "reasoning": "Static sites are fast, cheap to host, SEO-friendly",
+            },
+            "app": {
+                "framework": "React + TypeScript",
+                "styling": "Tailwind CSS",
+                "build": "Vite",
+                "reasoning": "React provides component reuse and good DX",
+            },
+        }
+
+        for key, stack in stacks.items():
+            if key in product_type:
+                return stack
+
+        return stacks["web"]  # Default to web stack
+
+    def _identify_priorities(self, brief: dict, pain_points: list) -> list:
+        """Identify and order priority features."""
+        priorities = []
+
+        # Pain points drive priority
+        for pp in pain_points[:3]:
+            if isinstance(pp, dict):
+                priorities.append(pp.get("pain_point", str(pp)))
+            else:
+                priorities.append(str(pp))
+
+        # Core features next
+        core_features = brief.get("core_features", [])
+        for f in core_features[:3]:
+            feature_name = f if isinstance(f, str) else f.get("name", str(f))
+            if feature_name not in priorities:
+                priorities.append(feature_name)
+
+        # Success criteria inform priority
+        for criterion in brief.get("success_criteria", [])[:2]:
+            if isinstance(criterion, dict):
+                crit = criterion.get("criterion", "")
+            else:
+                crit = str(criterion)
+            if crit and crit not in priorities:
+                priorities.append(f"Ensure: {crit}")
+
+        return priorities
+
+    def _identify_risks(self, brief: dict, product_type: str) -> list:
+        """Identify risk areas needing attention."""
+        risks = []
+
+        # SWOT threats
+        threats = brief.get("swot", {}).get("threats", [])
+        for t in threats[:2]:
+            risks.append(f"Market: {t}")
+
+        # Type-specific risks
+        if "printable" in product_type or "planner" in product_type:
+            risks.append("Print margins and bleed areas")
+            risks.append("Color accuracy across printers")
+        elif "app" in product_type:
+            risks.append("Mobile responsiveness")
+            risks.append("Performance on older devices")
+        elif "web" in product_type:
+            risks.append("Browser compatibility")
+            risks.append("Mobile viewport handling")
+
+        # Common risks
+        risks.append("Scope creep - stick to MVP")
+
+        return risks
+
+    def _define_qc_checkpoints(self, timeline: list) -> list:
+        """Define QC checkpoints based on timeline."""
+        checkpoints = []
+
+        for phase in timeline:
+            gate = phase.get("gate", "")
+            if gate:
+                checkpoints.append(f"After {phase['name']}: {gate}")
+
+        # Always have final sellability check
+        if not any("SELLABLE" in c for c in checkpoints):
+            checkpoints.append("Final: Product is SELLABLE (would pay $10+)")
+
+        return checkpoints
+
+    def _create_architect_instructions(
+        self, brief: dict, scope: dict, tech_stack: dict, priorities: list
+    ) -> str:
+        """Create clear instructions for the builder."""
+        return f"""Build {brief.get('product_name', 'the product')} using {tech_stack.get('framework', 'the selected stack')}.
+
+FOCUS ON:
+{chr(10).join([f'- {p}' for p in priorities[:3]])}
+
+TECH DECISIONS:
+- Use {tech_stack.get('styling', 'standard CSS')} for styling
+- Build with {tech_stack.get('build', 'standard build process')}
+
+STAY IN SCOPE:
+- Only build: {', '.join(scope['in_scope'][:3])}
+- Do NOT build: {', '.join(scope['out_of_scope'][:2])}
+
+QUALITY BAR:
+Would a customer pay ${brief.get('pricing', '$10')} for this right now?
+If not, keep working until the answer is YES."""
 
     # =========================================================================
     # Helper Methods
