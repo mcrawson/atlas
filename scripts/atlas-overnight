@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""
+ATLAS Overnight Autonomous Operator CLI.
+
+Usage:
+    atlas-overnight add "Research AI agent architectures"
+    atlas-overnight add "Fix the Mason tech_stack bug" --type atlas-fix
+    atlas-overnight add "Build a recipe sharing app" --type atlas-build
+
+    atlas-overnight run
+    atlas-overnight run --test
+    atlas-overnight run --force
+
+    atlas-overnight status
+    atlas-overnight queue
+
+    atlas-overnight schedule
+"""
+
+import argparse
+import asyncio
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+# Add atlas to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from atlas.operator import OvernightOperator, OvernightConfig
+from atlas.operator.router import TaskRouter
+from atlas.tasks.queue import TaskStatus
+
+
+def setup_logging(level: str = "INFO") -> None:
+    """Configure logging."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper()),
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+
+async def cmd_add(args) -> int:
+    """Add a task to the queue."""
+    operator = OvernightOperator()
+    router = TaskRouter()
+
+    # Handle file import
+    if args.file:
+        return await import_tasks_from_file(args.file, operator, router)
+
+    # Single task add
+    if not args.prompt:
+        print("Error: Either provide a prompt or use --file to import tasks")
+        return 1
+
+    metadata = {}
+    if args.type:
+        metadata["mode"] = args.type
+
+    task_id = await operator.add_task(
+        prompt=args.prompt,
+        task_type=args.type,
+        priority=args.priority,
+        metadata=metadata if metadata else None,
+    )
+
+    # Preview routing
+    routing = router.classify({"prompt": args.prompt, "task_type": args.type, "metadata": metadata})
+
+    print(f"Added task: {task_id}")
+    print(f"  Prompt: {args.prompt[:60]}{'...' if len(args.prompt) > 60 else ''}")
+    print(f"  Route: {routing.mode.value} (confidence: {routing.confidence:.0%})")
+    if routing.suggested_role:
+        print(f"  Role: {routing.suggested_role}")
+
+    return 0
+
+
+async def auto_import_shared_tasks(path: Path, operator, router) -> int:
+    """Auto-import tasks from the shared overnight queue file."""
+    import yaml
+
+    try:
+        content = path.read_text().strip()
+        data = yaml.safe_load(content)
+
+        if not data or not isinstance(data.get("tasks"), list):
+            return 0
+
+        tasks = data["tasks"]
+        if not tasks:
+            return 0
+
+        count = 0
+        for task in tasks:
+            if isinstance(task, str):
+                task = {"prompt": task}
+
+            prompt = task.get("prompt", "").strip()
+            if not prompt:
+                continue
+
+            task_type = task.get("type") or task.get("task_type")
+            priority = task.get("priority", 0)
+
+            metadata = {}
+            if task_type:
+                metadata["mode"] = task_type
+
+            await operator.add_task(
+                prompt=prompt,
+                task_type=task_type,
+                priority=priority,
+                metadata=metadata if metadata else None,
+            )
+            count += 1
+
+        # Clear the file after importing
+        if count > 0:
+            path.write_text("# Overnight Task Queue\n# Tasks imported and cleared\n\ntasks: []\n")
+
+        return count
+
+    except Exception as e:
+        logging.warning(f"Could not import shared tasks: {e}")
+        return 0
+
+
+async def import_tasks_from_file(filepath: str, operator, router) -> int:
+    """Import tasks from a file."""
+    from pathlib import Path
+    import json
+    import yaml
+
+    path = Path(filepath).expanduser()
+    if not path.exists():
+        print(f"Error: File not found: {filepath}")
+        return 1
+
+    content = path.read_text().strip()
+    tasks = []
+
+    # Try YAML/JSON first
+    if path.suffix in (".yaml", ".yml", ".json"):
+        try:
+            data = yaml.safe_load(content)
+            if isinstance(data, list):
+                tasks = data
+            elif isinstance(data, dict) and "tasks" in data:
+                tasks = data["tasks"]
+        except Exception as e:
+            print(f"Error parsing {path.suffix}: {e}")
+            return 1
+    else:
+        # Plain text: one task per line
+        for line in content.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                tasks.append({"prompt": line})
+
+    if not tasks:
+        print("No tasks found in file")
+        return 1
+
+    print(f"Importing {len(tasks)} tasks from {filepath}...")
+    print("-" * 60)
+
+    for task in tasks:
+        # Handle both string and dict formats
+        if isinstance(task, str):
+            task = {"prompt": task}
+
+        prompt = task.get("prompt", "")
+        task_type = task.get("type") or task.get("task_type")
+        priority = task.get("priority", 0)
+
+        if not prompt:
+            continue
+
+        metadata = {}
+        if task_type:
+            metadata["mode"] = task_type
+
+        task_id = await operator.add_task(
+            prompt=prompt,
+            task_type=task_type,
+            priority=priority,
+            metadata=metadata if metadata else None,
+        )
+
+        routing = router.classify({"prompt": prompt, "task_type": task_type, "metadata": metadata})
+
+        print(f"  [{task_id}] {prompt[:50]}...")
+        print(f"        → {routing.mode.value}")
+
+    print("-" * 60)
+    print(f"Imported {len(tasks)} tasks")
+    return 0
+
+
+async def cmd_run(args) -> int:
+    """Run the overnight processing session."""
+    config = OvernightConfig.load()
+
+    if args.verbose:
+        setup_logging("DEBUG")
+    else:
+        setup_logging(config.logging.level)
+
+    operator = OvernightOperator(config)
+    router = TaskRouter()
+
+    # Initialize Slack client
+    from atlas.operator.slack import SlackClient
+    slack = SlackClient()
+    slack_enabled = slack.is_configured
+
+    print("=" * 60)
+    print("ATLAS Overnight Autonomous Operator")
+    print("=" * 60)
+    print(f"Mode: {'TEST (1 task)' if args.test else 'FULL'}")
+    print(f"Force: {args.force}")
+    print(f"Max tasks: {args.max_tasks or config.limits.max_tasks}")
+    print(f"Slack: {'Connected' if slack_enabled else 'Not configured'}")
+    print("=" * 60)
+
+    # Import tasks from Slack
+    if slack_enabled:
+        slack_imported = await import_slack_tasks(slack, operator, router)
+        if slack_imported > 0:
+            print(f"\nImported {slack_imported} tasks from Slack")
+            await slack.notify_start()
+
+    # Auto-import from shared task file
+    shared_tasks_file = Path.home() / ".claude" / "data" / "overnight-tasks.yaml"
+    if shared_tasks_file.exists():
+        imported = await auto_import_shared_tasks(shared_tasks_file, operator, router)
+        if imported > 0:
+            print(f"\nImported {imported} tasks from shared queue")
+
+    # Check queue
+    stats = await operator.get_queue_status()
+    pending = stats.get("pending", 0)
+
+    if pending == 0:
+        msg = "Queue is empty. Add tasks via Slack or: atlas-overnight add <prompt>"
+        print(f"\n{msg}")
+        if slack_enabled:
+            await slack.post_message(f":clipboard: {msg}")
+        return 1
+
+    print(f"\nPending tasks: {pending}")
+    print("\nStarting session...\n")
+
+    # Run
+    session_stats = await operator.run(
+        test_mode=args.test,
+        force=args.force,
+        max_tasks=args.max_tasks,
+    )
+
+    # Print summary
+    print("\n" + "=" * 60)
+    print("Session Complete")
+    print("=" * 60)
+    print(f"Tasks completed: {session_stats.tasks_completed}")
+    print(f"Tasks failed: {session_stats.tasks_failed}")
+    print(f"Stop reason: {session_stats.stop_reason}")
+
+    if session_stats.ended_at and session_stats.started_at:
+        duration = session_stats.ended_at - session_stats.started_at
+        print(f"Duration: {duration}")
+
+    # Show briefing location
+    if config.briefing.enabled:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        briefing_path = config.briefing.dir / f"briefing-{date_str}.md"
+        print(f"\nBriefing: {briefing_path}")
+
+        # Post briefing to Slack (concise summary only)
+        if slack_enabled:
+            slack_summary = operator._format_slack_briefing()
+            await slack.post_briefing(slack_summary)
+            print("Briefing posted to Slack")
+
+    return 0 if session_stats.tasks_failed == 0 else 1
+
+
+async def import_slack_tasks(slack, operator, router) -> int:
+    """Import tasks from Slack channel messages."""
+    try:
+        # Get messages from the last 24 hours
+        messages = await slack.get_recent_messages(hours=24)
+        if not messages:
+            return 0
+
+        # Parse tasks from messages
+        tasks = await slack.parse_tasks_from_messages(messages)
+        if not tasks:
+            return 0
+
+        count = 0
+        for task in tasks:
+            prompt = task.get("prompt", "").strip()
+            if not prompt:
+                continue
+
+            task_type = task.get("type")
+            priority = task.get("priority", 0)
+
+            metadata = {"slack_ts": task.get("ts")}
+            if task_type:
+                metadata["mode"] = task_type
+
+            await operator.add_task(
+                prompt=prompt,
+                task_type=task_type,
+                priority=priority,
+                metadata=metadata,
+            )
+
+            # React to acknowledge
+            await slack.notify_task_received(task)
+            count += 1
+
+        return count
+
+    except Exception as e:
+        logging.warning(f"Could not import Slack tasks: {e}")
+        return 0
+
+
+async def cmd_status(args) -> int:
+    """Show last briefing or current status."""
+    config = OvernightConfig.load()
+
+    # Find latest briefing
+    briefing_dir = config.briefing.dir
+    if not briefing_dir.exists():
+        print("No overnight sessions yet.")
+        return 0
+
+    briefings = sorted(briefing_dir.glob("briefing-*.md"), reverse=True)
+    if not briefings:
+        print("No briefings found.")
+        return 0
+
+    latest = briefings[0]
+    print(f"Latest briefing: {latest.name}\n")
+    print(latest.read_text())
+
+    return 0
+
+
+async def cmd_queue(args) -> int:
+    """Show pending tasks in the queue."""
+    operator = OvernightOperator()
+
+    stats = await operator.get_queue_status()
+    tasks = await operator.list_pending_tasks(limit=args.limit)
+
+    print("Queue Status")
+    print("=" * 60)
+    print(f"Pending: {stats.get('pending', 0)}")
+    print(f"Running: {stats.get('running', 0)}")
+    print(f"Completed: {stats.get('completed', 0)}")
+    print(f"Failed: {stats.get('failed', 0)}")
+
+    if tasks:
+        print("\nPending Tasks:")
+        print("-" * 60)
+        router = TaskRouter()
+        for task in tasks:
+            routing = router.classify(task)
+            prompt = task.get("prompt", "")[:50]
+            task_id = str(task.get("id", "?"))[:8]
+            print(f"  [{task_id}] {prompt}...")
+            print(f"           Route: {routing.mode.value}")
+
+    return 0
+
+
+async def cmd_schedule(args) -> int:
+    """Show cron setup instructions."""
+    config = OvernightConfig.load()
+
+    print("Cron Setup for Overnight Operator")
+    print("=" * 60)
+    print()
+    print("Add this line to your crontab (crontab -e):")
+    print()
+
+    script_path = Path(__file__).resolve()
+    log_dir = config.logging.dir
+
+    # Cron line for 11 PM
+    cron_line = f"0 {config.schedule.start_hour} * * * {script_path} run >> {log_dir}/cron.log 2>&1"
+    print(f"  {cron_line}")
+    print()
+    print("Or use the wrapper script:")
+    print()
+    wrapper = script_path.parent / "overnight-runner.sh"
+    print(f"  0 {config.schedule.start_hour} * * * {wrapper}")
+    print()
+    print(f"Time window: {config.schedule.start_hour}:00 - {config.schedule.end_hour}:00")
+    print(f"Max tasks: {config.limits.max_tasks}")
+    print(f"Max runtime: {config.limits.max_runtime_minutes} minutes")
+
+    return 0
+
+
+def main() -> int:
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="ATLAS Overnight Autonomous Operator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  atlas-overnight add "Research MCP best practices"
+  atlas-overnight add "Fix the QC loop bug" --type atlas-fix
+  atlas-overnight add "Build a portfolio site" --type atlas-build
+  atlas-overnight run --test
+  atlas-overnight status
+""",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # Add command
+    add_parser = subparsers.add_parser("add", help="Add a task to the queue")
+    add_parser.add_argument("prompt", nargs="?", help="Task description/prompt")
+    add_parser.add_argument(
+        "--type", "-t",
+        choices=["general", "atlas-fix", "atlas-build"],
+        help="Task type (auto-detected if not specified)",
+    )
+    add_parser.add_argument(
+        "--priority", "-p",
+        type=int,
+        default=0,
+        help="Priority (higher = more urgent)",
+    )
+    add_parser.add_argument(
+        "--file", "-f",
+        help="Import tasks from file (one per line, or YAML/JSON)",
+    )
+
+    # Run command
+    run_parser = subparsers.add_parser("run", help="Run the overnight session")
+    run_parser.add_argument("--test", action="store_true", help="Test mode (1 task only)")
+    run_parser.add_argument("--force", action="store_true", help="Skip time window check")
+    run_parser.add_argument("--max-tasks", type=int, help="Override max tasks limit")
+
+    # Status command
+    subparsers.add_parser("status", help="Show last briefing")
+
+    # Queue command
+    queue_parser = subparsers.add_parser("queue", help="Show pending tasks")
+    queue_parser.add_argument("--limit", type=int, default=20, help="Max tasks to show")
+
+    # Schedule command
+    subparsers.add_parser("schedule", help="Show cron setup instructions")
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        setup_logging("DEBUG")
+    else:
+        setup_logging("INFO")
+
+    if args.command is None:
+        parser.print_help()
+        return 1
+
+    # Route to command handler
+    handlers = {
+        "add": cmd_add,
+        "run": cmd_run,
+        "status": cmd_status,
+        "queue": cmd_queue,
+        "schedule": cmd_schedule,
+    }
+
+    handler = handlers.get(args.command)
+    if handler is None:
+        parser.print_help()
+        return 1
+
+    return asyncio.run(handler(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
