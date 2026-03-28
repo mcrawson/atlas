@@ -118,7 +118,21 @@
 
     <!-- Actions -->
     <div class="plan-actions">
-        <form action="/projects/{{ project_id }}/approve-plan" method="post" style="display: inline;">
+        <form action="/projects/{{ project_id }}/approve-plan" method="post" class="approve-plan-form">
+            <div class="build-type-selector">
+                <label for="build_type">Build Type:</label>
+                <select name="build_type" id="build_type" class="build-type-select">
+                    <option value="react_spa" {% if suggested_build_type == 'react_spa' %}selected{% endif %}>
+                        React SPA (React/TypeScript)
+                    </option>
+                    <option value="static_html" {% if suggested_build_type == 'static_html' %}selected{% endif %}>
+                        Static HTML/CSS/JS
+                    </option>
+                </select>
+                {% if tech_stack.framework %}
+                <span class="build-type-hint">Auto-detected from: {{ tech_stack.framework }}</span>
+                {% endif %}
+            </div>
             <button type="submit" class="btn btn-success">
                 ✓ Approve Plan & Start Build
             </button>
@@ -472,6 +486,44 @@
 
 .btn-qc:hover {
     box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
+}
+
+/* Build Type Selector */
+.approve-plan-form {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.build-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.build-type-selector label {
+    font-size: 13px;
+    color: #888;
+}
+
+.build-type-select {
+    background: #1a1a24;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.build-type-select:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.build-type-hint {
+    font-size: 11px;
+    color: #666;
+    font-style: italic;
 }
 
 /* Empty State */

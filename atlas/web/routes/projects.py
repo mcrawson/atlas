@@ -1185,6 +1185,13 @@ async def start_planning(request: Request, project_id: int):
             metadata["phase"] = "plan_review"
             await project_manager.update_project(project_id, metadata=metadata)
 
+        # Determine suggested build_type from tech stack
+        kickoff_plan = metadata.get("kickoff_plan", {})
+        tech_stack = kickoff_plan.get("tech_stack", {})
+        framework = tech_stack.get("framework", "").lower()
+        spa_frameworks = ["react", "vue", "angular", "next", "nuxt", "svelte", "typescript"]
+        suggested_build_type = "react_spa" if any(fw in framework for fw in spa_frameworks) else "static_html"
+
         # Return plan display
         return templates.TemplateResponse(
             "partials/build_plan.html",
@@ -1192,6 +1199,8 @@ async def start_planning(request: Request, project_id: int):
                 "request": request,
                 "project_id": project_id,
                 "plan": result.artifacts.get("plan", {}),
+                "tech_stack": tech_stack,
+                "suggested_build_type": suggested_build_type,
             }
         )
 
@@ -1812,24 +1821,11 @@ async def approve_plan(request: Request, project_id: int, build_type: str = Form
     # Add spec to context for Mason to reference
     context["spec"] = spec
 
-    # Auto-detect build_type from kickoff_plan tech_stack if not explicitly set
-    # The form default is "static_html", but we should infer from tech stack
-    kickoff_plan = new_metadata.get("kickoff_plan", {})
-    tech_stack = kickoff_plan.get("tech_stack", {})
-    framework = tech_stack.get("framework", "").lower()
-
-    # Check if framework suggests React/modern SPA
-    spa_frameworks = ["react", "vue", "angular", "next", "nuxt", "svelte", "typescript"]
-    if any(fw in framework for fw in spa_frameworks):
-        inferred_build_type = "react_spa"
-    else:
-        inferred_build_type = "static_html"
-
-    # Use inferred type (form always sends default, so we trust tech stack)
-    # If user explicitly chose static_html for a React project, they can re-select
-    effective_build_type = inferred_build_type
-    context["build_type"] = effective_build_type
-    logger.info(f"[Build] Tech stack: {framework} -> build_type: {effective_build_type}")
+    # Use user-selected build_type from form
+    # The dropdown defaults are set based on tech_stack in the template,
+    # so whatever the user submits is their intentional choice
+    context["build_type"] = build_type
+    logger.info(f"[Build] User selected build_type: {build_type}")
 
     # Add team chat summary if available (resolved concerns)
     if "team_chat" in new_metadata:
