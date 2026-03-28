@@ -1,0 +1,269 @@
+<!-- Kickoff Plan Display -->
+{% set kp = kickoff_plan %}
+
+<div class="kickoff-content">
+    <!-- Tech Stack -->
+    <div class="kickoff-section">
+        <h3><span class="section-icon">🛠️</span> Tech Stack</h3>
+        {% set tech = kp.get('tech_stack', {}) %}
+        <div class="tech-stack-grid">
+            <div class="tech-item">
+                <span class="tech-label">Framework</span>
+                <span class="tech-value">{{ tech.get('framework', 'TBD') }}</span>
+            </div>
+            <div class="tech-item">
+                <span class="tech-label">Styling</span>
+                <span class="tech-value">{{ tech.get('styling', 'TBD') }}</span>
+            </div>
+            <div class="tech-item">
+                <span class="tech-label">Build</span>
+                <span class="tech-value">{{ tech.get('build', 'TBD') }}</span>
+            </div>
+        </div>
+        {% if tech.get('reasoning') %}
+        <p class="tech-reasoning">{{ tech.get('reasoning') }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Scope -->
+    <div class="kickoff-section">
+        <h3><span class="section-icon">🎯</span> Scope</h3>
+        {% set scope = kp.get('scope', {}) %}
+        <div class="scope-columns">
+            <div class="scope-column in-scope">
+                <h4>✅ In Scope</h4>
+                <ul>
+                {% for item in scope.get('in_scope', [])[:5] %}
+                    <li>{{ item }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+            <div class="scope-column out-scope">
+                <h4>❌ Out of Scope</h4>
+                <ul>
+                {% for item in scope.get('out_of_scope', [])[:5] %}
+                    <li>{{ item }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Priority Features -->
+    <div class="kickoff-section">
+        <h3><span class="section-icon">⭐</span> Priority Features</h3>
+        <ol class="priority-list">
+        {% for feature in kp.get('priority_features', [])[:5] %}
+            <li>{{ feature }}</li>
+        {% endfor %}
+        </ol>
+    </div>
+
+    <!-- Risk Areas -->
+    {% if kp.get('risk_areas') %}
+    <div class="kickoff-section">
+        <h3><span class="section-icon">⚠️</span> Risk Areas</h3>
+        <ul class="risk-list">
+        {% for risk in kp.get('risk_areas', [])[:4] %}
+            <li>{{ risk }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- QC Checkpoints -->
+    {% if kp.get('qc_checkpoints') %}
+    <div class="kickoff-section">
+        <h3><span class="section-icon">🔍</span> QC Checkpoints</h3>
+        <ul class="qc-list">
+        {% for checkpoint in kp.get('qc_checkpoints', []) %}
+            <li>{{ checkpoint }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Architect Instructions (collapsed by default) -->
+    {% if kp.get('architect_instructions') %}
+    <details class="architect-instructions">
+        <summary><span class="section-icon">📝</span> Builder Instructions</summary>
+        <pre>{{ kp.get('architect_instructions') }}</pre>
+    </details>
+    {% endif %}
+</div>
+
+<style>
+.kickoff-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.kickoff-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary, #1a1a2e);
+}
+
+.section-icon {
+    font-size: 1.1rem;
+}
+
+/* Tech Stack Grid */
+.tech-stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.tech-item {
+    background: var(--bg-secondary, #f8f9fa);
+    padding: 0.75rem;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.tech-label {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c757d);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.tech-value {
+    font-weight: 600;
+    color: var(--text-primary, #1a1a2e);
+}
+
+.tech-reasoning {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-muted, #6c757d);
+    font-style: italic;
+}
+
+/* Scope Columns */
+.scope-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 600px) {
+    .scope-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+.scope-column {
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.scope-column.in-scope {
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.scope-column.out-scope {
+    background: rgba(244, 67, 54, 0.1);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.scope-column h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.scope-column ul {
+    margin: 0;
+    padding-left: 1.25rem;
+    font-size: 0.875rem;
+}
+
+.scope-column li {
+    margin-bottom: 0.25rem;
+}
+
+/* Priority List */
+.priority-list {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.priority-list li {
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.priority-list li::marker {
+    font-weight: bold;
+    color: var(--primary, #6366f1);
+}
+
+/* Risk List */
+.risk-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.risk-list li {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 3px solid #ff9800;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.875rem;
+}
+
+/* QC List */
+.qc-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.qc-list li {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 3px solid #2196f3;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.875rem;
+}
+
+/* Architect Instructions */
+.architect-instructions {
+    margin-top: 0.5rem;
+}
+
+.architect-instructions summary {
+    cursor: pointer;
+    padding: 0.5rem;
+    background: var(--bg-secondary, #f8f9fa);
+    border-radius: 4px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.architect-instructions pre {
+    margin: 0.5rem 0 0 0;
+    padding: 1rem;
+    background: var(--bg-code, #1e1e2e);
+    color: var(--text-code, #cdd6f4);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+</style>

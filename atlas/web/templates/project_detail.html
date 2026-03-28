@@ -260,6 +260,7 @@
         <!-- PLANNING PHASE - Round Table + Build Plan -->
 
         {% set roundtable = project.metadata.get('roundtable', {}) %}
+        {% set kickoff_plan = project.metadata.get('kickoff_plan', {}) %}
         {% set build_plan = project.metadata.get('build_plan', {}) %}
 
         <!-- Round Table Status -->
@@ -296,6 +297,21 @@
                     <p>Loading conversation...</p>
                 </div>
             </div>
+        </div>
+        {% endif %}
+
+        <!-- Kickoff Plan (from RoundTableV2 Phase 6) -->
+        {% if kickoff_plan %}
+        <div class="phase-card kickoff-card">
+            <div class="phase-card-header">
+                <div class="agent-badge">
+                    <span class="agent-icon">🚀</span>
+                    <span class="agent-name">Kickoff</span>
+                </div>
+                <h2>Technical Plan</h2>
+                <p class="kickoff-subtitle">Scope, tech stack, and priorities</p>
+            </div>
+            {% include "partials/kickoff_plan.html" %}
         </div>
         {% endif %}
 
