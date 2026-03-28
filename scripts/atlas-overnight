@@ -29,8 +29,9 @@ atlas_root = Path(__file__).parent.parent
 sys.path.insert(0, str(atlas_root))
 
 # Load environment variables (needed for cron/automated runs)
+# override=True ensures .env takes precedence over shell environment
 from dotenv import load_dotenv
-load_dotenv(atlas_root / ".env")
+load_dotenv(atlas_root / ".env", override=True)
 
 from atlas.operator import OvernightOperator, OvernightConfig
 from atlas.operator.router import TaskRouter

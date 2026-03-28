@@ -594,14 +594,16 @@ Focus on: Does this mockup represent a product someone would pay for?
         output: dict,
         brief: dict,
         mockup: Optional[dict] = None,
+        kickoff_plan: Optional[dict] = None,
         attempt: int = 1,
     ) -> QCReport:
-        """Check a build output against the mockup and Business Brief.
+        """Check a build output against the mockup, Brief, and Kickoff Plan.
 
         Args:
             output: The build output to check
             brief: The Business Brief
             mockup: The approved mockup (optional)
+            kickoff_plan: The kickoff plan with scope, tech stack, priorities (optional)
             attempt: Which attempt this is (1 or 2)
 
         Returns:
@@ -618,13 +620,43 @@ Focus on: Does this mockup represent a product someone would pay for?
 ```
 """
 
+        # Include kickoff plan context
+        kickoff_section = ""
+        if kickoff_plan:
+            scope = kickoff_plan.get("scope", {})
+            tech_stack = kickoff_plan.get("tech_stack", {})
+            priorities = kickoff_plan.get("priority_features", [])
+            risks = kickoff_plan.get("risk_areas", [])
+
+            kickoff_section = f"""
+## Kickoff Plan (Technical Requirements)
+
+### Scope
+**In Scope:** {', '.join(scope.get('in_scope', [])[:5])}
+**Out of Scope:** {', '.join(scope.get('out_of_scope', [])[:3])}
+
+### Tech Stack
+- Framework: {tech_stack.get('framework', 'Not specified')}
+- Styling: {tech_stack.get('styling', 'Not specified')}
+- Build: {tech_stack.get('build', 'Not specified')}
+
+### Priority Features (in order)
+{chr(10).join([f'{i+1}. {p}' for i, p in enumerate(priorities[:5])])}
+
+### Risk Areas (verify these!)
+{chr(10).join([f'- {r}' for r in risks[:4]])}
+"""
+
         # Check if this is a React build by looking for .tsx/.jsx files
         react_source_section = ""
         react_files = {}
-        if isinstance(output, dict) and "files" in output:
-            for filename, content in output["files"].items():
-                if filename.endswith(('.tsx', '.jsx')):
-                    react_files[filename] = content
+        if isinstance(output, dict):
+            # Look for actual file content in extracted_files or assembled_files
+            files_dict = output.get("extracted_files") or output.get("assembled_files") or {}
+            if isinstance(files_dict, dict):
+                for filename, content in files_dict.items():
+                    if filename.endswith(('.tsx', '.jsx')):
+                        react_files[filename] = content
 
         # Determine evaluation mode based on presence of React files
         evaluation_mode = "react_source" if react_files else "html_preview"
@@ -645,6 +677,7 @@ Focus on: Does this mockup represent a product someone would pay for?
 ```json
 {json.dumps(brief, indent=2, default=str)}
 ```
+{kickoff_section}
 {mockup_section}
 ## Build Output to Evaluate
 ```json
@@ -659,15 +692,18 @@ The goal is ONE thorough check, not multiple rounds of discovery.
 
 ## MANDATORY CHECKLIST - Check EVERY item:
 
-### 1. ALIGNMENT (Does it match the Brief?)
+### 1. ALIGNMENT (Does it match the Brief and Kickoff Plan?)
 - [ ] Product matches the type specified in Brief (app, document, printable, etc.)
 - [ ] Product name/title matches Brief
 - [ ] Target customer needs are addressed
 - [ ] Value proposition is clear
 - [ ] Success criteria can be measured
 - [ ] Pricing tier/model matches Brief
+- [ ] Stays within defined SCOPE (not building out-of-scope features)
+- [ ] Uses specified TECH STACK (framework, styling, build tools)
 
-### 2. COMPLETENESS (Is everything there?)
+### 2. COMPLETENESS (Are priority features implemented?)
+- [ ] All PRIORITY FEATURES from kickoff plan are implemented
 - [ ] All promised features/sections are present
 - [ ] No placeholder text ("Lorem ipsum", "TODO", "[INSERT]")
 - [ ] All screens/pages are implemented (for apps/web)
@@ -681,6 +717,7 @@ The goal is ONE thorough check, not multiple rounds of discovery.
 - [ ] Clear, readable content
 - [ ] No obvious typos or grammatical errors
 - [ ] Matches mockup (if provided)
+- [ ] RISK AREAS from kickoff plan are addressed/mitigated
 
 ### 4. FUNCTIONALITY (Does it work?)
 - [ ] Core features function as expected

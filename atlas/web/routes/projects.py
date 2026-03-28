@@ -969,11 +969,16 @@ async def run_qc_build(request: Request, project_id: int):
         if not brief_data:
             brief_data = metadata.get("smart_conversation", {}).get("brief", {})
 
+        # Get kickoff_plan for scope, tech stack, priorities
+        kickoff_plan = metadata.get("kickoff_plan", {})
+
         # Check revision count - be more lenient after multiple attempts
         revision_count = build.get("revision_count", 0)
 
-        # Check the build output - pass the entire build dict
-        qc_report = await qc_agent.check_build(build, brief_data, attempt=1)
+        # Check the build output - pass the entire build dict and kickoff_plan
+        qc_report = await qc_agent.check_build(
+            build, brief_data, kickoff_plan=kickoff_plan, attempt=1
+        )
         qc_dict = qc_report.to_dict()
 
         # After 3+ revisions, be more lenient
