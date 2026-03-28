@@ -1,0 +1,978 @@
+<!-- Business Brief Display Partial -->
+<div id="business-brief" class="business-brief">
+    {% if brief %}
+    <div class="brief-header">
+        <div class="brief-title">
+            <h2>{{ brief.product_name or 'Business Brief' }}</h2>
+            <span class="product-type badge badge-{{ brief.product_type or 'default' }}">
+                {{ brief.product_type | upper }}
+            </span>
+        </div>
+
+        <!-- Recommendation Banner -->
+        <div class="recommendation-banner recommendation-{{ brief.recommendation }}">
+            {% if brief.recommendation == 'go' %}
+            <span class="rec-icon">✓</span>
+            <span class="rec-text">GO - Ready to Build</span>
+            {% elif brief.recommendation == 'no-go' %}
+            <span class="rec-icon">✗</span>
+            <span class="rec-text">NO-GO - Not Recommended</span>
+            {% else %}
+            <span class="rec-icon">🔍</span>
+            <span class="rec-text">NEEDS MORE RESEARCH</span>
+            {% endif %}
+            <span class="confidence">Confidence: {{ (brief.confidence * 100) | round }}%</span>
+        </div>
+    </div>
+
+    <!-- Revision Banner (if revised from QC) -->
+    {% if brief.revision_source == 'qc_fix' %}
+    <div class="revision-banner">
+        <span class="revision-icon">🔄</span>
+        <div class="revision-content">
+            <strong>Brief Revised (v{{ brief.revision_count | default(2) }})</strong>
+            <p>This brief has been updated based on QC feedback. Run QC again to verify improvements.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AI Disclaimer -->
+    <div class="ai-disclaimer">
+        <span class="disclaimer-icon">🤖</span>
+        <p>This analysis is AI-generated. Financial projections are rough estimates, not verified data. Validate with real market research before making business decisions.</p>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="brief-section">
+        <h3>Executive Summary</h3>
+        <p>{{ brief.executive_summary }}</p>
+    </div>
+
+    <!-- Recommendation Details -->
+    <div class="brief-section">
+        <h3>Recommendation</h3>
+        <p>{{ brief.recommendation_reason }}</p>
+    </div>
+
+    <!-- Target Customer -->
+    {% if brief.target_customer %}
+    <div class="brief-section">
+        <h3>Target Customer</h3>
+        <div class="detail-grid">
+            {% if brief.target_customer.demographics %}
+            <div class="detail-item">
+                <strong>Demographics</strong>
+                <p>{{ brief.target_customer.demographics }}</p>
+            </div>
+            {% endif %}
+            {% if brief.target_customer.pain_points %}
+            <div class="detail-item">
+                <strong>Pain Points</strong>
+                <ul>
+                    {% for point in brief.target_customer.pain_points %}
+                    <li>{{ point }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if brief.target_customer.behaviors %}
+            <div class="detail-item">
+                <strong>Behaviors</strong>
+                <ul>
+                    {% for behavior in brief.target_customer.behaviors %}
+                    <li>{{ behavior }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if brief.target_customer.where_to_find %}
+            <div class="detail-item">
+                <strong>Where to Find Them</strong>
+                <ul>
+                    {% for place in brief.target_customer.where_to_find %}
+                    <li>{{ place }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Market Analysis -->
+    {% if brief.market_analysis %}
+    <div class="brief-section">
+        <h3>Market Analysis</h3>
+        <div class="detail-grid">
+            {% for key, value in brief.market_analysis.items() %}
+            <div class="detail-item">
+                <strong>{{ key | replace('_', ' ') | title }}</strong>
+                <p>{{ value }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Competition -->
+    {% if brief.competition %}
+    <div class="brief-section">
+        <h3>Competition</h3>
+        <div class="competition-grid">
+            {% for comp in brief.competition %}
+            <div class="competitor-card">
+                <h4>{{ comp.name }}</h4>
+                {% if comp.strengths %}
+                <div class="comp-section">
+                    <strong>Strengths</strong>
+                    <ul>{% for s in comp.strengths %}<li>{{ s }}</li>{% endfor %}</ul>
+                </div>
+                {% endif %}
+                {% if comp.weaknesses %}
+                <div class="comp-section">
+                    <strong>Weaknesses</strong>
+                    <ul>{% for w in comp.weaknesses %}<li>{{ w }}</li>{% endfor %}</ul>
+                </div>
+                {% endif %}
+                {% if comp.pricing %}
+                <div class="comp-section">
+                    <strong>Pricing:</strong> {{ comp.pricing }}
+                </div>
+                {% endif %}
+                {% if comp.differentiation %}
+                <div class="comp-section diff">
+                    <strong>Our Differentiation:</strong> {{ comp.differentiation }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SWOT Analysis -->
+    {% if brief.swot %}
+    <div class="brief-section">
+        <h3>SWOT Analysis</h3>
+        <div class="swot-grid">
+            {% if brief.swot.strengths %}
+            <div class="swot-quadrant strengths">
+                <h4>Strengths</h4>
+                <ul>{% for s in brief.swot.strengths %}<li>{{ s }}</li>{% endfor %}</ul>
+            </div>
+            {% endif %}
+            {% if brief.swot.weaknesses %}
+            <div class="swot-quadrant weaknesses">
+                <h4>Weaknesses</h4>
+                <ul>{% for w in brief.swot.weaknesses %}<li>{{ w }}</li>{% endfor %}</ul>
+            </div>
+            {% endif %}
+            {% if brief.swot.opportunities %}
+            <div class="swot-quadrant opportunities">
+                <h4>Opportunities</h4>
+                <ul>{% for o in brief.swot.opportunities %}<li>{{ o }}</li>{% endfor %}</ul>
+            </div>
+            {% endif %}
+            {% if brief.swot.threats %}
+            <div class="swot-quadrant threats">
+                <h4>Threats</h4>
+                <ul>{% for t in brief.swot.threats %}<li>{{ t }}</li>{% endfor %}</ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Financial Projections -->
+    {% if brief.financials %}
+    <div class="brief-section financials-section">
+        <h3>Financial Projections <span class="estimate-badge">AI Estimates</span></h3>
+        <div class="financials-grid">
+            {% for key, value in brief.financials.items() %}
+            <div class="financial-item">
+                <strong>{{ key | replace('_', ' ') | title }}</strong>
+                <span>{{ value }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Success Criteria -->
+    {% if brief.success_criteria %}
+    <div class="brief-section">
+        <h3>Success Criteria</h3>
+        <div class="criteria-list">
+            {% for criterion in brief.success_criteria %}
+            <div class="criterion-item importance-{{ criterion.importance or 'important' }}">
+                <span class="criterion-importance">
+                    {% if criterion.importance == 'critical' %}🔴{% elif criterion.importance == 'nice' %}🟢{% else %}🟡{% endif %}
+                </span>
+                <div class="criterion-content">
+                    <strong>{{ criterion.criterion }}</strong>
+                    {% if criterion.measurable %}
+                    <p class="measure">Measure: {{ criterion.measurable }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Research Sources -->
+    {% if brief.research_sources %}
+    <div class="brief-section research-sources">
+        <h3>📚 Research Sources</h3>
+        <div class="sources-list">
+            {% for source in brief.research_sources %}
+            <div class="source-item confidence-{{ source.confidence or 'medium' }}">
+                <div class="source-header">
+                    <span class="source-name">{{ source.source }}</span>
+                    <span class="source-confidence">{{ source.confidence or 'medium' }}</span>
+                </div>
+                <p class="source-data">{{ source.data_point }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Assumptions -->
+    {% if brief.assumptions %}
+    <div class="brief-section assumptions">
+        <h3>⚠️ Assumptions Made</h3>
+        <ul class="assumptions-list">
+            {% for assumption in brief.assumptions %}
+            <li>{{ assumption }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Analyst Notes -->
+    {% if brief.analyst_notes %}
+    <div class="brief-section analyst-notes">
+        <h3>Analyst Notes</h3>
+        <p>{{ brief.analyst_notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- QC Report Container (will be populated via HTMX) -->
+    <div id="qc-report-container"></div>
+
+    <!-- Action Buttons -->
+    <div class="brief-actions">
+        {% if brief.recommendation == 'go' %}
+        <div class="action-row">
+            <!-- Run QC Check Button -->
+            <button type="button"
+                    class="btn btn-qc"
+                    hx-post="/projects/{{ project_id }}/run-qc"
+                    hx-target="#qc-report-container"
+                    hx-swap="innerHTML"
+                    hx-indicator="#qc-loading">
+                ✅ Run Quality Check
+            </button>
+            <span id="qc-loading" class="htmx-indicator">Checking...</span>
+        </div>
+        <div class="action-row" style="margin-top: 12px;">
+            <form method="POST" action="/projects/{{ project_id }}/approve-brief" style="display: inline;">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    ✓ Approve Brief & Continue to Planning
+                </button>
+            </form>
+        </div>
+        {% elif brief.recommendation == 'no-go' %}
+        <div class="no-go-options">
+            <p class="warning-text">This idea is not recommended. You can:</p>
+            <div class="action-row">
+                <button type="button"
+                        class="btn btn-qc"
+                        hx-post="/projects/{{ project_id }}/run-qc"
+                        hx-target="#qc-report-container"
+                        hx-swap="innerHTML"
+                        hx-indicator="#qc-loading-nogo">
+                    ✅ Run Quality Check
+                </button>
+                <span id="qc-loading-nogo" class="htmx-indicator">Checking...</span>
+            </div>
+            <div class="action-row" style="margin-top: 12px;">
+                <form method="POST" action="/projects/{{ project_id }}/override-brief" style="display: inline;">
+                    <button type="submit" class="btn btn-warning">
+                        Override & Continue Anyway
+                    </button>
+                </form>
+                <form method="POST" action="/projects/{{ project_id }}/revise-idea" style="display: inline;">
+                    <button type="submit" class="btn btn-secondary">
+                        Revise Idea
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="research-options">
+            <p>More research is needed. You can:</p>
+            <div class="action-row">
+                <button type="button"
+                        class="btn btn-qc"
+                        hx-post="/projects/{{ project_id }}/run-qc"
+                        hx-target="#qc-report-container"
+                        hx-swap="innerHTML"
+                        hx-indicator="#qc-loading-research">
+                    ✅ Run Quality Check
+                </button>
+                <span id="qc-loading-research" class="htmx-indicator">Checking...</span>
+            </div>
+
+            <!-- Re-analyze with context -->
+            <div class="reanalyze-section" style="margin-top: 16px;">
+                <button type="button" class="btn btn-ghost" onclick="toggleReanalyzeForm()">
+                    📝 Re-analyze with More Context
+                </button>
+                <form id="reanalyze-form" method="POST" action="/projects/{{ project_id }}/re-analyze" style="display: none; margin-top: 12px;" onsubmit="return handleReanalyzeSubmit(this);">
+                    <div class="context-input-wrapper">
+                        <label for="additional_context">What additional context should the analyst consider?</label>
+                        <textarea name="additional_context" id="additional_context" rows="3"
+                                  placeholder="e.g., 'Target market is remote workers earning $50-100k. Budget is under $15/month. Main competitor is Notion.'"></textarea>
+                    </div>
+                    <div class="form-actions" style="margin-top: 8px;">
+                        <button type="submit" class="btn btn-primary" id="reanalyze-btn">
+                            🔄 Re-analyze
+                        </button>
+                        <button type="button" class="btn btn-ghost" onclick="toggleReanalyzeForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="action-row" style="margin-top: 12px;">
+                <form method="POST" action="/projects/{{ project_id }}/override-brief" style="display: inline;">
+                    <button type="submit" class="btn btn-secondary">
+                        Continue Anyway
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <!-- Loading/Analyzing State -->
+    <div class="analyzing-state">
+        <div class="spinner"></div>
+        <h3>Analyzing Your Idea...</h3>
+        <p>The Analyst is creating a comprehensive Business Brief</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* Explicit dark theme - no CSS variables */
+.business-brief {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    background: #0d0d12;
+    color: #e0e0e0;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+.brief-header { margin-bottom: 24px; }
+
+.brief-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.brief-title h2 {
+    margin: 0;
+    color: #00ff41;
+    font-size: 1.5rem;
+}
+
+.badge {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-printable { background: rgba(0, 255, 65, 0.15); color: #00ff41; border: 1px solid rgba(0, 255, 65, 0.3); }
+.badge-document { background: rgba(0, 170, 255, 0.15); color: #00aaff; border: 1px solid rgba(0, 170, 255, 0.3); }
+.badge-web { background: rgba(255, 170, 0, 0.15); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+.badge-app { background: rgba(170, 0, 255, 0.15); color: #aa00ff; border: 1px solid rgba(170, 0, 255, 0.3); }
+.badge-default { background: rgba(255, 255, 255, 0.1); color: #888; border: 1px solid rgba(255, 255, 255, 0.2); }
+
+/* AI Disclaimer */
+/* Revision Banner (QC Fix Applied) */
+.revision-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(0, 170, 255, 0.15), rgba(0, 140, 200, 0.1));
+    border: 1px solid rgba(0, 170, 255, 0.4);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+    0%, 100% { border-color: rgba(0, 170, 255, 0.4); }
+    50% { border-color: rgba(0, 255, 65, 0.6); }
+}
+
+.revision-icon { font-size: 1.5rem; flex-shrink: 0; }
+.revision-content strong { color: #00aaff; display: block; margin-bottom: 4px; }
+.revision-content p { margin: 0; color: #a0a0a0; font-size: 0.9rem; }
+
+.ai-disclaimer {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 170, 0, 0.1);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 0.85rem;
+}
+
+.ai-disclaimer .disclaimer-icon { font-size: 1.2rem; flex-shrink: 0; }
+.ai-disclaimer p { margin: 0; color: #999; line-height: 1.5; }
+
+/* Recommendation Banner */
+.recommendation-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.recommendation-go {
+    background: rgba(0, 255, 65, 0.1);
+    border: 2px solid #00ff41;
+    color: #00ff41;
+}
+
+.recommendation-no-go {
+    background: rgba(255, 68, 68, 0.1);
+    border: 2px solid #ff4444;
+    color: #ff4444;
+}
+
+.recommendation-needs-more-research {
+    background: rgba(255, 170, 0, 0.1);
+    border: 2px solid #ffaa00;
+    color: #ffaa00;
+}
+
+.rec-icon { font-size: 24px; }
+.confidence { margin-left: auto; font-size: 13px; opacity: 0.8; }
+
+/* Sections */
+.brief-section {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brief-section h3 {
+    margin: 0 0 16px 0;
+    color: #00ff41;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brief-section p {
+    color: #e0e0e0;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.estimate-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    background: rgba(255, 170, 0, 0.2);
+    color: #ffaa00;
+    border-radius: 4px;
+    font-weight: normal;
+}
+
+/* Detail Grid */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.detail-item strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.detail-item p { color: #e0e0e0; }
+
+.detail-item ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #e0e0e0;
+}
+
+.detail-item li { margin-bottom: 4px; }
+
+/* Competition */
+.competition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.competitor-card {
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.competitor-card h4 {
+    margin: 0 0 12px 0;
+    color: #e0e0e0;
+}
+
+.comp-section {
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+.comp-section strong { color: #888; }
+
+.comp-section ul {
+    margin: 5px 0;
+    padding-left: 20px;
+    color: #e0e0e0;
+}
+
+.comp-section.diff {
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: #00ff41;
+}
+
+/* SWOT */
+.swot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.swot-quadrant {
+    padding: 16px;
+    border-radius: 6px;
+}
+
+.swot-quadrant h4 {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+}
+
+.swot-quadrant ul {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 0.9rem;
+}
+
+.swot-quadrant li { margin-bottom: 4px; }
+
+.swot-quadrant.strengths {
+    background: rgba(0, 255, 65, 0.1);
+    border: 1px solid rgba(0, 255, 65, 0.3);
+    color: #00ff41;
+}
+.swot-quadrant.weaknesses {
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    color: #ff6666;
+}
+.swot-quadrant.opportunities {
+    background: rgba(0, 170, 255, 0.1);
+    border: 1px solid rgba(0, 170, 255, 0.3);
+    color: #00aaff;
+}
+.swot-quadrant.threats {
+    background: rgba(255, 170, 0, 0.1);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    color: #ffaa00;
+}
+
+/* Financials */
+.financials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+}
+
+.financial-item {
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.financial-item strong {
+    display: block;
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.financial-item span {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+/* Success Criteria */
+.criteria-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.criterion-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.criterion-importance { font-size: 18px; flex-shrink: 0; }
+
+.criterion-content strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #e0e0e0;
+}
+
+.criterion-content .measure {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+/* Research Sources */
+.research-sources h3 { color: #00aaff; }
+
+.sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.source-item {
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border-left: 3px solid #00aaff;
+}
+
+.source-item.confidence-high { border-left-color: #00ff41; }
+.source-item.confidence-medium { border-left-color: #ffaa00; }
+.source-item.confidence-low { border-left-color: #ff6666; }
+
+.source-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.source-name {
+    font-weight: 600;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+}
+
+.source-confidence {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.confidence-high .source-confidence { background: rgba(0, 255, 65, 0.2); color: #00ff41; }
+.confidence-medium .source-confidence { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+.confidence-low .source-confidence { background: rgba(255, 102, 102, 0.2); color: #ff6666; }
+
+.source-data {
+    margin: 0;
+    color: #999;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+/* Assumptions */
+.assumptions h3 { color: #ffaa00; }
+
+.assumptions-list {
+    margin: 0;
+    padding-left: 20px;
+    color: #999;
+}
+
+.assumptions-list li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+/* Analyst Notes */
+.analyst-notes {
+    border-left: 3px solid #00ff41;
+}
+
+/* Actions */
+.brief-actions {
+    margin-top: 32px;
+    text-align: center;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 5px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #00ff41;
+    color: #000;
+}
+.btn-primary:hover {
+    background: #00cc33;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+}
+
+.btn-warning {
+    background: #ffaa00;
+    color: #000;
+}
+.btn-warning:hover { background: #cc8800; }
+
+.btn-secondary {
+    background: transparent;
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.btn-lg { padding: 16px 32px; font-size: 1rem; }
+
+.btn-qc {
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    color: #fff;
+}
+.btn-qc:hover {
+    background: linear-gradient(135deg, #0088cc, #006699);
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
+}
+
+.action-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.htmx-indicator {
+    display: none;
+    color: #00aaff;
+    font-size: 0.85rem;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    display: inline-block;
+}
+
+#qc-report-container {
+    margin: 20px 0;
+}
+
+.warning-text { color: #ff6666; margin-bottom: 15px; }
+
+.research-options p,
+.no-go-options p { color: #888; margin-bottom: 15px; }
+
+/* Analyzing State */
+.analyzing-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.analyzing-state h3 { color: #00ff41; }
+.analyzing-state p { color: #888; }
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #00ff41;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+    .swot-grid { grid-template-columns: 1fr; }
+    .brief-title { flex-direction: column; align-items: flex-start; }
+    .recommendation-banner { flex-wrap: wrap; }
+    .confidence { width: 100%; margin-left: 0; margin-top: 8px; }
+}
+
+/* Re-analyze form */
+.reanalyze-section {
+    padding: 16px;
+    background: rgba(0, 170, 255, 0.05);
+    border: 1px solid rgba(0, 170, 255, 0.2);
+    border-radius: 8px;
+}
+
+.context-input-wrapper {
+    margin-bottom: 12px;
+}
+
+.context-input-wrapper label {
+    display: block;
+    margin-bottom: 8px;
+    color: #a0a0a0;
+    font-size: 0.9rem;
+}
+
+.context-input-wrapper textarea {
+    width: 100%;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.context-input-wrapper textarea:focus {
+    outline: none;
+    border-color: #00aaff;
+}
+
+.context-input-wrapper textarea::placeholder {
+    color: #666;
+}
+
+.form-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a0a0a0;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+</style>
+
+<script>
+// Toggle re-analyze form visibility
+function toggleReanalyzeForm() {
+    const form = document.getElementById('reanalyze-form');
+    if (form) {
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Prevent double-submission of re-analyze form
+function handleReanalyzeSubmit(form) {
+    const btn = form.querySelector('#reanalyze-btn');
+
+    // Check if already submitting
+    if (btn.disabled) {
+        console.log('Already re-analyzing, blocking duplicate');
+        return false;
+    }
+
+    // Disable button and show loading
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Re-analyzing...';
+    btn.style.pointerEvents = 'none';
+    btn.style.opacity = '0.7';
+
+    // Allow the form to submit
+    return true;
+}
+
+// Fallback: Add click handler for QC button if HTMX doesn't work
+document.querySelectorAll('.btn-qc').forEach(btn => {
+    btn.addEventListener('click', async function(e) {
+        // If HTMX handled it, don't double-fire
+        if (e.defaultPrevented) return;
+
+        const projectId = '{{ project_id }}';
+        const container = document.getElementById('qc-report-container');
+        const indicator = this.nextElementSibling;
+
+        // Show loading
+        if (indicator) indicator.style.display = 'inline-block';
+        this.disabled = true;
+
+        try {
+            const response = await fetch(`/projects/${projectId}/run-qc`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+            const html = await response.text();
+            if (container) container.innerHTML = html;
+        } catch (err) {
+            console.error('QC check failed:', err);
+            if (container) container.innerHTML = '<div class="error">QC check failed. Please try again.</div>';
+        } finally {
+            if (indicator) indicator.style.display = 'none';
+            this.disabled = false;
+        }
+    });
+});
+</script>
