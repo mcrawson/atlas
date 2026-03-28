@@ -587,6 +587,16 @@ async def approve_business_brief(request: Request, project_id: int):
 
         builder_type = builder_type_map.get(product_type, "web_builder")  # Default to web
 
+        # Map general types to specific ProjectType enum values for Mason routing
+        # Mason expects specific types like "web_spa", "mobile_cross_platform", etc.
+        project_type_map = {
+            "printable": "printable_planner",  # Default printable type
+            "document": "doc_guide",           # Default document type
+            "web": "web_spa",                  # Default web type
+            "app": "web_spa",                  # Apps default to web SPA (React/Vue)
+        }
+        specific_project_type = project_type_map.get(product_type, "web_spa")
+
         # Store builder info for later phases
         metadata["assigned_builder"] = {
             "type": builder_type,
@@ -594,6 +604,11 @@ async def approve_business_brief(request: Request, project_id: int):
             "source": "project_identity" if project_identity.get("product_type") else "business_brief",
             "assigned_at": datetime.now().isoformat(),
         }
+
+        # CRITICAL: Set project_type at top level for Mason routing
+        # Mason looks for context["project_type"] to determine what to build
+        metadata["project_type"] = specific_project_type
+        metadata["project_category"] = product_type  # Keep original category for reference
 
         # Log the assignment
         logger.info(f"[Kickoff] Project {project_id}: product_type={product_type} -> builder={builder_type} (source: {metadata['assigned_builder']['source']})")
